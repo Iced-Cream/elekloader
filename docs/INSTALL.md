@@ -60,6 +60,8 @@ publishes it:
   `..._OS1.43.syx` (one file serves both), from Elektron's Digitone downloads;
 - Octatrack MKI or MKII: `OCTATRACK_OS1.40C.syx` or `OCTATRACK_OS1.40C.bin`
   (one file serves both), from Elektron's Octatrack downloads;
+- Analog Rytm MKII: `Analog-Rytm_MKII_OS1.74.syx` or `..._OS1.73.syx`, from
+  Elektron's Analog Rytm MKII downloads;
 - Model:Cycles or Model:Samples: the OS 1.13 `.syx`, from Elektron's
   Model:Cycles or Model:Samples downloads.
 

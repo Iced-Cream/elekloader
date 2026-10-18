@@ -33,7 +33,7 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-3.2-os1.44.elemod` | the same pre-release |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
-| Analog Rytm MKII | 1.73, 1.74 | `core-0.1.elemod`, `core-0.1-os1.74.elemod` (mods/core-ar2) | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Rytm MKII | 1.73, 1.74 | `core-ar2-0.1.elemod`, `core-ar2-0.1-os1.74.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
@@ -110,6 +110,12 @@ core.
   stock applies them (`ev_midi_pc`, "Program changes").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): the hook bus's tick,
   draw, key and encoder events, and rows in SETTINGS > PERSONALIZE.
+- **Analog Rytm MKII** ([mods/core-ar2](../mods/core-ar2)): a proof of
+  concept, the Digitakt mk1's core.s, settings.s and render.s with the
+  Rytm's addresses: the hook bus's tick (about 20 a second), draw, key,
+  encoder and SETTINGS events, and the render's entry and exit, which cover
+  the digital path only (the sample voices, the delay and the reverb), not
+  the analog voices. No machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
@@ -143,7 +149,8 @@ has more screens and how a mod adds an entry.
 One source, [mods/core/core.s](../mods/core/core.s), is built with each
 device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
-[mods/core-dt2](../mods/core-dt2) for the Digitakt II, [mods/core-mc](../mods/core-mc)
+[mods/core-dt2](../mods/core-dt2) for the Digitakt II,
+[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-mc](../mods/core-mc)
 and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
 gives the addresses of every OS it supports (its `os`, and its `ports`):
 the stock file you build with picks them. The Octatrack's has its own
@@ -154,7 +161,7 @@ toolchain ([ADAPTING.md](ADAPTING.md), "What you need"):
 python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx                          # the Digitakt mk1's (or 1.53)
 python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # the Digitone mk1's (or 1.43)
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
-python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.73.syx                  # the Analog Rytm MKII's
+python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (or 1.73)
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'

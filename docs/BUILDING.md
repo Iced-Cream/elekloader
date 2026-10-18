@@ -16,8 +16,8 @@
    The check below the list says when the set combines: "No conflicts ...
    Ready to build".
 4. **OS version shown**: what the unit will show as its OS version: 4
-   characters on the Digitakt mk1 and the Digitone mk1, 1 to 10 on the
-   Octatrack.
+   characters on the Digitakt mk1, the Digitone mk1 and the Analog Rytm
+   MKII, 1 to 10 on the Octatrack.
 5. **BUILD FIRMWARE**: choose where to save the `.syx`. elekloader builds it,
    verifies it ([below](#what-a-build-guarantees)), and shows its sha256. For the Octatrack it also
    writes the card file, the `.bin` beside it.
@@ -47,7 +47,8 @@ verifies the file. With `pip install .` the command is `elekpatch`.
 
 Send the `.syx` to the unit the way Elektron describes for OS updates
 ([How to update your device](https://support.elektron.se/support/solutions/articles/43000662890-how-to-update-your-device)).
-For the Digitakt mk1, the Digitakt II and the Digitone mk1:
+For the Digitakt mk1, the Digitakt II, the Digitone mk1 and the Analog Rytm
+MKII:
 1. Connect it over USB and open Elektron Transfer.
 2. Select the unit and **Connect**.
 3. Drag the `.syx` onto **Drop files here**.
@@ -72,7 +73,9 @@ Then send the stock `.syx` with Transfer's legacy OS upgrade mode (on the
 Digitakt II, over its MIDI ports: not USB). On the
 Octatrack: hold **FUNC** while powering on, press **TRIG 3** for MIDI
 UPGRADE, and send the stock `.syx` over 5-pin DIN MIDI (USB MIDI does not
-work for this).
+work for this). On the Analog Rytm MKII: hold **FUNC** while powering on for
+the STARTUP menu, press **TRIG 4** for OS UPGRADE, and send the stock `.syx`
+over 5-pin DIN MIDI (not USB).
 
 ## What a build guarantees
 
@@ -91,6 +94,10 @@ For the Digitakt mk1, the writer produces the same bytes as
 elektron-firmware-tool when given the same main OS stream. For the Digitone
 mk1 (the same file family, with seven sections), it reproduces the stock
 file from its own main OS stream.
+
+The Analog Rytm MKII's files are the Digitakt mk1's family, with five
+sections and no seal. From its own main OS stream, the writer reproduces the
+stock 1.73 and 1.74 files byte for byte.
 
 The Digitakt II's files are sealed: the container ends in an HMAC-SHA256 of
 the rest, which its bootstrap checks before it flashes anything. elekloader

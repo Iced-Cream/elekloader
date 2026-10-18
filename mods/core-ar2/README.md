@@ -76,10 +76,17 @@ branch):
   the other rows worked as stock. The same through a short session with a
   pattern playing into the delay and reverb.
 
+On a unit (OS 1.74, 17 Oct 2026), sent with Transfer over USB: the 1.74
+builds with hello-marker-ar2 (HM74) and hooks-check-ar2 (HC74) work as the
+1.73 ones do.
+
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
 
 ## Building
+
+For 1.74, give `Analog-Rytm_MKII_OS1.74.syx` instead: the SDK then writes
+`core-0.1-os1.74.elemod` and `hello-marker-1.0-os1.74.elemod`.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)

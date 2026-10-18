@@ -163,7 +163,7 @@ The linker places, in the area the claiming mod frees, every DSP section
 the payload's words in the image. Nothing else about the build changes: a
 set of mods without DSP code links to the same bytes as before.
 
-## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II)
+## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II, Analog Rytm MKII)
 
 This is a convention between mods for these devices, not a rule of the
 loader. The table gives the Digitakt mk1 1.53's sites, which 1.54 has at
@@ -185,6 +185,13 @@ and `core_projdata` (project data); 2.2 the event `ev_hold` and the table
 `ev_personalize` (0x4009e2a2, the PERSONALIZE menu, `void f(menu)`), and no
 render events (its audio renders on the DSP). It declares the `.fast` copy table itself,
 `core_fast`, and copies it on the first `ev_tick` (`mods/core/fast.s`).
+The Analog Rytm MKII's core (core-ar2 0.1) has `ev_tick`, `ev_draw`,
+`ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, at
+0x400a2bee, 0x400a2c56, 0x400a47cc, 0x400a4816, 0x400db87e, 0x4011fb02 and
+0x40121656 in 1.73, and 0x400a2c5a, 0x400a2cc2, 0x400a4838, 0x400a4882,
+0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`,
+its `ports`). It declares those seven events and no other table: no `.fast`
+copy table, so no `.fast` code.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

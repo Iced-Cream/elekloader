@@ -39,9 +39,9 @@ monolithic build; section 4 says how to go from A to B.
   source (with `settings.s`, `render.s` and `fast.s` where the device
   uses them); `mods/core` builds it for the Digitakt mk1
   (`python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx`),
-  `mods/core-dn1` for the Digitone mk1 and `mods/core-dt2` for the
-  Digitakt II. The Octatrack's core, `mods/core-ot`, has a hook bus of
-  its own from 0.2, with the Octatrack's events ("The hook bus on the
+  `mods/core-dn1` for the Digitone mk1, `mods/core-dt2` for the
+  Digitakt II and `mods/core-ar2` for the Analog Rytm MKII. The
+  Octatrack's core, `mods/core-ot`, has a hook bus of its own from 0.2, with the Octatrack's events ("The hook bus on the
   Octatrack" below).
 
 ## 2. The rules
@@ -69,7 +69,9 @@ what you see when it is broken (section 5 has the fixes).
    every mod: on the Digitakt mk1, 128 KB of RAM (`.run` + `.bss`), or
    256 KB with core 4.0, and 2304 bytes of fast SRAM (`.fast`); on the
    Digitone mk1 128 KB, or 1.25 MB with core-dn1 4.0 ("The mods' RAM"
-   below). *"the mods need RAM
+   below); on the Analog Rytm MKII 128 KB, and no fast SRAM, so a mod with
+   `.fast` code is refused there (*"has .fast code, which needs the mod that
+   declares a .fast copy table"*). *"the mods need RAM
    to ..."*.
 7. **Only relocatable references.** The linker relocates 32-bit absolute and
    32/16-bit PC-relative references. Use the device's compiler flags (the
@@ -94,7 +96,7 @@ what you see when it is broken (section 5 has the fixes).
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 
-### The hook bus (core's events): the Digitakt mk1, the Digitone mk1 and the Digitakt II
+### The hook bus (core's events): the Digitakt mk1, the Digitone mk1, the Digitakt II and the Analog Rytm MKII
 
 Handlers are C functions (arguments on the stack; d0-d1/a0-a1 free,
 everything else kept; the result in d0). `order` sorts handlers of one
@@ -125,7 +127,24 @@ render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_tick` (`core_fast`): subscribe only `.run` code to `ev_key` and
 `ev_enc` there, since a key can come before that tick (`ev_draw` cannot:
-the tick site runs first). The sites core owns (do not patch them):
+the tick site runs first).
+
+The Analog Rytm MKII's core (mods/core-ar2 0.1, a proof of concept) has
+`ev_tick`, `ev_draw`, `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and
+`ev_render_out`. What differs there:
+- `ev_tick` comes about 20 times a second, not 30.
+- The render events cover the audio interrupt's digital path: the sample
+  voices, the delay and the reverb. The drum voices are analog and are not
+  in it.
+- A SETTINGS row is listed after SYSTEM.
+- The key and encoder events are built as the Digitakt mk1's are, by
+  constructors with the same fields, so the table's `ev` offsets hold
+  (`ev+12` the key or encoder, `ev+16` the flags or the delta; read in the
+  1.74 image). The key ids are the Rytm's own.
+- core-ar2 exports no firmware locations (`fw_*`): a mod names each
+  firmware address itself, for each OS (3.10).
+
+The sites core owns (do not patch them):
 - Digitakt mk1 1.53 and 1.54: 0x40000538, 0x4000a770, 0x4000a7d6,
   0x4000b770, 0x4000b7ba, 0x40058800, 0x40077428, 0x400784c8;
 - Digitone mk1 1.43: 0x40000538, 0x4001900c, 0x40019072, 0x40019d9c,
@@ -138,7 +157,11 @@ the tick site runs first). The sites core owns (do not patch them):
   0x4009e09e, 0x4009e166, 0x400edbe2, 0x40018332, 0x4009dba0 and
   0x400ea41c;
 - Digitakt II 1.17: 0x40000538, 0x40032ad4, 0x40032b3a, 0x40033d94,
-  0x40033dde, 0x400a5eac, 0x4009e2a2.
+  0x40033dde, 0x400a5eac, 0x4009e2a2;
+- Analog Rytm MKII 1.73: 0x400008c0, 0x400a2bee, 0x400a2c56, 0x400a47cc,
+  0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
+- Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
+  0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2.
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -1251,7 +1274,10 @@ It names no firmware address, so its port (1.44, 1.54) is empty:
 of your own. It is a complete mod: a C handler on `ev_draw` that draws a
 small square in the top-right corner of every screen. For the Digitakt II,
 `examples/hello-marker-dt2/` builds the same source, and
-`examples/perform-direct/` is a real mod in one key handler.
+`examples/perform-direct/` is a real mod in one key handler. For the
+Analog Rytm MKII, `examples/hello-marker-ar2/` builds the same source for
+1.73 and 1.74, and `examples/hooks-check-ar2/` subscribes to every event its
+core has.
 
 **3.2 Fill in `mod.json`.**
 
@@ -1397,7 +1423,9 @@ exists for the device (the example was checked by cold-booting it in
 digikit's emulator: every screen differs from stock only in the corner
 square, and the audio is identical). On hardware, know the recovery path
 first: for the Digitakt mk1, hold FUNC while powering on for the startup
-menu, then send the stock `.syx`.
+menu, then send the stock `.syx`. For the Analog Rytm MKII, hold FUNC while
+powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), and send the
+stock `.syx` over 5-pin DIN MIDI (not USB).
 
 **3.9 Ship the `.elemod`.** Users install it from the loader's window
 (Install from file) or pass it to `elekloader.patch`. Bump `version` on
@@ -1441,6 +1469,10 @@ the stock file you build with picks them:
   its absolute addresses masked out usually finds a routine again in the
   new image. Check every match by its bytes, then run the build in an
   emulator (3.8).
+- From Analog Rytm MKII 1.73 to 1.74, code was added in two places: from
+  0x40057xxx the code sits 0x6c further on, from 0x40123exx 0x1cc, and the
+  data after the code further still ([DEVICES.md](DEVICES.md), "1.74").
+  Find each address again by its bytes all the same.
 
 ## 4. Path A: a whole build
 
