@@ -131,8 +131,8 @@ the tick site runs first).
 
 The Analog Rytm MKII's core (mods/core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, and
-from 0.2 mod storage ("Mod storage (core-ar2 0.2, Analog Rytm MKII)"). What
-differs there:
+from 0.2 mod storage and the event `ev_project` ("Mod storage (core-ar2 0.2,
+Analog Rytm MKII)"). What differs there:
 - `ev_tick` comes about 20 times a second, not 30.
 - The render events cover the audio interrupt's digital path: the sample
   voices, the delay and the reverb. The drum voices are analog and are not
@@ -686,6 +686,13 @@ the image they come from. Data that fails the check loads as zeros. A
 global slot received as SysEx has no room for an ID, so its mod data is
 always dropped, even from the same build: only its stock settings load.
 Projects saved before OS 1.70 are not supported.
+
+**When a project changes.** A mod that keeps its own copy of a field, or
+sets things up per project, subscribes to `ev_project`:
+
+| event | when | C prototype | notes |
+|---|---|---|---|
+| `ev_project` | Analog Rytm MKII only (core-ar2 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
 
 Core-ar2 0.2 owns 16 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74): 0x4000937c and 0x40009146

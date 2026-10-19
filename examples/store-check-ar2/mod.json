@@ -25,7 +25,8 @@
  "subscribe": [
   {"event": "ev_tick", "fn": "sc_tick", "order": 60},
   {"event": "ev_draw", "fn": "sc_draw", "order": 60},
-  {"event": "ev_settings", "fn": "sc_settings", "order": 60}
+  {"event": "ev_settings", "fn": "sc_settings", "order": 60},
+  {"event": "ev_project", "fn": "sc_project", "order": 60}
  ],
  "resources": {"names": ["settings:STORE CHECK"], "core": "0.2"},
  "requires": ["core"]

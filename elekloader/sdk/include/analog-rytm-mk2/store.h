@@ -39,6 +39,16 @@
 #define STORE_PATTERN 5
 #define STORE_PROJECT 6
 
+/* ev_project handlers: void f(int how, unsigned dropped), subscribed in
+ * mod.json ({"event": "ev_project", "fn": ...}). how is CORE_PROJECT_NEW after
+ * CREATE NEW or the project reset, CORE_PROJECT_LOADED after any project load
+ * (at boot too); dropped has STORE_DROPPED(scope) set for each of
+ * STORE_GLOBAL, STORE_TRACK, STORE_PATTERN and STORE_PROJECT that came in as
+ * zeros (saved by another layout, or with no mods). */
+#define CORE_PROJECT_NEW 0
+#define CORE_PROJECT_LOADED 1
+#define STORE_DROPPED(scope) (1u << (scope))
+
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 

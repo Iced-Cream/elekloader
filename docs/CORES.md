@@ -117,8 +117,9 @@ core.
   sample voices, the delay and the reverb), not the analog voices. From 0.2,
   mod storage: fields a mod declares per sound, kit, global slot, pattern
   track, pattern or project, kept in bytes the stock OS never uses and
-  placed from the build's lockfile ("Mod storage (core-ar2 0.2, Analog Rytm
-  MKII)" in ADAPTING.md). No machines and no firmware exports.
+  placed from the build's lockfile, and an event after every project load
+  and CREATE NEW ("Mod storage (core-ar2 0.2, Analog Rytm MKII)" in
+  ADAPTING.md). No machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods

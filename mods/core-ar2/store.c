@@ -89,6 +89,20 @@ extern int st_sound_init_body(void *sound, int a, int b, int c);
 extern int st_proj_init_body(void *project, int a, int b, int c);
 extern int st_proj_load_body(void *live, void *src, void *progress);
 
+/* ev_project: f(how, dropped) after CREATE NEW (how 0) and after every project
+ * load (how 1), with the stored project in place; dropped has bit 1 << scope
+ * set for each of global, track, pattern and project whose data the project
+ * had none of for this layout, now zeros */
+typedef void (*ev_project_t)(int how, unsigned dropped);
+extern const ev_project_t ev_project[];
+
+static void project_event(int how, unsigned dropped)
+{
+    const ev_project_t *f;
+    for (f = ev_project; *f; f++)
+        (*f)(how, dropped);
+}
+
 /* the live homes of the four global slots: stock's live records have no spare */
 volatile unsigned char core_store_globals[4][5];
 
@@ -387,25 +401,37 @@ int st_proj_init(void *project, int a, int b, int c)
     for (g = 0; g < 4; g++)
         for (j = 0; j < 5; j++)
             core_store_globals[g][j] = 0;
+    project_event(0, 0);
     return r;
 }
 
 /* After any project load: the stored project's store drops what this layout
- * can't read, then takes this build's header. */
+ * can't read, then takes this build's header, and the mods hear of it. A file
+ * of an older project version (st_image 0) brings no project data. */
 int st_proj_load(void *live, unsigned char *src, void *progress)
 {
     int r = st_proj_load_body(live, src, progress), g, j;
-    if (!store_ok(S, SC_TRACK))
+    unsigned dropped = 0;
+    if (!store_ok(S, SC_TRACK)) {
         store_clear(S, HEADER, PATTERNS_AT);
-    if (!store_ok(S, SC_PATTERN))
+        dropped |= 1 << SC_TRACK;
+    }
+    if (!store_ok(S, SC_PATTERN)) {
         store_clear(S, PATTERNS_AT, PROJECT_AT);
-    if (!store_ok(S, SC_PROJECT))
+        dropped |= 1 << SC_PATTERN;
+    }
+    if (!st_image || !store_ok(S, SC_PROJECT)) {
         store_clear(S, PROJECT_AT, STORE_BYTES);
-    if (!store_ok(S, SC_GLOBAL))
+        dropped |= 1 << SC_PROJECT;
+    }
+    if (!store_ok(S, SC_GLOBAL)) {
         for (g = 0; g < 4; g++)
             for (j = 0; j < 5; j++)
                 S[GLOBALS_AT + 80 * g + 0x4b + j] = 0;
+        dropped |= 1 << SC_GLOBAL;
+    }
     store_header(S);
+    project_event(1, dropped);
     return r;
 }
 
@@ -424,9 +450,7 @@ int st_file_load(void *live, unsigned char *src, void *progress)
 {
     int r;
     st_image = src && rd32(src + 4) == 9 ? src : 0;
-    r = PROJECT_LOAD(live, src, progress);
-    if (!st_image)                      /* an older version: no working pattern from an image */
-        store_clear(S, PROJECT_AT, STORE_BYTES);
+    r = PROJECT_LOAD(live, src, progress);   /* through st_proj_load */
     st_image = S;
     return r;
 }

@@ -224,9 +224,10 @@ The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 0x400a2bee, 0x400a2c56, 0x400a47cc, 0x400a4816, 0x400db87e, 0x4011fb02 and
 0x40121656 in 1.73, and 0x400a2c5a, 0x400a2cc2, 0x400a4838, 0x400a4882,
 0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`,
-its `ports`). It declares those seven events and, from 0.2, the table
-`core_store_ids` (entry 4, filled by the linker: below); no `.fast` copy
-table, so no `.fast` code.
+its `ports`). It declares those seven events and, from 0.2, the event
+`ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md)
+and the table `core_store_ids` (entry 4, filled by the linker: below); no
+`.fast` copy table, so no `.fast` code.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

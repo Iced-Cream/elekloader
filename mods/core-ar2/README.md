@@ -92,6 +92,10 @@ in `store.s`:
 | file save (`keep2`) | 0x400b0804 | 0x400b0870 | the same, for a project file |
 | file load (`keep2`) | 0x40035000 | the same | which image is being loaded |
 
+After CREATE NEW and after every project load (the project init and
+project load sites), core calls the mods' `ev_project` handlers with what
+happened and which scopes came in as zeros.
+
 What it does not do:
 
 - **Global SysEx dumps** have no room for a layout ID, so a global slot
@@ -102,7 +106,6 @@ What it does not do:
   the old data to zeros anyway.
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
-- **No "project loaded" event**: a mod reads its fields when it needs them.
 - **Projects saved before OS 1.70** are not supported.
 
 ## Checked so far
@@ -147,7 +150,10 @@ stock bytes, and that each covers whole instructions.
   kit generation bumped read zeros for kits only; a build with a fresh
   layout read zeros everywhere; CREATE NEW cleared everything. A global
   slot received as SysEx came in with its mod data cleared, and the other
-  three slots and every other scope kept theirs. Not yet
+  three slots and every other scope kept theirs. `ev_project` came once
+  at boot (a load; on the first boot with all four scopes dropped, after a
+  power cycle with none), once per project load, not on save, and as
+  `CORE_PROJECT_NEW` after CREATE NEW. Not yet
   checked on a unit, and not yet on 1.73, which has the same addresses
   apart from the file save.
 

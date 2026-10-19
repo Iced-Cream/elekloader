@@ -89,6 +89,6 @@
    ]
   }
  },
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "core_store_ids": 4},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4},
  "resources": {"names": ["timer:DTIM0"]}
 }

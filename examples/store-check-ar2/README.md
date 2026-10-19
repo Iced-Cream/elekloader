@@ -27,6 +27,11 @@ everything survived; full columns after loading another project, or with a
 build whose layout can't read this one, mean the data was dropped to zeros
 as it should be. A 3x3 square top right blinks while the mod runs.
 
+It also counts `ev_project`: right of the columns, a bar two pixels longer
+for each project event (it wraps at 16), and under it a dot when the last
+event was a load (none for CREATE NEW), then one dot for each scope that
+load dropped: global, track, pattern, project.
+
 It names the live pattern, kit, sound and pool addresses itself (core
 exports none), so it is built for 1.74 only.
 

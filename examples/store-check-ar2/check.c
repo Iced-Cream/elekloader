@@ -11,6 +11,11 @@
  * to right: pattern tracks, patterns, kit sounds, pool sounds, kits, globals,
  * project; each grows a pixel for every marker core_store_get no longer
  * reads back, up to 16. A 3x3 square top right blinks while it runs.
+ *
+ * It also hears ev_project: to the right of the columns, a bar as long as the
+ * number of project events so far (mod 16, two pixels each), and under it a
+ * dot when the last one was a load (none for CREATE NEW) and one dot for each
+ * scope it dropped: global, track, pattern, project.
  */
 #include "analog-rytm-mk2/store.h"
 
@@ -37,6 +42,14 @@ extern void core_additem(void *menu, const void *row);
 extern void sc_label(void);
 
 static volatile unsigned sc_ticks;
+volatile unsigned sc_proj_n, sc_proj_how, sc_proj_dropped;
+
+void sc_project(int how, unsigned dropped)
+{
+    sc_proj_how = how;
+    sc_proj_dropped = dropped;
+    sc_proj_n++;
+}
 
 void sc_tick(void *ctrl)
 {
@@ -138,5 +151,13 @@ void sc_draw(void *bmp, void *ctrl)
         if (bad)
             FILLRECT(bmp, 8 * col, 64 - bad, 8 * col + 5, 63, 1);
     }
+    FILLRECT(bmp, 64, 47, 100, 63, 0);
+    if (sc_proj_n & 15)
+        FILLRECT(bmp, 64, 62, 64 + 2 * (sc_proj_n & 15) - 1, 63, 1);
+    if (sc_proj_how == CORE_PROJECT_LOADED)
+        FILLRECT(bmp, 64, 58, 65, 59, 1);
+    for (col = 0; col < 4; col++)
+        if (sc_proj_dropped & STORE_DROPPED(col ? STORE_TRACK + col - 1 : STORE_GLOBAL))
+            FILLRECT(bmp, 68 + 4 * col, 58, 69 + 4 * col, 59, 1);
     FILLRECT(bmp, 125, 61, 127, 63, (sc_ticks >> 4) & 1);
 }
