@@ -142,7 +142,7 @@ builds with hello-marker-ar2 (HM74) and hooks-check-ar2 (HC74) work as the
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
 
-- **Mod storage (0.2)**, in an emulator only (OS 1.74 and 1.73, 19 Oct 2026), with
+- **Mod storage (0.2)**, in an emulator (OS 1.74 and 1.73, 19 Oct 2026), with
   [store-check-ar2](../../examples/store-check-ar2) marking every field of
   every item: after save, loading another project (all zeros), loading the
   project back, and a power cycle, every marker read back. A build with an
@@ -155,8 +155,21 @@ stock bytes, and that each covers whole instructions.
   power cycle with none), once per project load, not on save, and as
   `CORE_PROJECT_NEW` after CREATE NEW. On 1.73 the same chain, CREATE
   NEW, the SysEx global and the events gave the same results; the ancestor,
-  kit generation and other-layout builds ran on 1.74 only. Not yet checked on
-  a unit.
+  kit generation and other-layout builds ran on 1.74 only.
+
+- **Mod storage (0.2) on a unit** (19 Oct 2026), sent with Transfer over
+  USB, with store-check (builds SC74, OTHER74 and SC73: two layouts, both
+  OS versions). On 1.74: every column stayed empty after marking, saving,
+  loading the project back and a power cycle, and was full after loading a
+  stock-saved project (with all four drop flags); the project exported as
+  .arprj and imported into another slot kept everything, as did a Total
+  Recall sync and recall; CREATE NEW cleared everything, as a new-project
+  event. The same mods built with another lockfile read none of the saved
+  project (all four drop flags), and the first build read all of it again
+  afterwards. On 1.73 the project saved on 1.74 read in full, and marking,
+  saving, loading another project, loading back and a power cycle passed.
+  One flash (OTHER74) stopped at SUCCESS: REBOOTING and booted normally
+  after a power cycle.
 
 ## Building
 

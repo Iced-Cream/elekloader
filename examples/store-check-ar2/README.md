@@ -38,8 +38,8 @@ It names the live objects and two firmware routines itself (core exports
 none): the live objects are at the same addresses on 1.73 and 1.74, and the
 routines' 1.74 addresses are in `ports`, as in hooks-check-ar2.
 
-Checked in an emulator only (19 Oct 2026): see core-ar2's README. Not yet
-on a unit.
+Checked in an emulator and on a unit, on 1.73 and 1.74 (19 Oct 2026): see
+core-ar2's README.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
