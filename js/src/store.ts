@@ -5,9 +5,10 @@
 // A core that keeps mod storage (core-ar2 0.2) imports `__store_gen`. Mods declare fields in their mod.json
 // ("storage": [{"sym", "scope", "bits"}]) and the linker gives each field's symbol a descriptor: its scope in bits
 // 28..31, its width in bits 22..27 and its bit offset in bits 0..21. The lockfile keeps every field where it was from
-// one build to the next; a new or resized field takes bits no field has used, a scope that runs out is repacked under
-// a new generation, and any change gives the lockfile a new layout ID with the old one kept as an ancestor. Nothing
-// here is random: a new ID comes from the caller.
+// one build to the next; a freed field that comes back takes its old place, any other new or resized field takes bits
+// no field has used, a scope that runs out is repacked under a new generation, and any change gives the lockfile its
+// new layout's ID (a hash of the layout) with the old one kept as an ancestor. Nothing here is random.
+import { sha } from './bytes.ts'
 import { ModError, int } from './elemod.ts'
 import { dumps as pyDumps, repr, str } from './py.ts'
 
@@ -94,13 +95,30 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   return out
 }
 
-export function fresh(devKey: string, newId: number): Lock {
+const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+const byField = (a: Field, b: Field) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset || a.bits - b.bits
+  || cmpStr(a.mod, b.mod) || cmpStr(a.sym, b.sym)
+
+/** A layout's ID: the first 4 bytes of a SHA-256 of everything that says where data sits (not the ID or the
+ * ancestors), other than 0. Freed fields count: their bits still hold their values, which a field coming back reads.
+ * store.layout_id. */
+export function layoutId(lock: Lock): number {
+  const what: unknown[] = [lock.elekloader_store, lock.device, [lock.split.track, lock.split.pattern],
+    SCOPES.map(s => lock.generation[s]), SCOPES.map(s => lock.next[s])]
+  for (const k of ['fields', 'freed'] as const)
+    what.push([...lock[k]].sort(byField).map(f => [f.scope, f.offset, f.bits, f.mod, f.sym]))
+  return parseInt(sha(new TextEncoder().encode(pyDumps(what))).slice(0, 8), 16) || 1
+}
+
+export function fresh(devKey: string): Lock {
   const sp = spec(devKey)
-  return {
-    elekloader_store: FORMAT, device: devKey, id: idStr(idVal(newId, 'id')), ancestors: [], split: { ...sp.split },
+  const lock: Lock = {
+    elekloader_store: FORMAT, device: devKey, id: '', ancestors: [], split: { ...sp.split },
     generation: Object.fromEntries(SCOPES.map(s => [s, 1])), next: Object.fromEntries(SCOPES.map(s => [s, 0])),
     fields: [], freed: [],
   }
+  lock.id = idStr(layoutId(lock))
+  return lock
 }
 
 /** Validate a lockfile's shape. Throws ModError. */
@@ -151,16 +169,15 @@ const byModSym = (a: { mod: string; sym: string }, b: { mod: string; sym: string
   a.mod < b.mod ? -1 : a.mod > b.mod ? 1 : a.sym < b.sym ? -1 : a.sym > b.sym ? 1 : 0
 const ceilDiv = (a: number, b: number) => Math.floor((a + b - 1) / b)
 
-/** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]; newId gives a fresh 32-bit ID other
- * than 0. -> [the new lockfile, notes]. The lockfile given is not changed. store.allocate. */
-export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, newId: () => number): [Lock, string[]] {
+/** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]. -> [the new lockfile, notes]. The
+ * lockfile given is not changed. store.allocate. */
+export function allocate(lock0: Lock | null, decls: Decl[], devKey: string): [Lock, string[]] {
   const notes: string[] = []
   let lock: Lock
   let isNew: boolean
   if (lock0 === null) {
-    lock = fresh(devKey, newId())
+    lock = fresh(devKey)
     isNew = true
-    notes.push(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by other builds load their mod data at defaults`)
   } else {
     checkLock(lock0, devKey)
     lock = structuredClone(lock0)
@@ -184,15 +201,26 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, newI
     .sort(byModSym)
     .filter(({ mod, sym }) => !have.has(keyOf(mod, sym)))
     .map(({ mod, sym }) => { const [scope, bits] = want.get(keyOf(mod, sym))!; return { mod, sym, scope, offset: null, bits } })
-  for (const f of gone) {
-    lock.freed.push({ ...f })
-    const why = want.has(keyOf(f.mod, f.sym)) ? 'changed size' : 'no longer in the build'
-    notes.push(`${f.mod} ${f.sym} (${f.scope}): ${why}, its data is dropped`)
+  // a freed field back with the same scope and width takes its old place: no field was given those bits since, so
+  // its values are still there
+  const back = new Set<string>()
+  for (const f of added) {
+    const same = lock.freed.filter(g => g.mod === f.mod && g.sym === f.sym && g.scope === f.scope && g.bits === f.bits)
+    if (same.length) {
+      const g = same[same.length - 1]
+      f.offset = g.offset
+      // the first entry equal to it, as Python's list.remove
+      lock.freed.splice(lock.freed.findIndex(h => byField(h, g) === 0), 1)
+      back.add(keyOf(f.mod, f.sym))
+    }
   }
+  for (const f of gone) lock.freed.push({ ...f })
   const fields = [...kept, ...added] as Field[]
   let cap = capacity(devKey, lock.split)
+  const repacked = new Set<string>()
 
   const repack = (scope: string) => {
+    repacked.add(scope)
     lock.generation[scope] = bump(lock.generation[scope])
     lock.freed = lock.freed.filter(f => f.scope !== scope)
     let at = 0
@@ -204,26 +232,29 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, newI
     notes.push(`${scope} storage repacked (generation ${lock.generation[scope]}): older projects and sounds load it at defaults`)
   }
   const need = (scope: string) => fields.filter(f => f.scope === scope).reduce((n, f) => n + f.bits, 0)
+  const pending = (scope: string) => added.filter(f => f.scope === scope && f.offset === null)
 
   const sp = spec(devKey)
   const split = { ...lock.split }
   for (const k of ['track', 'pattern'] as const) {
     const n = need(k)
     if (n > sp.live[k]) throw new ModError(`the mods need ${n} bits per ${k}; the ${devKey} keeps at most ${sp.live[k]}`)
-    const fits = lock.next[k] + added.filter(f => f.scope === k).reduce((a, f) => a + f.bits, 0) <= 8 * split[k]
+    const fits = lock.next[k] + pending(k).reduce((a, f) => a + f.bits, 0) <= 8 * split[k]
     if (!fits && n > 8 * split[k]) split[k] = ceilDiv(n, 8)
   }
   if (split.track !== lock.split.track || split.pattern !== lock.split.pattern) {
+    // the pattern tracks come first in the store: they move only when their own size changes
+    const moved = split.track !== lock.split.track ? ['track', 'pattern', 'project'] : ['pattern', 'project']
     lock.split = split
     cap = capacity(devKey, split)
     if (cap.project < need('project'))
       throw new ModError(`the mods need ${sp.items.track * split.track + sp.items.pattern * split.pattern + ceilDiv(need('project'), 8)} bytes of pattern-track, pattern and project storage; the ${devKey} has ${sp.store}`)
     notes.push(`the tagged store now keeps ${split.track} B per pattern track and ${split.pattern} B per pattern`)
-    for (const k of ['track', 'pattern', 'project']) repack(k)
+    for (const k of moved) repack(k)
   }
   for (const s of SCOPES) {
     if (need(s) > cap[s]) throw new ModError(`the mods need ${need(s)} bits of ${s} storage; the ${devKey} has ${cap[s]}`)
-    const pend = added.filter(f => f.scope === s && f.offset === null)
+    const pend = pending(s)
     if (!pend.length) continue
     if (lock.next[s] + pend.reduce((a, f) => a + f.bits, 0) <= cap[s]) {
       for (const f of pend) {
@@ -232,12 +263,34 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, newI
       }
     } else repack(s)
   }
-  for (const f of added) notes.push(`${f.mod} ${f.sym}: ${f.bits} bits of ${f.scope} storage at bit ${f.offset}`)
+  for (const f of gone) {
+    const resized = want.has(keyOf(f.mod, f.sym))
+    if (resized || repacked.has(f.scope))
+      notes.push(`${f.mod} ${f.sym} (${f.scope}): ${resized ? 'changed size' : 'no longer in the build'}, its data is dropped`)
+    else notes.push(`${f.mod} ${f.sym} (${f.scope}): no longer in the build; its bits are kept, so it gets its values back if it returns`)
+  }
+  for (const f of added) {
+    if (back.has(keyOf(f.mod, f.sym)) && !repacked.has(f.scope))
+      notes.push(`${f.mod} ${f.sym}: back at bit ${f.offset} of ${f.scope} storage, with the values it had`)
+    else notes.push(`${f.mod} ${f.sym}: ${f.bits} bits of ${f.scope} storage at bit ${f.offset}`)
+  }
   lock.fields = fields.sort((a, b) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset)
-  if ((gone.length || added.length) && !isNew) {
-    lock.ancestors = [lock.id, ...lock.ancestors].slice(0, MAX_ANCESTORS)
-    lock.id = idStr(idVal(newId(), 'id'))
-    notes.push(`layout ID ${lock.id} (from ${lock.ancestors[0]}, whose projects it still reads)`)
+  if (isNew) {
+    lock.id = idStr(layoutId(lock))
+    notes.unshift(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by builds with other layouts load their mod data at defaults`)
+  } else if (gone.length || added.length) {
+    const old = lock.id
+    lock.id = idStr(layoutId(lock))
+    const seen = new Set([idVal(lock.id, 'id')]), anc: string[] = []
+    for (const a of [old, ...lock.ancestors]) {             // a layout can come back: no ID twice
+      const v = idVal(a, 'ancestor')
+      if (!seen.has(v)) {
+        seen.add(v)
+        anc.push(idStr(v))
+      }
+    }
+    lock.ancestors = anc.slice(0, MAX_ANCESTORS)
+    notes.push(`layout ID ${lock.id} (from ${old}, whose projects it still reads)`)
   }
   return [lock, notes]
 }

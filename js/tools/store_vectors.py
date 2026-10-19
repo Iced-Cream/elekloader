@@ -18,15 +18,6 @@ from elekloader.elemod import ModError                         # noqa: E402
 DEV = 'analog-rytm-mk2'
 
 
-def ids(start):
-    n = [start]
-
-    def nxt():
-        n[0] += 1
-        return n[0]
-    return nxt
-
-
 def F(mod, sym, scope, bits):
     return [mod, sym, scope, bits]
 
@@ -51,18 +42,29 @@ RUNS = {
     'sound full': [[F('a', 's', 'sound', 24), F('b', 's2', 'sound', 1)]],
     'ancestors': [[F('a', 'f%d' % j, 'global', 1) for j in range(i + 1)] for i in range(18)],
     'nothing': [[], []],
+    'off and on': [[F('a', 'x', 'track', 4), F('b', 'y', 'track', 4)], [F('b', 'y', 'track', 4)],
+                   [F('a', 'x', 'track', 4), F('b', 'y', 'track', 4)], [F('b', 'y', 'track', 4)],
+                   [F('a', 'x', 'track', 4), F('b', 'y', 'track', 4)]],
+    'resized and back': [[F('a', 'x', 'kit', 8)], [F('a', 'x', 'kit', 9)], [F('a', 'x', 'kit', 8)]],
+    'off while its scope repacks': [[F('a', 'x', 'kit', 32), F('b', 'y', 'kit', 30)],
+                                    [F('b', 'y', 'kit', 30), F('c', 'z', 'kit', 4)]],
+    'patterns grow, tracks stay': [[F('a', 't', 'track', 4), F('a', 'p', 'pattern', 32)],
+                                   [F('a', 't', 'track', 4), F('a', 'p', 'pattern', 32),
+                                    F('a', 'q', 'pattern', 8)]],
 }
 LOCKS = {
     'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 2},
-    'device': dict(store.fresh(DEV, 5), device='digitakt-mk1'),
-    'id 0': dict(store.fresh(DEV, 5), id='0x0'), 'id text': dict(store.fresh(DEV, 5), id='abc'),
-    'split': dict(store.fresh(DEV, 5), split={'track': 2}),
-    'split too big': dict(store.fresh(DEV, 5), split={'track': 3, 'pattern': 4}),
-    'generation 0': dict(store.fresh(DEV, 5), generation=dict(store.fresh(DEV, 5)['generation'], kit=0)),
-    'next past': dict(store.fresh(DEV, 5), next=dict(store.fresh(DEV, 5)['next'], sound=25)),
-    'bad field': dict(store.fresh(DEV, 5), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0}]),
-    'field past': dict(store.fresh(DEV, 5), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0,
-                                                     'bits': 4}]),
+    'device': dict(store.fresh(DEV), device='digitakt-mk1'),
+    'id 0': dict(store.fresh(DEV), id='0x0'), 'id text': dict(store.fresh(DEV), id='abc'),
+    'split': dict(store.fresh(DEV), split={'track': 2}),
+    'split too big': dict(store.fresh(DEV), split={'track': 3, 'pattern': 4}),
+    'generation 0': dict(store.fresh(DEV), generation=dict(store.fresh(DEV)['generation'], kit=0)),
+    'next past': dict(store.fresh(DEV), next=dict(store.fresh(DEV)['next'], sound=25)),
+    'bad field': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0}]),
+    'field past': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0,
+                                                  'bits': 4}]),
+    # an older lockfile, with an ID not from a hash: kept while nothing changes
+    'random id': dict(store.fresh(DEV), id='0x5a17c0de', ancestors=['0x00000007']),
 }
 DECLS = {
     'ok': {'storage': [{'sym': 'a_b1', 'scope': 'kit', 'bits': 3}]},
@@ -80,20 +82,20 @@ DECLS = {
 def main():
     out = {'runs': {}, 'locks': {}, 'decls': {}}
     for name, steps in RUNS.items():
-        lock, nxt, res = None, ids(0x10000000), []
+        lock, res = None, []
         for decls in steps:
             try:
-                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, nxt)
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV)
                 syms, tab = store.symbols(lock, DEV)
                 res.append({'lock': lock, 'notes': notes, 'symbols': syms, 'ids': [t.hex() for t in tab],
-                            'json': store.dumps(lock)})
+                            'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
             except ModError as e:
                 res.append({'error': str(e)})
         out['runs'][name] = {'steps': steps, 'results': res}
     for name, lock in LOCKS.items():
         try:
-            store.allocate(lock, [], DEV, ids(9))
-            out['locks'][name] = {'lock': lock, 'error': None}
+            same, _ = store.allocate(lock, [], DEV)
+            out['locks'][name] = {'lock': lock, 'error': None, 'result': same}
         except ModError as e:
             out['locks'][name] = {'lock': lock, 'error': str(e)}
     for name, doc in DECLS.items():

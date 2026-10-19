@@ -275,7 +275,7 @@ export class LoaderModel {
           blob: img.length - this.img!.length, sites: mods.reduce((n, m) => n + m.sites.length, 0),
         }
       }
-      L = link(mods as Mod2[], this.img!, null, () => 1)   // a check: any ID
+      L = link(mods as Mod2[], this.img!)
     } catch (e) {
       if (!(e instanceof ModError) && !(e instanceof OSError_)) throw e
       const lines0 = e.message.split('\n').slice(1).map(x => x.trim())

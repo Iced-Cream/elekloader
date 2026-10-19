@@ -164,10 +164,15 @@ The lockfile is JSON: `elekloader_store` (1), `device`, `id`, `ancestors`,
 `split` (`track`, `pattern`: bytes per item in the tagged store),
 `generation` and `next` (per scope: its generation and its first bit no
 field ever used), `fields` (`mod`, `sym`, `scope`, `offset`, `bits`) and
-`freed` (bits a dropped field left, reused only after the scope's
-generation is bumped). A field keeps its place while its mod, `sym`,
-`scope` and `bits` stay the same. docs/ADAPTING.md ("Mod storage (core-ar2
-0.2, Analog Rytm MKII)") has the rest.
+`freed` (fields a build dropped: no other field is given their bits until
+the scope's generation is bumped, and a field back with the same `mod`,
+`sym`, `scope` and `bits` takes its old place again). A field keeps its
+place while its mod, `sym`, `scope` and `bits` stay the same. `id` is the
+first 4 bytes of a SHA-256 of the layout (`store.layout_id`: the format, the
+device, `split`, `generation`, `next`, `fields` and `freed`, not the ID or
+the ancestors), taken whenever the layout changes; a lockfile whose ID came
+from somewhere else keeps it until then. docs/ADAPTING.md ("Mod storage
+(core-ar2 0.2, Analog Rytm MKII)") has the rest.
 
 ### DSP code
 

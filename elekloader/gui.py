@@ -284,7 +284,7 @@ class LoaderModel:
                             'order': [m.label() for m in mods], 'status': status,
                             'blob': len(img) - len(self.img),
                             'sites': sum(len(m.sites) for m in mods)}
-                L = link.link(mods, self.img, self.store_lock(), lambda: 1)   # a check: any ID
+                L = link.link(mods, self.img, self.store_lock())
             except (OSError, elemod.ModError) as e:
                 lines = [x.strip() for x in str(e).split('\n')[1:]] or [str(e)]
                 for p in paths:

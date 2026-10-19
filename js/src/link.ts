@@ -447,9 +447,8 @@ export function ddrFor(dev: Device, coreVersion: string): Range {
 }
 
 /** The patched main OS, its map, tables and layout, and for a core with mod storage the new lockfile. lock: the
- * build's lockfile, or null for a new one; newId gives a fresh layout ID, needed when the lockfile changes
- * (store.ts). Throws ModError. */
-export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = null, newId: (() => number) | null = null): Linked {
+ * build's lockfile, or null for a new one (store.ts). Throws ModError. */
+export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = null): Linked {
   if (!mods.length) throw new ModError('no mods')
   const dev = mods[0].dev, rel = mods[0].rel
   if (sha(image) !== rel.mainSha256) throw new ModError(`the stock main OS is not ${dev.name} ${rel.version}`)
@@ -477,8 +476,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   }
   if (keeps) {
     if (!tables.has(store.IDS_TABLE)) throw new ModError(`${core.label()} imports ${store.GEN_SYMS[0]} but declares no table ${store.IDS_TABLE}`)
-    const idf = newId ?? (() => { throw new ModError('the lockfile changes, so the build needs a new layout ID') })
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, idf)
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     const taken = new Set(order.flatMap(m => m.exports))

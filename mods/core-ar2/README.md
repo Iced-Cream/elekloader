@@ -53,7 +53,8 @@ What differs from the Digitakt mk1 at these sites:
 ## Mod storage (0.2)
 
 Mods declare fields in their mod.json (`storage`) and read and write them
-with `core_store_get` and `core_store_set`; elekloader places the fields
+with `core_store_get` and `core_store_set`, which mask interrupts while they
+do (one byte can hold several mods' fields); elekloader places the fields
 from the build's lockfile. docs/ADAPTING.md ("Mod storage (core-ar2 0.2,
 Analog Rytm MKII)") is the mod writer's guide; `store.c`'s opening comment
 has the byte layout.
@@ -101,9 +102,10 @@ What it does not do:
 - **Global SysEx dumps** have no room for a layout ID, so a global slot
   received as SysEx drops its mod data, even from the same build; its
   stock settings load as usual.
-- **Freed bits** (a field a build dropped) are not cleared on save; no new
+- **Freed bits** (a field a build dropped) are not cleared on save; no other
   field is placed there until the scope's generation is bumped, which turns
-  the old data to zeros anyway.
+  the old data to zeros anyway, and the field takes them back, with its
+  values, if its mod returns.
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
 - **Projects saved before OS 1.70** are not supported.

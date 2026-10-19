@@ -11,7 +11,9 @@
  *     core_store_set(STORE(my_accent), live_pattern, track, v + 1);
  *
  * Zero is always the default: a field reads 0 in a new project, in one saved
- * by another layout, and after its scope was reset.
+ * by another layout, and after its scope was reset. Both calls mask
+ * interrupts while they read or write the field: use them from any context,
+ * the audio interrupt too.
  *
  * item and index, by scope:
  *   sound    the live sound (a kit's or the pool's)     index unused

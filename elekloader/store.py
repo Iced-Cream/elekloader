@@ -13,20 +13,27 @@ field where it was from one build to the next:
 
 - a field keeps its place while its mod declares it with the same scope and
   width;
-- a new field, or one whose scope or width changed, takes bits no field of
-  this lockfile has ever used, so it reads zero (its default) everywhere;
-- a field no mod declares any more is freed;
+- a field no mod declares any more is freed: no other field is given its
+  bits, so its values stay in the projects saved with it;
+- a freed field back in the build with the same scope and width takes its
+  old place again, with the values it had;
+- any other new field, or one whose scope or width changed, takes bits no
+  field of this lockfile has ever used, so it reads zero (its default)
+  everywhere;
 - when a scope's never-used bits run out, its generation goes up and its
   fields are packed again from bit 0: projects and library sounds from older
   generations load that scope at defaults;
 - the tagged store's split (bytes per pattern track and per pattern) grows
-  when its fields need it, which moves the store's regions, so the
-  generations of the pattern tracks, the patterns and the project go up.
+  when its fields need it, which moves the store's regions after it, so the
+  generations of the scopes that move go up (the patterns and the project;
+  the pattern tracks too when their own size changes).
 
-Any change gives the lockfile a new layout ID and keeps the old one as an
-ancestor (the newest 15). The core reads data written under its own ID or an
-ancestor's, so a build that adds a mod still reads the projects of the build
-before it, while two copies of a lockfile that change apart never share an ID.
+A layout's ID is a hash of the layout (layout_id): two lockfiles share an ID
+only when they place every field and freed field alike, so the same mods
+built from no lockfile always get the same layout and ID. Any change gives
+the lockfile its new layout's ID and keeps the old one as an ancestor (the
+newest 15). The core reads data written under its own ID or an ancestor's,
+so a build that adds a mod still reads the projects of the build before it.
 
 The lockfile is JSON:
 
@@ -37,10 +44,11 @@ The lockfile is JSON:
      "fields": [{"mod", "sym", "scope", "offset", "bits"}],
      "freed": [{"mod", "sym", "scope", "offset", "bits"}]}
 
-Nothing here is random: a new ID comes from the caller (`new_id`), so the
-same lockfile and mods always link to the same bytes.
+Nothing here is random: the same lockfile (or none) and mods always link to
+the same bytes.
 """
 import copy
+import hashlib
 import json
 import re
 
@@ -121,12 +129,31 @@ def parse_decls(m):
     return out
 
 
-def fresh(dev_key, new_id):
+def _field_key(f):
+    return (SCOPE_NUM[f['scope']], f['offset'], f['bits'], f['mod'], f['sym'])
+
+
+def layout_id(lock):
+    """A layout's ID: the first 4 bytes of a SHA-256 of everything that says
+    where data sits (not the ID or the ancestors), other than 0. Freed fields
+    count: their bits still hold their values, which a field coming back
+    reads."""
+    what = [lock['elekloader_store'], lock['device'], [lock['split']['track'], lock['split']['pattern']],
+            [lock['generation'][s] for s in SCOPES], [lock['next'][s] for s in SCOPES]]
+    for k in ('fields', 'freed'):
+        what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']]
+                     for f in sorted(lock[k], key=_field_key)])
+    return int(hashlib.sha256(json.dumps(what).encode('ascii')).hexdigest()[:8], 16) or 1
+
+
+def fresh(dev_key):
     sp = _spec(dev_key)
-    return {'elekloader_store': FORMAT, 'device': dev_key, 'id': _idstr(_idval(new_id, 'id')),
+    lock = {'elekloader_store': FORMAT, 'device': dev_key, 'id': None,
             'ancestors': [], 'split': dict(sp['split']),
             'generation': {s: 1 for s in SCOPES}, 'next': {s: 0 for s in SCOPES},
             'fields': [], 'freed': []}
+    lock['id'] = _idstr(layout_id(lock))
+    return lock
 
 
 def check_lock(lock, dev_key):
@@ -190,16 +217,14 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key, new_id):
+def allocate(lock, decls, dev_key):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
-    scope, bits)]; new_id: a callable giving a fresh 32-bit ID other than 0.
-    -> (the new lockfile, [notes]). The lockfile given is not changed."""
+    scope, bits)]. -> (the new lockfile, [notes]). The lockfile given is not
+    changed."""
     notes = []
     if lock is None:
-        lock = fresh(dev_key, new_id())
+        lock = fresh(dev_key)
         new = True
-        notes.append('a new lockfile, layout ID %s: projects and sounds saved by other builds '
-                     'load their mod data at defaults' % lock['id'])
     else:
         check_lock(lock, dev_key)
         lock = copy.deepcopy(lock)
@@ -218,14 +243,24 @@ def allocate(lock, decls, dev_key, new_id):
     have = {(f['mod'], f['sym']) for f in kept}
     added = [{'mod': mid, 'sym': sym, 'scope': want[(mid, sym)][0], 'offset': None,
               'bits': want[(mid, sym)][1]} for mid, sym in sorted(want) if (mid, sym) not in have]
+    # a freed field back with the same scope and width takes its old place: no
+    # field was given those bits since, so its values are still there
+    back = set()
+    for f in added:
+        same = [g for g in lock['freed'] if (g['mod'], g['sym'], g['scope'], g['bits'])
+                == (f['mod'], f['sym'], f['scope'], f['bits'])]
+        if same:
+            f['offset'] = same[-1]['offset']
+            lock['freed'].remove(same[-1])
+            back.add((f['mod'], f['sym']))
     for f in gone:
         lock['freed'].append(dict(f))
-        why = 'changed size' if (f['mod'], f['sym']) in want else 'no longer in the build'
-        notes.append('%s %s (%s): %s, its data is dropped' % (f['mod'], f['sym'], f['scope'], why))
     fields = kept + added
     cap = capacity(dev_key, lock['split'])
+    repacked = set()
 
     def repack(scope):
+        repacked.add(scope)
         lock['generation'][scope] = _bump(lock['generation'][scope])
         lock['freed'] = [f for f in lock['freed'] if f['scope'] != scope]
         at = 0
@@ -240,6 +275,9 @@ def allocate(lock, decls, dev_key, new_id):
     def need(scope):
         return sum(f['bits'] for f in fields if f['scope'] == scope)
 
+    def pending(scope):
+        return [f for f in added if f['scope'] == scope and f['offset'] is None]
+
     # the split first: if the tracks or the patterns can't fit even packed, grow it
     sp = _spec(dev_key)
     split = dict(lock['split'])
@@ -248,10 +286,13 @@ def allocate(lock, decls, dev_key, new_id):
         if n > sp['live'][k]:
             raise ModError('the mods need %d bits per %s; the %s keeps at most %d'
                            % (n, k, dev_key, sp['live'][k]))
-        fits = lock['next'][k] + sum(f['bits'] for f in added if f['scope'] == k) <= 8 * split[k]
+        fits = lock['next'][k] + sum(f['bits'] for f in pending(k)) <= 8 * split[k]
         if not fits and n > 8 * split[k]:
             split[k] = -(-n // 8)
     if split != lock['split']:
+        # the pattern tracks come first in the store: they move only when their own size changes
+        moved = ('track', 'pattern', 'project') if split['track'] != lock['split']['track'] \
+            else ('pattern', 'project')
         lock['split'] = split
         cap = capacity(dev_key, split)
         if cap['project'] < need('project'):
@@ -261,13 +302,13 @@ def allocate(lock, decls, dev_key, new_id):
                                               + -(-need('project') // 8)), dev_key, sp['store']))
         notes.append('the tagged store now keeps %d B per pattern track and %d B per pattern'
                      % (split['track'], split['pattern']))
-        for k in ('track', 'pattern', 'project'):
+        for k in moved:
             repack(k)
     for s in SCOPES:
         if need(s) > cap[s]:
             raise ModError('the mods need %d bits of %s storage; the %s has %d'
                            % (need(s), s, dev_key, cap[s]))
-        pend = [f for f in added if f['scope'] == s and f['offset'] is None]
+        pend = pending(s)
         if not pend:
             continue
         if lock['next'][s] + sum(f['bits'] for f in pend) <= cap[s]:
@@ -276,15 +317,37 @@ def allocate(lock, decls, dev_key, new_id):
                 lock['next'][s] += f['bits']
         else:
             repack(s)
+    for f in gone:
+        if (f['mod'], f['sym']) in want or f['scope'] in repacked:
+            notes.append('%s %s (%s): %s, its data is dropped'
+                         % (f['mod'], f['sym'], f['scope'],
+                            'changed size' if (f['mod'], f['sym']) in want else 'no longer in the build'))
+        else:
+            notes.append('%s %s (%s): no longer in the build; its bits are kept, so it gets its '
+                         'values back if it returns' % (f['mod'], f['sym'], f['scope']))
     for f in added:
-        notes.append('%s %s: %d bits of %s storage at bit %d' % (f['mod'], f['sym'], f['bits'],
-                                                                 f['scope'], f['offset']))
+        if (f['mod'], f['sym']) in back and f['scope'] not in repacked:
+            notes.append('%s %s: back at bit %d of %s storage, with the values it had'
+                         % (f['mod'], f['sym'], f['offset'], f['scope']))
+        else:
+            notes.append('%s %s: %d bits of %s storage at bit %d'
+                         % (f['mod'], f['sym'], f['bits'], f['scope'], f['offset']))
     lock['fields'] = sorted(fields, key=lambda f: (SCOPE_NUM[f['scope']], f['offset']))
-    if (gone or added) and not new:
-        lock['ancestors'] = ([lock['id']] + lock['ancestors'])[:MAX_ANCESTORS]
-        lock['id'] = _idstr(_idval(new_id(), 'id'))
-        notes.append('layout ID %s (from %s, whose projects it still reads)'
-                     % (lock['id'], lock['ancestors'][0]))
+    if new:
+        lock['id'] = _idstr(layout_id(lock))
+        notes.insert(0, 'a new lockfile, layout ID %s: projects and sounds saved by builds with '
+                        'other layouts load their mod data at defaults' % lock['id'])
+    elif gone or added:
+        old = lock['id']
+        lock['id'] = _idstr(layout_id(lock))
+        seen, anc = {_idval(lock['id'], 'id')}, []
+        for a in [old] + lock['ancestors']:        # a layout can come back: no ID twice
+            v = _idval(a, 'ancestor')
+            if v not in seen:
+                seen.add(v)
+                anc.append(_idstr(v))
+        lock['ancestors'] = anc[:MAX_ANCESTORS]
+        notes.append('layout ID %s (from %s, whose projects it still reads)' % (lock['id'], old))
     return lock, notes
 
 

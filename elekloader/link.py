@@ -419,12 +419,11 @@ class Linked:
     pass
 
 
-def link(mods, image, lock=None, new_id=None):
+def link(mods, image, lock=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
     with mod storage .store (the new lockfile) and .store_notes. lock: the
-    build's lockfile, or None for a new one; new_id: a callable giving a fresh
-    layout ID, needed when the lockfile changes (elekloader/store.py). Raises
+    build's lockfile, or None for a new one (elekloader/store.py). Raises
     ModError."""
     if not mods:
         raise ModError('no mods')
@@ -458,10 +457,7 @@ def link(mods, image, lock=None, new_id=None):
         if store.IDS_TABLE not in tables:
             raise ModError('%s imports %s but declares no table %s'
                            % (core.label(), store.GEN_SYMS[0], store.IDS_TABLE))
-        if new_id is None:
-            def new_id():
-                raise ModError('the lockfile changes, so the build needs a new layout ID')
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, new_id)
+        new_lock, store_notes = store.allocate(lock, decls, dev.key)
         store_syms, ids = store.symbols(new_lock, dev.key)
         taken = {nm for m in order for nm in m.exports}
         for nm in store_syms:

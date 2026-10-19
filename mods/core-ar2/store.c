@@ -459,7 +459,24 @@ int st_file_load(void *live, unsigned char *src, void *progress)
  * scope's bytes in bits 0..21, most significant bit first.
  * item and index, by scope: a sound, the live sound; a kit, the live kit; a
  * global slot, index 0..3; a pattern track, the live pattern and index 0..12
- * (the track); a pattern, the live pattern; the project, neither. */
+ * (the track); a pattern, the live pattern; the project, neither.
+ *
+ * One byte can hold fields of several mods, and mods use them from the UI
+ * and from the audio interrupt, so a field is read and written with
+ * interrupts masked, as the OS's own critical sections do: no write is lost
+ * to another's, and no reader sees half a value. */
+
+static unsigned short irq_mask(void)
+{
+    unsigned short sr;
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) : : "memory");
+    return sr;
+}
+
+static void irq_restore(unsigned short sr)
+{
+    __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
+}
 
 static volatile unsigned char *field_base(unsigned scope, unsigned char *item, int index)
 {
@@ -487,10 +504,13 @@ unsigned core_store_get(unsigned field, void *item, int index)
 {
     unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i;
     volatile unsigned char *base = field_base(scope, item, index);
+    unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return 0;
+    sr = irq_mask();
     for (i = 0; i < w; i++, o++)
         v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
+    irq_restore(sr);
     return v;
 }
 
@@ -498,8 +518,10 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
     unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, i;
     volatile unsigned char *base = field_base(scope, item, index), *p;
+    unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return;
+    sr = irq_mask();
     for (i = 0; i < w; i++, o++) {
         unsigned bit = 0x80 >> (o & 7);
         p = field_byte(scope, base, o >> 3);
@@ -508,4 +530,5 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
         else
             *p &= ~bit;
     }
+    irq_restore(sr);
 }

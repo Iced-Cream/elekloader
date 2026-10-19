@@ -79,8 +79,8 @@ function plan(configPath: string, casesPath: string) {
   }
 
   // the Analog Rytm MKII (optional: stocks.ar173, and dirs.ar with core-0.2.elemod, hello-marker-1.0.elemod and
-  // hooks-check-0.1.elemod built from mods/core-ar2 and examples/*-ar2). A new mod-storage layout's ID is fixed on
-  // both sides (build's newId), so the builds compare byte for byte
+  // hooks-check-0.1.elemod built from mods/core-ar2 and examples/*-ar2). A mod-storage layout's ID is a hash of the
+  // layout, so the builds compare byte for byte
   if (cfg.stocks.ar173 && cfg.dirs.ar) {
     const core = f('ar', 'core-0.2.elemod'), hello = f('ar', 'hello-marker-1.0.elemod'), hooks = f('ar', 'hooks-check-0.1.elemod')
     add('ar173 core alone', 'ar173', [core])
@@ -266,7 +266,7 @@ async function runTs(c: Case, root: string) {
   const out: Record<string, any> = { n: c.n }
   const log: string[] = []
   try {
-    const [outputs, man] = await build(stock, mods, c.version, !!c.check_only, line => log.push(line), null, () => 0x51ab1e00)
+    const [outputs, man] = await build(stock, mods, c.version, !!c.check_only, line => log.push(line))
     if (!outputs) {
       out.checked = JSON.parse(dumps(man))
     } else {

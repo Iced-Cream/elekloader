@@ -51,4 +51,6 @@ python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
 ```
 
 Keep `rytm-store.lock.json`: a later build made with it reads the projects
-this one saved.
+this one saved. The same mods built without it get the same layout, so they
+read them too. For a build that can't, give it an edited copy of the
+lockfile, with another `id` and no `ancestors`.

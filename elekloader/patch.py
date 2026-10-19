@@ -24,12 +24,13 @@ In this order, stopping at the first failure:
      mods, OUT.map.json (every symbol's address).
 
 A core with mod storage (core-ar2 0.2) places the mods' fields from a
-lockfile (elekloader/store.py): --lockfile FILE, by default OUT.lock.json.
-Keep it, and give it to every later build: a build without it starts a new
-layout, and the unit then loads every project's mod data at defaults. It is
-written back after each build, and copies go in the manifest and in the
-build itself: --lockfile-from OLD.syx takes it out of an earlier build when
-the lockfile is lost.
+lockfile (elekloader/store.py): --lockfile FILE, by default DEVICE.lock.json
+in the output's folder (analog-rytm-mk2.lock.json), so every build written
+there shares it. Keep it, and give it to every later build: a build without
+it packs the fields afresh, and when the mods have changed since, the unit
+loads every project's mod data at defaults. It is written back after each
+build, and copies go in the manifest and in the build itself: --lockfile-from
+OLD.syx takes it out of an earlier build when the lockfile is lost.
 
 --check stops after step 4 and writes nothing. Nothing here talks to a
 device: you flash the file yourself, as with any OS update, and the stock
@@ -38,7 +39,6 @@ file recovers the unit because the bootloader is never changed.
 import argparse
 import json
 import os
-import secrets
 import sys
 import time
 
@@ -50,16 +50,7 @@ class PatchError(Exception):
     pass
 
 
-def new_layout_id():
-    """A random 32-bit layout ID other than 0."""
-    while True:
-        v = secrets.randbits(32)
-        if v:
-            return v
-
-
-def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock=None,
-          new_id=new_layout_id):
+def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock=None):
     """-> (outputs {'syx': bytes[, 'bin': bytes]} or None, manifest dict).
     lock: the mod-storage lockfile (a dict), or None for a new one; the new
     one is the manifest's 'store'. Raises PatchError."""
@@ -95,7 +86,7 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             if len(v2) != len(mods):
                 raise elemod.ModError('a whole-build bundle (format 1) cannot be combined '
                                       'with separate mods (format 2)')
-            linked = link.link(mods, img0, lock, new_id)
+            linked = link.link(mods, img0, lock)
             img = linked.image
         else:
             img = elemod.apply(mods, img0)
@@ -215,6 +206,17 @@ def lock_from_build(path):
     return None
 
 
+def default_lockfile(stock_path, out):
+    """The lockfile a build keeps when --lockfile is not given: DEVICE.lock.json
+    in the output's folder; None when the stock file can't be read (the build
+    then says why)."""
+    try:
+        _, dev, _ = formats.load(stock_path)
+    except (OSError, devices.UnknownFirmware, formats.FormatError):
+        return None
+    return os.path.join(os.path.dirname(os.path.abspath(out)), dev.key + '.lock.json')
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='elekloader.patch', description=__doc__.split('\n')[0])
     ap.add_argument('--stock', required=True, help='your stock OS file (.syx, or the '
@@ -226,7 +228,7 @@ def main(argv=None):
                                       'a Digitakt, up to 10 on an Octatrack (default: the mod\'s)')
     ap.add_argument('--check', action='store_true', help='check the mods combine; write nothing')
     ap.add_argument('--lockfile', help='the mod-storage lockfile, read and written back '
-                                       '(default: OUT.lock.json)')
+                                       '(default: DEVICE.lock.json in the output\'s folder)')
     ap.add_argument('--lockfile-from', metavar='OLD', help='when the lockfile does not exist: '
                     'take it from this earlier build (.syx)')
     a = ap.parse_args(argv)
@@ -235,15 +237,24 @@ def main(argv=None):
     if a.out and os.path.exists(a.stock) and os.path.exists(a.out) \
             and os.path.samefile(a.stock, a.out):
         ap.error('--out is the stock file')
-    lockpath = a.lockfile or (a.out + '.lock.json' if a.out else None)
+    lockpath = a.lockfile or (default_lockfile(a.stock, a.out) if a.out else None)
+    readpath = lockpath
+    if not a.lockfile and lockpath and not os.path.exists(lockpath) \
+            and os.path.exists(a.out + '.lock.json'):
+        readpath = a.out + '.lock.json'           # the default before DEVICE.lock.json
     lock = None
-    if lockpath and os.path.exists(lockpath):
+    if readpath and os.path.exists(readpath):
+        if a.lockfile_from:
+            print('IGNORED --lockfile-from %s: the lockfile %s exists (move it away to take the '
+                  'build\'s)' % (a.lockfile_from, readpath))
         try:
-            with open(lockpath) as fh:
+            with open(readpath) as fh:
                 lock = json.load(fh)
         except (OSError, ValueError) as e:
-            print('REFUSED: cannot read the lockfile %s: %s' % (lockpath, e))
+            print('REFUSED: cannot read the lockfile %s: %s' % (readpath, e))
             return 1
+        if readpath != lockpath:
+            print('READ the lockfile %s; it is kept as %s from now on' % (readpath, lockpath))
     elif a.lockfile_from:
         try:
             lock = lock_from_build(a.lockfile_from)

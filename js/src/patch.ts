@@ -47,18 +47,10 @@ export function loadAny(file: File): AnyMod {
 const pad = (s: string, n: number) => s + ' '.repeat(Math.max(0, n - s.length))
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
-/** A random 32-bit layout ID other than 0. patch.new_layout_id. */
-export function newLayoutId(): number {
-  const b = new Uint32Array(1)
-  do crypto.getRandomValues(b); while (!b[0])
-  return b[0]
-}
-
 /** -> [outputs {syx[, bin]} or null, manifest]. Throws PatchError. `stock` is the stock file (or Elektron's zip).
  * lock: the mod-storage lockfile, or null for a new one; the new one is the manifest's `store`. */
 export async function build(stock: File, modFiles: File[], version: string | null = null, checkOnly = false,
-  log: (line: string) => void = () => {}, lock: Lock | null = null,
-  newId: () => number = newLayoutId): Promise<[formats.Outputs | null, Record<string, any>]> {
+  log: (line: string) => void = () => {}, lock: Lock | null = null): Promise<[formats.Outputs | null, Record<string, any>]> {
   let parsed: formats.Parsed, dev, rel
   try {
     [parsed, dev, rel] = await formats.load(stock.data)
@@ -90,7 +82,7 @@ export async function build(stock: File, modFiles: File[], version: string | nul
   try {
     if (v2.length) {
       if (v2.length !== mods.length) throw new ModError('a whole-build bundle (format 1) cannot be combined with separate mods (format 2)')
-      linked = link(v2, img0, lock, newId)
+      linked = link(v2, img0, lock)
       img = linked.image
     } else {
       img = apply(mods as Mod[], img0)
