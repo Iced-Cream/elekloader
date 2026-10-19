@@ -21,7 +21,9 @@ field, and is never 0.
 
 Seven columns at the bottom left then count the markers `core_store_get` no
 longer reads back, left to right: pattern tracks, patterns, kit sounds, pool
-sounds, kits, globals, project. Each grows a pixel per bad marker, up to 16.
+sounds, kits, globals, project. Each grows a pixel per bad marker, up to 16;
+globals have only 8 markers (4 slots x 2 fields) and the project 2, so those
+two columns are full at 8 and 2 pixels.
 Empty columns after a save, a power cycle or loading the project back mean
 everything survived; full columns after loading another project, or with a
 build whose layout can't read this one, mean the data was dropped to zeros
