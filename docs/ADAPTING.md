@@ -666,22 +666,26 @@ JSON file per project: `elekloader.patch --lockfile FILE` (default: next to
 the output, `OUT.lock.json`); the desktop app keeps one per profile; the web
 bridge takes it as `store` and returns the new one. A build that adds a
 field puts it in bits no field ever used; one that drops or changes a field
-frees its bits. Each layout has a 4-byte ID and a generation per scope, and
-the build's manifest carries the lockfile (`store`). Every change gives a
+frees its bits. Each layout has a 4-byte ID and a generation per scope.
+Every change gives a
 new ID, and the build keeps the last 15 IDs as ancestors, so a project saved
 by an older layout still loads. When a scope is full the allocator bumps its
 generation and packs that scope's fields again from bit 0: the scope's data
 in projects saved before then loads as zeros. Keep the lockfile with the
 project: a build made without it starts a new layout, which reads none of
-the old data.
+the old data. Copies go in the build's manifest (`store`) and in the build
+itself, after the mods' image (`ELKSTORE`, its length, then the lockfile's
+text; about 1-2 KB, never copied into RAM), so a lost lockfile comes back
+from the last .syx: `elekloader.patch --lockfile-from OLD.syx`. The unit
+itself can't give it back: it never sends its OS out.
 
 **What is checked.** Sounds and kits carry the layout ID and their
 generation in their own spare bytes and are checked on every load. Pattern
 tracks, patterns, the project and globals are checked against the header of
 the image they come from. Data that fails the check loads as zeros. A
-global SysEx dump carries no ID and is taken as it is, so a dump from
-another layout's build can be read wrongly. Projects saved before OS 1.70
-are not supported.
+global slot received as SysEx has no room for an ID, so its mod data is
+always dropped, even from the same build: only its stock settings load.
+Projects saved before OS 1.70 are not supported.
 
 Core-ar2 0.2 owns 16 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74): 0x4000937c and 0x40009146

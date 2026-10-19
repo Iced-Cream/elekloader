@@ -693,6 +693,8 @@ def link(mods, image, lock=None, new_id=None):
             o = s['addr'] - dev.main_load
             img[o:o + s['len']] = new
     img += blob
+    if new_lock is not None:
+        img += store.trailer(new_lock)
     bad = _copied_rules(order, bytes(img), dev)
     for m in order:
         for s in m.sites:

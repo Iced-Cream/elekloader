@@ -155,6 +155,9 @@ core a mod that declares storage is refused. The linker:
   generations, then T and P);
 - adds entries to `core_store_ids`: the layout's ID, then its ancestors,
   newest first;
+- appends the lockfile to the image, after the mods' image: `ELKSTORE`,
+  its length (4 bytes, big-endian), then its text. Nothing reads it on the
+  unit; `elekloader.patch --lockfile-from` takes it back out of a build;
 - returns the new lockfile, which the build's manifest carries as `store`.
 
 The lockfile is JSON: `elekloader_store` (1), `device`, `id`, `ancestors`,

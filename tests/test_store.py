@@ -132,6 +132,15 @@ def test_lockfiles_it_refuses():
         refused(store.allocate, bad, [], DEV, ids())
 
 
+
+def test_the_build_carries_the_lockfile():
+    lock, _ = store.allocate(None, [('a', 'x', 'track', 4)], DEV, ids())
+    image = bytes(1000) + b'any image' + store.trailer(lock)
+    assert store.from_image(image) == lock
+    assert store.from_image(bytes(1000)) is None
+    assert 'cannot be read' in refused(store.from_image, store.TRAILER + (5).to_bytes(4, 'big') + b'{nope')
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_'):

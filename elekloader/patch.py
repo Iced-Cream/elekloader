@@ -3,7 +3,7 @@
 
     python -m elekloader.patch --stock Digitakt_OS1.53.syx \
         --mod core-2.1.elemod --mod sysinfo-2.0a.elemod ... --out CUSTOM.syx \
-        [--version 2.0a] [--check] [--lockfile FILE]
+        [--version 2.0a] [--check] [--lockfile FILE] [--lockfile-from OLD.syx]
 
 In this order, stopping at the first failure:
   1. the stock file must be a release elekloader knows (by its sha256), and
@@ -27,7 +27,9 @@ A core with mod storage (core-ar2 0.2) places the mods' fields from a
 lockfile (elekloader/store.py): --lockfile FILE, by default OUT.lock.json.
 Keep it, and give it to every later build: a build without it starts a new
 layout, and the unit then loads every project's mod data at defaults. It is
-written back after each build, and a copy goes in the manifest.
+written back after each build, and copies go in the manifest and in the
+build itself: --lockfile-from OLD.syx takes it out of an earlier build when
+the lockfile is lost.
 
 --check stops after step 4 and writes nothing. Nothing here talks to a
 device: you flash the file yourself, as with any OS update, and the stock
@@ -196,6 +198,23 @@ def save(outputs, man, path):
     return written
 
 
+def lock_from_build(path):
+    """An earlier build's OS file -> the mod-storage lockfile it carries, or None."""
+    with open(path, 'rb') as fh:
+        raw = fh.read()
+    for dev in devices.devices():
+        if not store.supports(dev.key):
+            continue
+        try:
+            image = formats.main_image(formats.parse(raw, dev), dev)
+        except Exception:                      # not this family's file
+            continue
+        lock = store.from_image(image)
+        if lock is not None:
+            return lock
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='elekloader.patch', description=__doc__.split('\n')[0])
     ap.add_argument('--stock', required=True, help='your stock OS file (.syx, or the '
@@ -208,6 +227,8 @@ def main(argv=None):
     ap.add_argument('--check', action='store_true', help='check the mods combine; write nothing')
     ap.add_argument('--lockfile', help='the mod-storage lockfile, read and written back '
                                        '(default: OUT.lock.json)')
+    ap.add_argument('--lockfile-from', metavar='OLD', help='when the lockfile does not exist: '
+                    'take it from this earlier build (.syx)')
     a = ap.parse_args(argv)
     if not a.check and not a.out:
         ap.error('--out is required (or --check)')
@@ -223,6 +244,17 @@ def main(argv=None):
         except (OSError, ValueError) as e:
             print('REFUSED: cannot read the lockfile %s: %s' % (lockpath, e))
             return 1
+    elif a.lockfile_from:
+        try:
+            lock = lock_from_build(a.lockfile_from)
+        except (OSError, elemod.ModError, formats.FormatError) as e:
+            print('REFUSED: cannot take the lockfile from %s: %s' % (a.lockfile_from, e))
+            return 1
+        if lock is None:
+            print('REFUSED: %s carries no lockfile (built without mod storage, or before '
+                  'elekloader kept one in the build)' % a.lockfile_from)
+            return 1
+        print('READ the lockfile (layout ID %s) from %s' % (lock['id'], a.lockfile_from))
     try:
         outputs, man = build(a.stock, a.mod, a.version, a.check, lock=lock)
     except PatchError as e:

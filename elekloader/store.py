@@ -303,3 +303,28 @@ def symbols(lock, dev_key):
 
 def dumps(lock):
     return json.dumps(lock, indent=1) + '\n'
+
+
+TRAILER = b'ELKSTORE'
+
+
+def trailer(lock):
+    """The lockfile as the build carries it, after the mods' image: TRAILER, its
+    length (4 bytes, big-endian), then dumps(lock). Nothing reads it on the unit:
+    it is there so the lockfile can be taken back out of the build (from_image)."""
+    text = dumps(lock).encode('ascii')
+    return TRAILER + len(text).to_bytes(4, 'big') + text
+
+
+def from_image(image):
+    """A built main OS image -> the lockfile it carries (a dict), or None."""
+    at = bytes(image).rfind(TRAILER)
+    if at < 0:
+        return None
+    n = int.from_bytes(image[at + 8:at + 12], 'big')
+    try:
+        lock = json.loads(bytes(image[at + 12:at + 12 + n]).decode('ascii'))
+    except (ValueError, UnicodeDecodeError):
+        raise ModError('the build\'s lockfile cannot be read')
+    check_lock(lock, lock.get('device') if isinstance(lock, dict) else None)
+    return lock

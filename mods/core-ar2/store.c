@@ -33,8 +33,8 @@
  * Data is used only when it was written by this layout or one of its
  * ancestors (core_store_ids) and its scope's generation is this build's:
  * sounds and kits by their own copy of the ID, everything else by the header
- * of the image it is read from. Anything else loads as zeros. SysEx dumps of
- * globals have no ID and are taken as they are.
+ * of the image it is read from. Anything else loads as zeros, and so does a
+ * global slot from a SysEx dump, which has no room for an ID.
  */
 
 #define S ((unsigned char *)0x405c8f20)         /* the stored project */
@@ -341,7 +341,8 @@ int st_glob_load(unsigned char *live, unsigned char *src)
     int r = st_glob_load_body(live, src), g = global_slot(live), j;
     if (src && g >= 0) {
         unsigned char *img = global_image(src);
-        int ok = st_image && (!img || store_ok(img, SC_GLOBAL));
+        /* a SysEx dump (no image) carries no layout ID: its mod data is dropped */
+        int ok = st_image && img && store_ok(img, SC_GLOBAL);
         for (j = 0; j < 5; j++)
             core_store_globals[g][j] = ok ? src[0x4b + j] : 0;
     }

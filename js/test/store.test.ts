@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, dumps, parseDecls, symbols, type Decl, type Lock } from '../src/store.ts'
+import { allocate, dumps, fromImage, parseDecls, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -45,4 +45,15 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
     if (c.error) assert.throws(() => parseDecls(c.doc), (e: Error) => e.message === c.error, `${name}: ${c.error}`)
     else assert.deepEqual(parseDecls(c.doc), c.ok, name)
   }
+})
+
+test('the build carries the lockfile, as store.py writes it', () => {
+  const [lock] = allocate(null, [['a', 'x', 'track', 4]], DEV, ids(0x10000000))
+  const t = trailer(lock)
+  assert.equal(new TextDecoder().decode(t.subarray(12)), dumps(lock))
+  assert.deepEqual([...t.subarray(0, 12)], [...new TextEncoder().encode('ELKSTORE'), 0, 0, (t.length - 12) >> 8, (t.length - 12) & 255])
+  const image = new Uint8Array(1000 + t.length)
+  image.set(t, 1000)
+  assert.deepEqual(fromImage(image), lock)
+  assert.equal(fromImage(new Uint8Array(1000)), null)
 })

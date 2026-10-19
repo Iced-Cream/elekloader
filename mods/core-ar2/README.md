@@ -94,8 +94,9 @@ in `store.s`:
 
 What it does not do:
 
-- **Global SysEx dumps** carry no layout ID, so a dump made by another
-  layout's build is taken as it is and can read wrongly.
+- **Global SysEx dumps** have no room for a layout ID, so a global slot
+  received as SysEx drops its mod data, even from the same build; its
+  stock settings load as usual.
 - **Freed bits** (a field a build dropped) are not cleared on save; no new
   field is placed there until the scope's generation is bumped, which turns
   the old data to zeros anyway.
@@ -144,7 +145,9 @@ stock bytes, and that each covers whole instructions.
   project back, and a power cycle, every marker read back. A build with an
   ancestor layout read all of it and rewrote the header; a build with the
   kit generation bumped read zeros for kits only; a build with a fresh
-  layout read zeros everywhere; CREATE NEW cleared everything. Not yet
+  layout read zeros everywhere; CREATE NEW cleared everything. A global
+  slot received as SysEx came in with its mod data cleared, and the other
+  three slots and every other scope kept theirs. Not yet
   checked on a unit, and not yet on 1.73, which has the same addresses
   apart from the file save.
 

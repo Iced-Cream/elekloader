@@ -254,3 +254,33 @@ export function symbols(lock: Lock): [Map<string, number>, Uint8Array[]] {
 }
 
 export const dumps = (lock: Lock): string => pyDumps(lock, 1) + '\n'
+
+export const TRAILER = 'ELKSTORE'
+
+/** The lockfile as the build carries it, after the mods' image: TRAILER, its length (4 bytes, big-endian), then
+ * dumps(lock). Nothing reads it on the unit: it is there so the lockfile can be taken back out (fromImage). */
+export function trailer(lock: Lock): Uint8Array {
+  const text = new TextEncoder().encode(dumps(lock))
+  const out = new Uint8Array(12 + text.length)
+  out.set(new TextEncoder().encode(TRAILER))
+  new DataView(out.buffer).setUint32(8, text.length)
+  out.set(text, 12)
+  return out
+}
+
+/** A built main OS image -> the lockfile it carries, or null. */
+export function fromImage(image: Uint8Array): Lock | null {
+  const m = new TextEncoder().encode(TRAILER)
+  let at = -1
+  for (let i = image.length - m.length; i >= 0 && at < 0; i--) if (m.every((b, j) => image[i + j] === b)) at = i
+  if (at < 0) return null
+  const n = new DataView(image.buffer, image.byteOffset).getUint32(at + 8)
+  let lock: unknown
+  try {
+    lock = JSON.parse(new TextDecoder('ascii', { fatal: true }).decode(image.subarray(at + 12, at + 12 + n)))
+  } catch {
+    throw new ModError("the build's lockfile cannot be read")
+  }
+  checkLock(lock, (lock as any)?.device)
+  return lock as Lock
+}

@@ -725,7 +725,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   const boot = content.get(key(core.id, '.boot'))
   if (!boot) throw new KeyError(`(${repr(core.id)}, '.boot')`)
   const blob = concat([boot, new Uint8Array(runLoad - end - boot.length), ddr])
-  const img = new Uint8Array(image.length + blob.length)
+  const tail = newLock ? store.trailer(newLock) : new Uint8Array(0)
+  const img = new Uint8Array(image.length + blob.length + tail.length)
   img.set(image)
   const dspPut = (tag: string, word: number, data: Uint8Array) => {   // P words of a payload's area: main OS bytes
     const [lo, , at] = areas.get(tag)!
@@ -741,6 +742,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
   }
   img.set(blob, image.length)
+  img.set(tail, image.length + blob.length)
   const bad = copiedRules(order, img, dev)
   for (const m of order) {
     for (const s of m.sites) {
