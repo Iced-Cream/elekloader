@@ -406,30 +406,28 @@ int st_proj_init(void *project, int a, int b, int c)
 }
 
 /* After any project load: the stored project's store drops what this layout
- * can't read, then takes this build's header, and the mods hear of it. A file
- * of an older project version (st_image 0) brings no project data. */
+ * can't read, then takes this build's header, and the mods hear of it, with
+ * the scopes the loaded image (a file's buffer, else the stored project) had
+ * nothing for. A file of an older project version (st_image 0) brings no
+ * project data. */
 int st_proj_load(void *live, unsigned char *src, void *progress)
 {
-    int r = st_proj_load_body(live, src, progress), g, j;
+    int r = st_proj_load_body(live, src, progress), g, j, s;
+    unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
-    if (!store_ok(S, SC_TRACK)) {
+    for (s = SC_GLOBAL; s <= SC_PROJECT; s++)
+        if (!store_ok(from, s))
+            dropped |= 1 << s;
+    if (!store_ok(S, SC_TRACK))
         store_clear(S, HEADER, PATTERNS_AT);
-        dropped |= 1 << SC_TRACK;
-    }
-    if (!store_ok(S, SC_PATTERN)) {
+    if (!store_ok(S, SC_PATTERN))
         store_clear(S, PATTERNS_AT, PROJECT_AT);
-        dropped |= 1 << SC_PATTERN;
-    }
-    if (!st_image || !store_ok(S, SC_PROJECT)) {
+    if (!st_image || !store_ok(S, SC_PROJECT))
         store_clear(S, PROJECT_AT, STORE_BYTES);
-        dropped |= 1 << SC_PROJECT;
-    }
-    if (!store_ok(S, SC_GLOBAL)) {
+    if (!store_ok(S, SC_GLOBAL))
         for (g = 0; g < 4; g++)
             for (j = 0; j < 5; j++)
                 S[GLOBALS_AT + 80 * g + 0x4b + j] = 0;
-        dropped |= 1 << SC_GLOBAL;
-    }
     store_header(S);
     project_event(1, dropped);
     return r;
