@@ -31,8 +31,9 @@
  * store; a project file, Total Recall's buffer and the like carry theirs.
  *
  * The SysEx project commands that copy, swap or write whole stored songs go
- * through st_song_copy, which leaves the target's store bytes (three sites,
- * at different addresses on 1.73 and 1.74).
+ * through st_song_copy, which leaves the target's store bytes, and those for
+ * whole stored patterns through st_pattern_copy, which clears the target
+ * slot's fields (three sites each, at different addresses on 1.73 and 1.74).
  *
  * Data is used only when it was written by this layout or one of its
  * ancestors (core_store_ids) and its scope's generation is this build's:
@@ -471,6 +472,29 @@ void *st_song_copy(unsigned char *dst, const unsigned char *src, unsigned n)
     for (i = 0; i < n; i++)
         if (n != 0x518 || i < 0x116 || i >= 0x116 + 4 * 256 || ((i - 0x116) & 3))
             dst[i] = src[i];
+    return dst;
+}
+
+/* The same commands copy, write and swap whole stored patterns (13,101 B)
+ * with memcpy. A pattern's track and pattern fields are kept by slot in the
+ * image's store, so they can't follow it: clear the target slot's, so the
+ * pattern loads with its mods' defaults instead of the slot's old values. A
+ * swap's temporary buffer is in no image and is left alone. */
+
+void *st_pattern_copy(unsigned char *dst, const unsigned char *src, unsigned n)
+{
+    unsigned char *img;
+    unsigned i, t, j, T = SPLIT_T, P = SPLIT_P;
+    int k;
+    for (i = 0; i < n; i++)
+        dst[i] = src[i];
+    if (n != 13101 || !(img = pattern_image(dst)) || (k = pattern_index(img, dst)) < 0)
+        return dst;
+    for (t = 0; t < 13; t++)
+        for (j = 0; j < T; j++)
+            B(store_byte(img, HEADER + (13 * k + t) * T + j)) = 0;
+    for (j = 0; j < P; j++)
+        B(store_byte(img, PATTERNS_AT + P * k + j)) = 0;
     return dst;
 }
 
