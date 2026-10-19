@@ -76,7 +76,7 @@ project image (4,352 bytes). The stock OS leaves those bytes out of a
 project file, so core hooks the file save and load and the save to a
 buffer in RAM, and carries the store across.
 
-The 16 sites, by `jmp` unless marked, each with its displaced instructions
+The 19 sites, by `jmp` unless marked, each with its displaced instructions
 in `store.s`:
 
 | site | 1.73 | 1.74 | why |
@@ -92,6 +92,7 @@ in `store.s`:
 | buffer save (`keep2`) | 0x40034d86 | the same | which image is being saved |
 | file save (`keep2`) | 0x400b0804 | 0x400b0870 | the same, for a project file |
 | file load (`keep2`) | 0x40035000 | the same | which image is being loaded |
+| SysEx song copy, write, swap (`keep2`) | 0x4018b6ec, 0x4018c09a, 0x4018c2bc | 0x4018b8b8, 0x4018c266, 0x4018c488 | copy whole stored songs but leave the target's store bytes |
 
 After CREATE NEW and after every project load (the project init and
 project load sites), core calls the mods' `ev_project` handlers with what
@@ -109,6 +110,10 @@ What it does not do:
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
 - **Projects saved before OS 1.70** are not supported.
+- **Patterns copied by the SysEx project commands** from a stored pattern
+  into a stored pattern of another project don't take their pattern-track and
+  pattern fields with them: those are kept by pattern slot in the tagged
+  store, so the target keeps the fields its slot already had.
 
 ## Checked so far
 

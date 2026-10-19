@@ -30,6 +30,10 @@
  * stored project (the working copy at 0x405c8f20) carries the build's own
  * store; a project file, Total Recall's buffer and the like carry theirs.
  *
+ * The SysEx project commands that copy, swap or write whole stored songs go
+ * through st_song_copy, which leaves the target's store bytes (three sites,
+ * at different addresses on 1.73 and 1.74).
+ *
  * Data is used only when it was written by this layout or one of its
  * ancestors (core_store_ids) and its scope's generation is this build's:
  * sounds and kits by their own copy of the ID, everything else by the header
@@ -451,6 +455,23 @@ int st_file_load(void *live, unsigned char *src, void *progress)
     r = PROJECT_LOAD(live, src, progress);   /* through st_proj_load */
     st_image = S;
     return r;
+}
+
+/* ---- the SysEx project commands: whole stored songs ----
+ * The SysEx handler copies, swaps and writes stored song records (0x518 B,
+ * song slots 1..16 of a project image) with memcpy. Byte +2 of each of a
+ * record's 256 entries is the tagged store, which belongs to the image, not
+ * the song: copy everything else and leave the target's store bytes. In a
+ * swap the temporary buffer keeps its own (garbage) bytes, so both slots end
+ * with their own. Any other length is a plain copy. */
+
+void *st_song_copy(unsigned char *dst, const unsigned char *src, unsigned n)
+{
+    unsigned i;
+    for (i = 0; i < n; i++)
+        if (n != 0x518 || i < 0x116 || i >= 0x116 + 4 * 256 || ((i - 0x116) & 3))
+            dst[i] = src[i];
+    return dst;
 }
 
 /* ---- for mods: a field's value in an item ----
