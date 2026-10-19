@@ -142,7 +142,7 @@ builds with hello-marker-ar2 (HM74) and hooks-check-ar2 (HC74) work as the
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
 
-- **Mod storage (0.2)**, in an emulator only (OS 1.74, 19 Oct 2026), with
+- **Mod storage (0.2)**, in an emulator only (OS 1.74 and 1.73, 19 Oct 2026), with
   [store-check-ar2](../../examples/store-check-ar2) marking every field of
   every item: after save, loading another project (all zeros), loading the
   project back, and a power cycle, every marker read back. A build with an
@@ -153,9 +153,10 @@ stock bytes, and that each covers whole instructions.
   three slots and every other scope kept theirs. `ev_project` came once
   at boot (a load; on the first boot with all four scopes dropped, after a
   power cycle with none), once per project load, not on save, and as
-  `CORE_PROJECT_NEW` after CREATE NEW. Not yet
-  checked on a unit, and not yet on 1.73, which has the same addresses
-  apart from the file save.
+  `CORE_PROJECT_NEW` after CREATE NEW. On 1.73 the same chain, CREATE
+  NEW, the SysEx global and the events gave the same results; the ancestor,
+  kit generation and other-layout builds ran on 1.74 only. Not yet checked on
+  a unit.
 
 ## Building
 

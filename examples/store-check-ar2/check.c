@@ -10,10 +10,10 @@
  * slots and the project. Seven columns at the bottom left of the screen, left
  * to right: pattern tracks, patterns, kit sounds, pool sounds, kits, globals,
  * project; each grows a pixel for every marker core_store_get no longer
- * reads back, up to 16. A 3x3 square top right blinks while it runs.
+ * reads back, up to 16. A 3x3 square at the right end of the same edge blinks while it runs.
  *
  * It also hears ev_project: to the right of the columns, a bar as long as the
- * number of project events so far (mod 16, two pixels each), and under it a
+ * number of project events so far (mod 16, two pixels each), and beside it a
  * dot when the last one was a load (none for CREATE NEW) and one dot for each
  * scope it dropped: global, track, pattern, project.
  */

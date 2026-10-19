@@ -94,7 +94,7 @@ function plan(configPath: string, casesPath: string) {
   // and its 1.74 ports (optional: stocks.ar174, with the *-os1.74.elemod builds in dirs.ar)
   if (cfg.stocks.ar174 && cfg.dirs.ar) {
     const core = f('ar', 'core-0.2-os1.74.elemod'), hello = f('ar', 'hello-marker-1.0-os1.74.elemod')
-    const hooks = f('ar', 'hooks-check-0.1-os1.74.elemod'), store = f('ar', 'store-check-1.0.elemod')
+    const hooks = f('ar', 'hooks-check-0.1-os1.74.elemod'), store = f('ar', 'store-check-1.0-os1.74.elemod')
     add('ar174 core alone', 'ar174', [core])
     add('ar174 core + hello-marker', 'ar174', [core, hello])
     add('ar174 core + hooks-check', 'ar174', [core, hooks])

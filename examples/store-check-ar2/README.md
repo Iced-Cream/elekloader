@@ -1,6 +1,6 @@
 # store-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s mod storage (core 0.2, OS 1.74).
+A test for [core-ar2](../../mods/core-ar2)'s mod storage (core 0.2, OS 1.73 and 1.74).
 It declares a field in every scope and does nothing until asked:
 
 | field | scope | bits |
@@ -25,15 +25,16 @@ sounds, kits, globals, project. Each grows a pixel per bad marker, up to 16.
 Empty columns after a save, a power cycle or loading the project back mean
 everything survived; full columns after loading another project, or with a
 build whose layout can't read this one, mean the data was dropped to zeros
-as it should be. A 3x3 square top right blinks while the mod runs.
+as it should be. A 3x3 square at the right end of the same edge blinks while the mod runs.
 
 It also counts `ev_project`: right of the columns, a bar two pixels longer
-for each project event (it wraps at 16), and under it a dot when the last
+for each project event (it wraps at 16), and beside it a dot when the last
 event was a load (none for CREATE NEW), then one dot for each scope that
 load dropped: global, track, pattern, project.
 
-It names the live pattern, kit, sound and pool addresses itself (core
-exports none), so it is built for 1.74 only.
+It names the live objects and two firmware routines itself (core exports
+none): the live objects are at the same addresses on 1.73 and 1.74, and the
+routines' 1.74 addresses are in `ports`, as in hooks-check-ar2.
 
 Checked in an emulator only (19 Oct 2026): see core-ar2's README. Not yet
 on a unit.
@@ -43,7 +44,7 @@ on a unit.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/store-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.2-os1.74.elemod --mod examples/store-check-ar2/out/store-check-1.0.elemod \
+    --mod mods/core-ar2/out/core-0.2-os1.74.elemod --mod examples/store-check-ar2/out/store-check-1.0-os1.74.elemod \
     --out rytm-store.syx --version SC01 --lockfile rytm-store.lock.json
 ```
 
