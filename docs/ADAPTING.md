@@ -129,9 +129,10 @@ renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_enc` there, since a key can come before that tick (`ev_draw` cannot:
 the tick site runs first).
 
-The Analog Rytm MKII's core (mods/core-ar2 0.1, a proof of concept) has
-`ev_tick`, `ev_draw`, `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and
-`ev_render_out`. What differs there:
+The Analog Rytm MKII's core (mods/core-ar2) has `ev_tick`, `ev_draw`,
+`ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, and
+from 0.2 mod storage ("Mod storage (core-ar2 0.2, Analog Rytm MKII)"). What
+differs there:
 - `ev_tick` comes about 20 times a second, not 30.
 - The render events cover the audio interrupt's digital path: the sample
   voices, the delay and the reverb. The drum voices are analog and are not
@@ -161,7 +162,9 @@ The sites core owns (do not patch them):
 - Analog Rytm MKII 1.73: 0x400008c0, 0x400a2bee, 0x400a2c56, 0x400a47cc,
   0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
-  0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2.
+  0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
+- from core-ar2 0.2, on both Rytm releases, 16 more for mod storage
+  (listed under "Mod storage").
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -607,6 +610,88 @@ jmp: every save, to a slot, to the temp area or the working copy);
 the load of a block already in RAM (at boot, and from SysEx), both by jsr;
 0x4001570e, the new project's builder (CREATE NEW, by jmp), and 0x400acbf4,
 the template copy of slot -1's load (by jsr).
+
+### Mod storage (core-ar2 0.2, Analog Rytm MKII)
+
+From core-ar2 0.2 a Rytm mod can keep its own values with the project:
+per sound, kit, global slot, pattern track, pattern or project. They live in
+bytes the stock OS never reads or writes, so a project saved with mods still
+loads on the stock OS, and no stock function gives up any space. A mod
+declares each field in its mod.json:
+
+```json
+"storage": [{"sym": "my_accent", "scope": "track", "bits": 4}]
+```
+
+`scope` is one of `sound`, `kit`, `global`, `track`, `pattern` and
+`project`; `bits` is 1 to 32; `sym` is a C name. Two fields may not share a
+`sym`. The mod reads and writes the field through core, with
+`elekloader/sdk/include/analog-rytm-mk2/store.h`:
+
+```c
+#include "analog-rytm-mk2/store.h"
+STORE_FIELD(my_accent);
+unsigned v = core_store_get(STORE(my_accent), live_pattern, track);
+core_store_set(STORE(my_accent), live_pattern, track, v + 1);
+```
+
+| scope | item | index | room per item | kept in |
+|---|---|---|---|---|
+| `sound` | the live sound (a kit's, or the pool's) | unused | 24 bits | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste) |
+| `kit` | the live kit | unused | 64 bits | the kit's own spare bytes, so it travels with the kit |
+| `global` | unused | the slot, 0-3 | 40 bits | the global slot's spare bytes |
+| `track` | the live pattern | the track, 0-12 | 8 x T bits | the project's tagged store |
+| `pattern` | the live pattern | unused | 8 x P bits | the project's tagged store |
+| `project` | unused | unused | what is left | the project's tagged store |
+
+Zero is always the default: a field reads 0 in a new project, in a project
+saved by another layout, and after its scope was reset (below). Core exports
+no firmware locations, so a mod names the live objects it passes as `item`
+itself, for each OS. While an item is live its fields sit inside the stock
+object, so copy, paste, undo and pattern changes carry them with no extra
+code.
+
+**The tagged store.** One byte of each of the 256 entries of the 17 songs in
+a project image is never used by the stock OS: 4,352 bytes. Core keeps
+there a 10-byte header (the layout ID, then one generation per scope), then
+T bytes for each of the 129 x 13 pattern tracks, then P bytes for each of
+the 129 patterns, then the project's own bytes. T and P start at 2 and 4,
+and grow when the mods need it (T can't reach 3: the store would not fit,
+so `track` is limited to 16 bits a track). The stock OS does not keep these
+bytes in a project file, so core also hooks the file save and load
+(Transfer's `.arprj` and the card) and Total Recall's buffer.
+
+**The lockfile.** Where each field sits is decided once and then kept, in a
+JSON file per project: `elekloader.patch --lockfile FILE` (default: next to
+the output, `OUT.lock.json`); the desktop app keeps one per profile; the web
+bridge takes it as `store` and returns the new one. A build that adds a
+field puts it in bits no field ever used; one that drops or changes a field
+frees its bits. Each layout has a 4-byte ID and a generation per scope, and
+the build's manifest carries the lockfile (`store`). Every change gives a
+new ID, and the build keeps the last 15 IDs as ancestors, so a project saved
+by an older layout still loads. When a scope is full the allocator bumps its
+generation and packs that scope's fields again from bit 0: the scope's data
+in projects saved before then loads as zeros. Keep the lockfile with the
+project: a build made without it starts a new layout, which reads none of
+the old data.
+
+**What is checked.** Sounds and kits carry the layout ID and their
+generation in their own spare bytes and are checked on every load. Pattern
+tracks, patterns, the project and globals are checked against the header of
+the image they come from. Data that fails the check loads as zeros. A
+global SysEx dump carries no ID and is taken as it is, so a dump from
+another layout's build can be read wrongly. Projects saved before OS 1.70
+are not supported.
+
+Core-ar2 0.2 owns 16 more sites, the same on 1.73 and 1.74 except the file
+save (0x400b0804 on 1.73, 0x400b0870 on 1.74): 0x4000937c and 0x40009146
+(the pattern serializers), 0x4000843a and 0x400081f6 (sounds), 0x400088d6
+and 0x4000863e (kits), 0x40007a5c and 0x4000763c (global slots), 0x40011ab8
+and 0x400118e8 (pattern and track init), 0x400122b6 (sound init),
+0x40011d38 (CREATE NEW and the project reset), 0x4000cd2e (every project
+load), 0x40034d86 (Total Recall's buffer save), the file save, and
+0x40035000 (the file load). `examples/store-check-ar2` uses a field in each
+scope and shows which no longer read back.
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 

@@ -41,7 +41,7 @@ def run(case, root):
     log = []
     try:
         outputs, man = patch.build(stock, mods, case.get('version'), check_only=case.get('check_only', False),
-                                   log=lambda line: log.append(line))
+                                   log=lambda line: log.append(line), new_id=lambda: 0x51ab1e00)
         if outputs is None:
             out['checked'] = json.loads(json.dumps(man))
         else:

@@ -27,6 +27,6 @@ moved as the table says.
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build examples/hooks-check-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.73.syx \
-    --mod mods/core-ar2/out/core-0.1.elemod --mod examples/hooks-check-ar2/out/hooks-check-0.1.elemod \
+    --mod mods/core-ar2/out/core-0.2.elemod --mod examples/hooks-check-ar2/out/hooks-check-0.1.elemod \
     --out rytm-hooks.syx --version HC01
 ```

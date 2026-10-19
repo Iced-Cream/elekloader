@@ -29,6 +29,8 @@ mod.json:
      "weak": ["name"], "copied": [...],
      "resources": {"regions": [...], "names": [...]},
      "requires": ["core"], "conflicts": [...],
+     "storage": [{"sym", "scope", "bits"}],          mod storage (core-ar2 0.2): fields the
+                                                     linker places from the lockfile
      "ports": {"1.54": {"defsym": {...}, "sites": [...]}}}   optional: other OS versions
 
 A port builds the same mod for another release of the device: for that OS,
@@ -521,6 +523,8 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                               for s in srcs + dsrcs}},
         'signature': None,
     }
+    if mod.get('storage'):                  # mod storage: fields elekloader places (store.py)
+        doc['storage'] = mod['storage']
     raw = (json.dumps(doc, indent=1) + '\n').encode()
     try:
         m = link.Mod2(json.loads(raw), mid)                # the loader's own validation

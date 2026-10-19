@@ -110,12 +110,15 @@ core.
   stock applies them (`ev_midi_pc`, "Program changes").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): the hook bus's tick,
   draw, key and encoder events, and rows in SETTINGS > PERSONALIZE.
-- **Analog Rytm MKII** ([mods/core-ar2](../mods/core-ar2)): a proof of
-  concept, the Digitakt mk1's core.s, settings.s and render.s with the
-  Rytm's addresses: the hook bus's tick (about 20 a second), draw, key,
-  encoder and SETTINGS events, and the render's entry and exit, which cover
-  the digital path only (the sample voices, the delay and the reverb), not
-  the analog voices. No machines and no firmware exports.
+- **Analog Rytm MKII** ([mods/core-ar2](../mods/core-ar2)): the Digitakt
+  mk1's core.s, settings.s and render.s with the Rytm's addresses: the hook
+  bus's tick (about 20 a second), draw, key, encoder and SETTINGS events,
+  and the render's entry and exit, which cover the digital path only (the
+  sample voices, the delay and the reverb), not the analog voices. From 0.2,
+  mod storage: fields a mod declares per sound, kit, global slot, pattern
+  track, pattern or project, kept in bytes the stock OS never uses and
+  placed from the build's lockfile ("Mod storage (core-ar2 0.2, Analog Rytm
+  MKII)" in ADAPTING.md). No machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods

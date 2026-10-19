@@ -188,7 +188,7 @@ def build(args, data, progress=None):
 
     try:
         outputs, man = patch.build(model.stock['path'], sorted(args['enabled']),
-                                   args['version'] or None, log=say)
+                                   args['version'] or None, log=say, lock=args.get('store'))
         patch.save(outputs, man, os.path.join(OUT, name))
     except patch.PatchError as e:
         return {'ok': False, 'error': str(e), 'log': log,
@@ -209,7 +209,9 @@ def build(args, data, progress=None):
             'flash_end': f['flash_end'], 'headroom': f['flash_headroom'],
             'gap': f['main'].get('inplace_min_gap'), 'inplace': f['main'].get('inplace', ''),
             'mods': [m['id'] + ' ' + m['version'] for m in man['mods']],
-            'untouched': f['untouched'], 'recovery': model.dev.recovery}
+            'untouched': f['untouched'], 'recovery': model.dev.recovery,
+            # a core with mod storage: the lockfile to keep for the next build
+            'store': man.get('store')}
 
 
 CALLS = {f.__name__: f for f in (info, add_core, set_stock, add_mod, remove_mod, mods, tick,

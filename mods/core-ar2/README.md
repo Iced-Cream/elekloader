@@ -1,9 +1,10 @@
 # core-ar2
 
-The boot copier and the hook bus for the Analog Rytm MKII, OS 1.73 and 1.74. A proof
-of concept: no new code. It builds the Digitakt mk1's `core.s`, `settings.s`
-and `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
-`sites`). On its own it changes nothing the unit does.
+The boot copier, the hook bus and mod storage for the Analog Rytm MKII, OS
+1.73 and 1.74. It builds the Digitakt mk1's `core.s`, `settings.s` and
+`render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
+`sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below).
+On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -49,6 +50,60 @@ What differs from the Digitakt mk1 at these sites:
 - **No machines.** The Digitakt's SRC machine slots (`machines.s`) and its
   firmware exports (`fw.s`) are not ported.
 
+## Mod storage (0.2)
+
+Mods declare fields in their mod.json (`storage`) and read and write them
+with `core_store_get` and `core_store_set`; elekloader places the fields
+from the build's lockfile. docs/ADAPTING.md ("Mod storage (core-ar2 0.2,
+Analog Rytm MKII)") is the mod writer's guide; `store.c`'s opening comment
+has the byte layout.
+
+Every byte used is one the stock OS never reads or writes; no stock
+function gives up space:
+
+| scope | live, while in use | saved in |
+|---|---|---|
+| sound | live sound +0x6d..+0x6f | stored sound +0x70..+0x72, with the layout ID (+0x73) and the sound generation (+0x77) |
+| kit | live kit +0x796..+0x79d (FX words 38-41) | stored kit +0x7c6+0x50..+0x57, with the layout ID (+0x58) and the kit generation (+0x5c) |
+| global | `core_store_globals` (5 bytes a slot) | stored global slot +0x4b..+0x4f |
+| pattern track | live track +785 (64 bytes) | the tagged store |
+| pattern | live pattern +85696 (64 bytes) | the tagged store |
+| project | the tagged store | the tagged store |
+
+The tagged store is byte +2 of each of the 256 entries of the 17 songs in a
+project image (4,352 bytes). The stock OS leaves those bytes out of a
+project file, so core hooks the file save and load and the save to a
+buffer in RAM, and carries the store across.
+
+The 16 sites, by `jmp` unless marked, each with its displaced instructions
+in `store.s`:
+
+| site | 1.73 | 1.74 | why |
+|---|---|---|---|
+| pattern save / load | 0x4000937c / 0x40009146 | the same | pattern tracks, patterns, and the project region with the working pattern |
+| sound save / load | 0x4000843a / 0x400081f6 | the same | the sound's 3 bytes, ID and generation |
+| kit save / load | 0x400088d6 / 0x4000863e | the same | the kit's 8 bytes, ID and generation |
+| global save / load | 0x40007a5c / 0x4000763c | the same | the slot's 5 bytes |
+| pattern init, track init | 0x40011ab8, 0x400118e8 | the same | clear the fields (stock leaves the spare bytes as they were) |
+| sound init | 0x400122b6 | the same | the same |
+| project init | 0x40011d38 | the same | CREATE NEW and the project reset: a fresh store |
+| project load | 0x4000cd2e | the same | after any load: drop scopes another layout wrote, write this build's header |
+| buffer save (`keep2`) | 0x40034d86 | the same | which image is being saved |
+| file save (`keep2`) | 0x400b0804 | 0x400b0870 | the same, for a project file |
+| file load (`keep2`) | 0x40035000 | the same | which image is being loaded |
+
+What it does not do:
+
+- **Global SysEx dumps** carry no layout ID, so a dump made by another
+  layout's build is taken as it is and can read wrongly.
+- **Freed bits** (a field a build dropped) are not cleared on save; no new
+  field is placed there until the scope's generation is bumped, which turns
+  the old data to zeros anyway.
+- **Pattern tracks** are limited to 16 bits each: three bytes a track would
+  not fit in the store.
+- **No "project loaded" event**: a mod reads its fields when it needs them.
+- **Projects saved before OS 1.70** are not supported.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -83,18 +138,28 @@ builds with hello-marker-ar2 (HM74) and hooks-check-ar2 (HC74) work as the
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
 
+- **Mod storage (0.2)**, in an emulator only (OS 1.74, 19 Oct 2026), with
+  [store-check-ar2](../../examples/store-check-ar2) marking every field of
+  every item: after save, loading another project (all zeros), loading the
+  project back, and a power cycle, every marker read back. A build with an
+  ancestor layout read all of it and rewrote the header; a build with the
+  kit generation bumped read zeros for kits only; a build with a fresh
+  layout read zeros everywhere; CREATE NEW cleared everything. Not yet
+  checked on a unit, and not yet on 1.73, which has the same addresses
+  apart from the file save.
+
 ## Building
 
 For 1.74, give `Analog-Rytm_MKII_OS1.74.syx` instead: the SDK then writes
-`core-0.1-os1.74.elemod` and `hello-marker-1.0-os1.74.elemod`.
+`core-0.2-os1.74.elemod` and `hello-marker-1.0-os1.74.elemod`.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0.elemod \
-    --stock Analog-Rytm_MKII_OS1.73.syx --with mods/core-ar2/out/core-0.1.elemod
+    --stock Analog-Rytm_MKII_OS1.73.syx --with mods/core-ar2/out/core-0.2.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.73.syx \
-    --mod mods/core-ar2/out/core-0.1.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0.elemod \
+    --mod mods/core-ar2/out/core-0.2.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0.elemod \
     --out rytm-hello.syx --version HM01
 ```

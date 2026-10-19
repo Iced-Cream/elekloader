@@ -68,6 +68,7 @@ A format-2 mod is a relocatable object:
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
+| `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2; "Mod storage" below) |
 
 ### The linker
 
@@ -101,6 +102,9 @@ A format-2 mod is a relocatable object:
    address) and `NAME_n` (its count). Each `.fast` section is added to the
    device's copy table (`fa_copies` on the Digitakt mk1, `core_fast` on the
    Digitakt II) automatically.
+   When a mod declares `storage`, the linker places the fields from the
+   build's lockfile ("Mod storage" below) and defines each field's `sym`
+   as an absolute symbol, its descriptor.
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, and the copied-block rules hold.
@@ -134,6 +138,33 @@ Nothing is built unless all of these pass:
   sections and DSP table entries, at whole words, and only `dsp24` there;
   and a DSP address and a ColdFire address are never written in place of
   each other.
+
+### Mod storage
+
+A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
+`global`, `track`, `pattern` or `project`) and `bits` (1-32). Only a core
+that imports `__store_gen` takes them (core-ar2 from 0.2); with another
+core a mod that declares storage is refused. The linker:
+
+- reads the build's lockfile, or starts one, and places every field
+  (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both);
+- defines each `sym` as `scope << 28 | bits << 22 | offset`, the offset
+  in bits from the start of the scope's bytes, most significant bit first;
+- defines `__store_gen` (the sound, kit, global and track generations,
+  one byte each, high to low) and `__store_gen2` (the pattern and project
+  generations, then T and P);
+- adds entries to `core_store_ids`: the layout's ID, then its ancestors,
+  newest first;
+- returns the new lockfile, which the build's manifest carries as `store`.
+
+The lockfile is JSON: `elekloader_store` (1), `device`, `id`, `ancestors`,
+`split` (`track`, `pattern`: bytes per item in the tagged store),
+`generation` and `next` (per scope: its generation and its first bit no
+field ever used), `fields` (`mod`, `sym`, `scope`, `offset`, `bits`) and
+`freed` (bits a dropped field left, reused only after the scope's
+generation is bumped). A field keeps its place while its mod, `sym`,
+`scope` and `bits` stay the same. docs/ADAPTING.md ("Mod storage (core-ar2
+0.2, Analog Rytm MKII)") has the rest.
 
 ### DSP code
 
@@ -185,13 +216,14 @@ and `core_projdata` (project data); 2.2 the event `ev_hold` and the table
 `ev_personalize` (0x4009e2a2, the PERSONALIZE menu, `void f(menu)`), and no
 render events (its audio renders on the DSP). It declares the `.fast` copy table itself,
 `core_fast`, and copies it on the first `ev_tick` (`mods/core/fast.s`).
-The Analog Rytm MKII's core (core-ar2 0.1) has `ev_tick`, `ev_draw`,
+The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, at
 0x400a2bee, 0x400a2c56, 0x400a47cc, 0x400a4816, 0x400db87e, 0x4011fb02 and
 0x40121656 in 1.73, and 0x400a2c5a, 0x400a2cc2, 0x400a4838, 0x400a4882,
 0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`,
-its `ports`). It declares those seven events and no other table: no `.fast`
-copy table, so no `.fast` code.
+its `ports`). It declares those seven events and, from 0.2, the table
+`core_store_ids` (entry 4, filled by the linker: below); no `.fast` copy
+table, so no `.fast` code.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

@@ -284,7 +284,7 @@ class LoaderModel:
                             'order': [m.label() for m in mods], 'status': status,
                             'blob': len(img) - len(self.img),
                             'sites': sum(len(m.sites) for m in mods)}
-                L = link.link(mods, self.img)
+                L = link.link(mods, self.img, self.store_lock(), lambda: 1)   # a check: any ID
             except (OSError, elemod.ModError) as e:
                 lines = [x.strip() for x in str(e).split('\n')[1:]] or [str(e)]
                 for p in paths:
@@ -312,12 +312,22 @@ class LoaderModel:
                 'fast': (lay['fast'][1] - lay['fast'][0], lay['fast_size']),
                 'blob': lay['blob_len'], 'sites': sum(len(m.sites) for m in mods)}
 
+    def store_lock(self):
+        """The mod-storage lockfile kept for this profile and device, or None."""
+        return self.settings.get('stores', {}).get('%s %s' % (self.profile, self.dev.key if self.dev
+                                                                else ''))
+
     def build(self, paths, version, out_path):
-        """Build, verify and write out_path (+ .json, + .map.json). -> facts."""
+        """Build, verify and write out_path (+ .json, + .map.json). -> facts.
+        A core with mod storage takes this profile's lockfile, which is kept
+        again after the build."""
         with self.lock:
             outputs, man = patch.build(self.stock['path'], paths, version or None,
-                                       log=lambda *a: None)
+                                       log=lambda *a: None, lock=self.store_lock())
         written = patch.save(outputs, man, out_path)
+        if man.get('store') is not None:
+            self.settings.setdefault('stores', {})['%s %s' % (self.profile, self.dev.key)] = man['store']
+            self.save_settings()
         f = man['output']
         return {'path': out_path, 'written': written, 'sha256': f['sha256'], 'bytes': f['bytes'],
                 'version': man['version'], 'flash_end': f['flash_end'],

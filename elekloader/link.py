@@ -27,7 +27,7 @@ there is a DSP word address, and a `dsp24` relocation writes one as three little
 """
 import struct
 
-from . import dsp
+from . import dsp, store
 from .elemod import (ModError, sha, _int, _hex, common_checks, insn_check, overlaps, summarize,
                     parse_needs_core, parse_parts, parse_resources, parse_sites, parts_bytes,
                     resolve_target, format_of, version_key,
@@ -64,7 +64,7 @@ class Mod2:
         if format_of(doc) != FORMAT2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
-                                     'relocs', 'collections', 'contribute', 'copied'}
+                                     'relocs', 'collections', 'contribute', 'copied', 'storage'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -151,6 +151,10 @@ class Mod2:
             claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims', [])]
             self.contribute.append({'to': str(c['to']), 'order': _int(c.get('order', 50), what),
                                     'data': data, 'relocs': rel, 'claims': claims, 'i': i})
+        try:
+            self.storage = store.parse_decls(doc)
+        except ModError as e:
+            raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
                        for c in doc.get('copied', [])]
         self.regions, self.names = parse_resources(doc, name, self.dev)
@@ -327,10 +331,22 @@ def check(mods, image):
                 bad.append('table %s has the name of a symbol %s exports' % (c, owner[c].label()))
             tables[c] = (m, e)
     sized = reserve_names(dev, owner)
+    fields = {}                                 # mod storage: the linker defines these
+    for m in mods:
+        for sym, _scope, _bits in m.storage:
+            if sym in fields:
+                bad.append('%s and %s both declare the storage field %s'
+                           % (fields[sym].label(), m.label(), sym))
+            elif sym in owner or sym in tables or sym in LINKER_SYMS or sym in store.GEN_SYMS:
+                bad.append('%s: the storage field %s has the name of a symbol or table'
+                           % (m.label(), sym))
+            fields[sym] = m
+    if store.IDS_TABLE in tables:
+        fields.update({x: None for x in store.GEN_SYMS})
     for m in mods:
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
-                    or (x.endswith('_n') and x[:-2] in tables):
+                    or (x.endswith('_n') and x[:-2] in tables) or x in fields:
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
@@ -403,9 +419,13 @@ class Linked:
     pass
 
 
-def link(mods, image):
+def link(mods, image, lock=None, new_id=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
-    .layout, .tables ({name: (address, count, entry)}), .order. Raises ModError."""
+    .layout, .tables ({name: (address, count, entry)}), .order, and for a core
+    with mod storage .store (the new lockfile) and .store_notes. lock: the
+    build's lockfile, or None for a new one; new_id: a callable giving a fresh
+    layout ID, needed when the lockfile changes (elekloader/store.py). Raises
+    ModError."""
     if not mods:
         raise ModError('no mods')
     dev, rel = mods[0].dev, mods[0].rel
@@ -425,6 +445,30 @@ def link(mods, image):
     for m in order:
         for c in m.contribute:
             entries[c['to']].append((c['order'], m.id, c['i'], m, c))
+
+    # mod storage: the fields' places from the lockfile, as symbols and the IDs' table
+    keeps = store.GEN_SYMS[0] in core.imports
+    decls = [(m.id, sym, scope, bits) for m in order for sym, scope, bits in m.storage]
+    new_lock, store_notes, store_syms = None, [], {}
+    if decls and not keeps:
+        users = sorted({d[0] for d in decls})
+        raise ModError('%s declare%s mod storage, which %s does not keep'
+                       % (', '.join(users), 's' if len(users) == 1 else '', core.label()))
+    if keeps:
+        if store.IDS_TABLE not in tables:
+            raise ModError('%s imports %s but declares no table %s'
+                           % (core.label(), store.GEN_SYMS[0], store.IDS_TABLE))
+        if new_id is None:
+            def new_id():
+                raise ModError('the lockfile changes, so the build needs a new layout ID')
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, new_id)
+        store_syms, ids = store.symbols(new_lock, dev.key)
+        taken = {nm for m in order for nm in m.exports}
+        for nm in store_syms:
+            if nm in taken or nm in LINKER_SYMS:
+                raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
+        for i, data in enumerate(ids):
+            entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
     fast_mods = [m for m in order if m.size('.fast')]
     for c in entries:
         entries[c].sort(key=lambda e: e[:3])
@@ -526,6 +570,7 @@ def link(mods, image):
         glob[c + '_n'] = table_count(c)
         if c in dsp_tables:
             dspsym.add((None, c))
+    glob.update(store_syms)
     glob.update({'__run_load': run_load, '__run_start': ddr_base,
                  '__run_words': (run_end - ddr_base) // 4, '__bss_start': run_end,
                  '__bss_end': bss_end, '__bss_words': (bss_end - run_end) // 4})
@@ -681,6 +726,7 @@ def link(mods, image):
         'ddr_spare': ddr_end - bss_end, 'fast_spare': fast_end - fast_at,
         'ddr_size': ddr_end - ddr_base, 'fast_size': fast_end - fast_base,
     }
+    out.store, out.store_notes = new_lock, store_notes
     if units is not None:                      # the reserve the core takes: units of dev.reserve
         out.layout['reserve'] = {'units': units, 'end': ddr_base + units * dev.reserve[0]}
     if areas:                                  # words: P addresses of each payload's area

@@ -78,10 +78,11 @@ function plan(configPath: string, casesPath: string) {
     add('ot sized core + octabam all', 'ot', [cfg.files.slimcore, ...ob.map(m => f('octabam', m))])
   }
 
-  // the Analog Rytm MKII (optional: stocks.ar173, and dirs.ar with core-0.1.elemod, hello-marker-1.0.elemod and
-  // hooks-check-0.1.elemod built from mods/core-ar2 and examples/*-ar2)
+  // the Analog Rytm MKII (optional: stocks.ar173, and dirs.ar with core-0.2.elemod, hello-marker-1.0.elemod and
+  // hooks-check-0.1.elemod built from mods/core-ar2 and examples/*-ar2). A new mod-storage layout's ID is fixed on
+  // both sides (build's newId), so the builds compare byte for byte
   if (cfg.stocks.ar173 && cfg.dirs.ar) {
-    const core = f('ar', 'core-0.1.elemod'), hello = f('ar', 'hello-marker-1.0.elemod'), hooks = f('ar', 'hooks-check-0.1.elemod')
+    const core = f('ar', 'core-0.2.elemod'), hello = f('ar', 'hello-marker-1.0.elemod'), hooks = f('ar', 'hooks-check-0.1.elemod')
     add('ar173 core alone', 'ar173', [core])
     add('ar173 core + hello-marker', 'ar173', [core, hello])
     add('ar173 core + hooks-check', 'ar173', [core, hooks])
@@ -92,14 +93,16 @@ function plan(configPath: string, casesPath: string) {
   }
   // and its 1.74 ports (optional: stocks.ar174, with the *-os1.74.elemod builds in dirs.ar)
   if (cfg.stocks.ar174 && cfg.dirs.ar) {
-    const core = f('ar', 'core-0.1-os1.74.elemod'), hello = f('ar', 'hello-marker-1.0-os1.74.elemod')
-    const hooks = f('ar', 'hooks-check-0.1-os1.74.elemod')
+    const core = f('ar', 'core-0.2-os1.74.elemod'), hello = f('ar', 'hello-marker-1.0-os1.74.elemod')
+    const hooks = f('ar', 'hooks-check-0.1-os1.74.elemod'), store = f('ar', 'store-check-1.0.elemod')
     add('ar174 core alone', 'ar174', [core])
     add('ar174 core + hello-marker', 'ar174', [core, hello])
     add('ar174 core + hooks-check', 'ar174', [core, hooks])
     add('ar174 core + both', 'ar174', [core, hello, hooks])
     add('ar174 hooks-check without core', 'ar174', [hooks])
-    add('ar174 core for 1.73', 'ar174', [f('ar', 'core-0.1.elemod')])
+    add('ar174 core for 1.73', 'ar174', [f('ar', 'core-0.2.elemod')])
+    add('ar174 core + store-check', 'ar174', [core, store])
+    add('ar174 store-check without core', 'ar174', [store])
   }
 
   const scratch = cfg.scratch
@@ -263,7 +266,7 @@ async function runTs(c: Case, root: string) {
   const out: Record<string, any> = { n: c.n }
   const log: string[] = []
   try {
-    const [outputs, man] = await build(stock, mods, c.version, !!c.check_only, line => log.push(line))
+    const [outputs, man] = await build(stock, mods, c.version, !!c.check_only, line => log.push(line), null, () => 0x51ab1e00)
     if (!outputs) {
       out.checked = JSON.parse(dumps(man))
     } else {
