@@ -7,7 +7,14 @@ with the A4's `fill_rect` (0x40059f1a) and `std::string` constructor
 checked by its callers. What each bar and square means is in
 [hooks-check-ar2's README](../hooks-check-ar2/README.md).
 
-Not yet run on a unit or in an emulator.
+Not yet run on a unit. In rytm-emu's A4 build (20 Oct 2026, build HC56,
+with an A4 "modified image" fallback added to the emulator): the tick ran
+at about 20 Hz and its square blinked, each key press counted twice (down
+and up) and each repeat once, the encoder counted every detent the
+emulator delivered, the two render counts never differed, and SETTINGS
+(GLOBAL) listed HOOK TEST last, after SYSTEM, whose selection counted.
+hello-marker-a4 (HM56) differed from stock only in its 3x3 corner on every
+screen taken.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
