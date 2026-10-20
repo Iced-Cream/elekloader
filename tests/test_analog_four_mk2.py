@@ -135,7 +135,7 @@ def test_no_copy_of_the_bootstrap_in_the_main_os():
     in the main OS, no 2 KB anywhere in it with more than 32 distinct byte
     values is, and its stored (packed) bytes share nothing. The one table
     the two share is the font widths, 1,175 bytes at +0x71e8 and
-    0x40203e38."""
+    0x40203e20."""
     _r, st, img = stock()
     boot, packed = st.section(2), st.stored[2]
     for o in range(0, 0x6f94 - 512, 64):
@@ -145,7 +145,7 @@ def test_no_copy_of_the_bootstrap_in_the_main_os():
         assert len(set(w)) <= 32 or w not in img, hex(o)
     for o in range(0, len(packed) - 32, 32):
         assert packed[o:o + 32] not in img, hex(o)
-    assert boot[0x71e8:0x71e8 + 1175] == at(img, 0x40203e38, 1175)
+    assert boot[0x71e8:0x71e8 + 1175] == at(img, 0x40203e20, 1175)
 
 
 def test_every_flash_write_and_erase_in_the_os_is_known():

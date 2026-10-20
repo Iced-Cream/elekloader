@@ -41,7 +41,7 @@ a unit yet.
   and 0xC00000 after copying them to the card); none writes bytes of the
   main OS image. The main OS holds no copy of the bootstrap: the only bytes
   they share are a 1,175-byte font-width table (section 2 +0x71E8, main OS
-  0x40203E38).
+  0x40203E20).
 - The OS clears 0x40253000-0x448B6D50 at start (0x400010FA, the Rytm's
   0x4000083A) and runs its stack down from 0x48000000.
 - Mods' area: 0x47BE0000-0x47C00000, the Rytm's and the Digitakt mk1's.
