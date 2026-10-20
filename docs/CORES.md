@@ -33,7 +33,7 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-3.2-os1.44.elemod` | the same pre-release |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
-| Analog Rytm MKII | 1.73, 1.74 | `core-ar2-0.1.elemod`, `core-ar2-0.1-os1.74.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Rytm MKII | 1.73, 1.74 | `core-ar2-0.3.elemod`, `core-ar2-0.3-os1.74.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
@@ -119,7 +119,10 @@ core.
   track, pattern or project, kept in bytes the stock OS never uses and
   placed from the build's lockfile, and an event after every project load
   and CREATE NEW ("Mod storage (core-ar2 0.2, Analog Rytm MKII)" in
-  ADAPTING.md). No machines and no firmware exports.
+  ADAPTING.md). From 0.3, 56 bits a sound (24 with 0.2), in the velocity
+  routes' amount low bytes too, and pattern-track and pattern fields kept
+  by stock's saves of one edited track, a pattern's settings or its locks,
+  not only by whole-pattern saves. No machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods

@@ -127,12 +127,23 @@ def test_core_ar2_sites():
     assert at(img, 0x4011fafa, 4) == bytes.fromhex('4e56') + (-int(d['RENDER_FRAME'], 16) & 0xffff).to_bytes(2, 'big')
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
     assert int(d['SETTINGS_RET'], 16) == moved(0x400db87e) + 6
+    # SoundConfigChangedInfo's vtable (data, which moves otherwise): the
+    # immediate the velocity setAmount site displaces
+    vset = [x for x in mod['sites'] if x['target'] == 'st_vel_set'][0]
+    assert d['SOUND_CHANGED'] == '0x' + vset['stock'][-8:]
     # and the rest are where 1.73's are, moved
     with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
-        d73 = json.load(fh)['defsym']
-    for k, v in d73.items():
-        if v.lower().startswith('0x4'):
+        m73 = json.load(fh)
+    for k, v in m73['defsym'].items():
+        if v.lower().startswith('0x4') and k != 'SOUND_CHANGED':
             assert int(d[k], 16) == moved(int(v, 16)), k
+    # mod storage's sites (core-ar2 0.3: 32 of the 40) are 1.73's, moved
+    assert len(mod['sites']) == 40
+    st73 = [x for x in m73['sites'] if x['target'].startswith('st_')]
+    st = [x for x in mod['sites'] if x['target'].startswith('st_')]
+    assert len(st) == len(st73) == 32
+    for a, b in zip(st73, st):
+        assert (a['target'], moved(int(a['addr'], 16))) == (b['target'], int(b['addr'], 16)), b
 
 
 def test_no_copy_of_the_bootstrap_in_the_main_os():

@@ -163,8 +163,8 @@ The sites core owns (do not patch them):
   0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
   0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
-- from core-ar2 0.2, on both Rytm releases, 22 more for mod storage
-  (listed under "Mod storage").
+- from core-ar2 0.2, on both Rytm releases, 22 more for mod storage, and
+  from 0.3 10 more (32 in all; listed under "Mod storage").
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -615,8 +615,10 @@ the template copy of slot -1's load (by jsr).
 
 From core-ar2 0.2 a Rytm mod can keep its own values with the project:
 per sound, kit, global slot, pattern track, pattern or project. They live in
-bytes the stock OS never reads or writes, so a project saved with mods still
-loads on the stock OS, and no stock function gives up any space. A mod
+bytes the stock OS never reads or writes (from 0.3 also in bytes it only
+ever holds at 0, read where it matters through sites core hooks), so a
+project saved with mods still loads on the stock OS, and no stock function
+gives up any space. A mod
 declares each field in its mod.json:
 
 ```json
@@ -637,12 +639,18 @@ core_store_set(STORE(my_accent), live_pattern, track, v + 1);
 
 | scope | item | index | room per item | kept in |
 |---|---|---|---|---|
-| `sound` | the live sound (a kit's, or the pool's) | unused | 24 bits | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste) |
+| `sound` | the live sound (a kit's, or the pool's) | unused | 56 bits (24 with core-ar2 0.2) | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste); bits 24..55 sit in the velocity routes' amount low bytes, which stock holds at 0 |
 | `kit` | the live kit | unused | 64 bits | the kit's own spare bytes, so it travels with the kit |
 | `global` | unused | the slot, 0-3 | 40 bits | the global slot's spare bytes |
 | `track` | the live pattern | the track, 0-12 | 8 x T bits | the project's tagged store |
 | `pattern` | the live pattern | unused | 8 x P bits | the project's tagged store |
 | `project` | unused | unused | what is left | the project's tagged store |
+
+A sound's room depends on the core: 0.3 keeps 56 bits, 0.2 24, and the
+allocator gives a build what its core keeps (a mod that needs more than 24
+says `"core": "0.3"` in `resources`). Bits 0..23 are the same bytes with
+either core, so a 0.2 build's lockfile keeps its places with 0.3, and the
+sounds it saved load there with the new bits at 0.
 
 Zero is always the default: a field reads 0 in a new project, in a project
 saved by another layout, and after its scope was reset (below). Core exports
@@ -664,6 +672,16 @@ and the project's regions, so their data in older projects loads as zeros;
 the pattern tracks come first and keep theirs. The stock OS does not keep these
 bytes in a project file, so core also hooks the file save and load
 (Transfer's `.arprj` and the card) and Total Recall's buffer.
+
+**When a field reaches the project.** A live item's fields go into the
+stored project when stock saves that item there. A sound's or kit's go with
+the stock save of that sound or kit. Pattern-track and pattern fields go
+whenever stock saves any part of that pattern (from core-ar2 0.3: an edited
+track, the pattern's settings, its parameter locks; with 0.2 only the whole
+pattern, at SAVE PROJECT or into a project file), and then the whole
+pattern's. A field a mod sets from its own page with no stock edit is
+kept by the next of those saves, as stock's own data is; until then a power
+cycle loses it, as it loses an unsaved stock edit.
 
 **The lockfile.** Where each field sits is decided once and then kept, in a
 JSON file: `elekloader.patch --lockfile FILE` (default:
@@ -702,7 +720,7 @@ sets things up per project, subscribes to `ev_project`:
 
 | event | when | C prototype | notes |
 |---|---|---|---|
-| `ev_project` | Analog Rytm MKII only (core-ar2 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
+| `ev_project` | Analog Rytm MKII only (core-ar2 from 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -716,6 +734,14 @@ project commands copy, write and swap whole stored songs (0x4018b6ec,
 0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)
 and whole stored patterns (0x4018ba90, 0x4018c736, 0x4018c968 on 1.73;
 0x4018bc5c, 0x4018c902, 0x4018cb34 on 1.74).
+Core-ar2 0.3 owns 10 more: the calls through which stock saves an
+edited pattern track, a pattern's settings and its parameter locks by
+themselves (0x400bf7ac, 0x400aac58, 0x400ac262 and 0x400ac280 on 1.73;
+0x400bf818, 0x400aacc4, 0x400ac2ce and 0x400ac2ec on 1.74), and the
+velocity routes' push to the engine (0x4011f63c; 0x4011f6a8), the VELOCITY
+MOD menu's getAmount (0x400c52ba; 0x400c5326), setAmount (0x400c5246;
+0x400c52b2), setRoute (0x400c5148; 0x400c51b4) and reset (0x400c53c0;
+0x400c542c), and the aftertouch menu's setRoute (0x4003391e on both).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 

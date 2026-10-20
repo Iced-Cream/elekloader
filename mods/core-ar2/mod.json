@@ -1,10 +1,10 @@
 {
- "id": "core", "version": "0.2",
+ "id": "core", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus and mod storage for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus and mod storage for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0. On its own it changes nothing the unit does.",
  "device": "analog-rytm-mk2", "os": "1.73",
- "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "route.s"],
  "defsym": {
   "DRAWALL": "0x40079086",
   "KEYDISP": "0x400a02ca",
@@ -17,7 +17,13 @@
   "PPMSR0": "0xFC04002D",
   "VBR_FN": "0x400014cc",
   "SETTINGS_RET": "0x400db884",
-  "RENDER_FRAME": "0xb4"
+  "RENDER_FRAME": "0xb4",
+  "VEL_PUSH_RET": "0x4011f642",
+  "VEL_GET_RET": "0x400c52c8",
+  "VEL_SET_RET": "0x400c5250",
+  "VEL_ROUTE_RET": "0x400c5150",
+  "AT_ROUTE_RET": "0x40033926",
+  "SOUND_CHANGED": "0x401cb5dc"
  },
  "sites": [
   {"addr": "0x400008c0", "stock": "4eb9400014cc", "op": "jsr", "target": "boot"},
@@ -49,7 +55,17 @@
   {"addr": "0x4018c2bc", "stock": "45f940098b54", "op": "keep2", "target": "st_song_copy"},
   {"addr": "0x4018ba90", "stock": "4eb940098b54", "op": "keep2", "target": "st_pattern_copy"},
   {"addr": "0x4018c736", "stock": "4eb940098b54", "op": "keep2", "target": "st_pattern_copy"},
-  {"addr": "0x4018c968", "stock": "45f940098b54", "op": "keep2", "target": "st_pattern_copy"}
+  {"addr": "0x4018c968", "stock": "45f940098b54", "op": "keep2", "target": "st_pattern_copy"},
+  {"addr": "0x400bf7ac", "stock": "4eb940008dc8", "op": "keep2", "target": "st_track_save"},
+  {"addr": "0x400aac58", "stock": "4eb940008b06", "op": "keep2", "target": "st_settings_save"},
+  {"addr": "0x400ac262", "stock": "4eb94000940c", "op": "keep2", "target": "st_lock_save"},
+  {"addr": "0x400ac280", "stock": "4eb940009216", "op": "keep2", "target": "st_locks_save"},
+  {"addr": "0x4011f63c", "stock": "3169007004c0", "op": "jmp", "target": "st_vel_push"},
+  {"addr": "0x400c52ba", "stock": "41f3ba00588f", "op": "jmp", "target": "st_vel_get"},
+  {"addr": "0x400c5246", "stock": "31810800203c401cb5dc", "op": "jmp", "target": "st_vel_set"},
+  {"addr": "0x400c5148", "stock": "3191080043ee0013", "op": "jmp", "target": "st_vel_route"},
+  {"addr": "0x4003391e", "stock": "3191080043ee0013", "op": "jmp", "target": "st_at_route"},
+  {"addr": "0x400c53c0", "stock": "4eb94001224e", "op": "keep2", "target": "st_vel_defaults"}
  ],
  "ports": {
   "1.74": {
@@ -65,7 +81,13 @@
     "PPMSR0": "0xFC04002D",
     "VBR_FN": "0x400014cc",
     "SETTINGS_RET": "0x400db8f0",
-    "RENDER_FRAME": "0xb4"
+    "RENDER_FRAME": "0xb4",
+    "VEL_PUSH_RET": "0x4011f6ae",
+    "VEL_GET_RET": "0x400c5334",
+    "VEL_SET_RET": "0x400c52bc",
+    "VEL_ROUTE_RET": "0x400c51bc",
+    "AT_ROUTE_RET": "0x40033926",
+    "SOUND_CHANGED": "0x401cb88c"
    },
    "sites": [
     {"addr": "0x400008c0", "stock": "4eb9400014cc", "op": "jsr", "target": "boot"},
@@ -97,7 +119,17 @@
     {"addr": "0x4018c488", "stock": "45f940098bc0", "op": "keep2", "target": "st_song_copy"},
     {"addr": "0x4018bc5c", "stock": "4eb940098bc0", "op": "keep2", "target": "st_pattern_copy"},
     {"addr": "0x4018c902", "stock": "4eb940098bc0", "op": "keep2", "target": "st_pattern_copy"},
-    {"addr": "0x4018cb34", "stock": "45f940098bc0", "op": "keep2", "target": "st_pattern_copy"}
+    {"addr": "0x4018cb34", "stock": "45f940098bc0", "op": "keep2", "target": "st_pattern_copy"},
+    {"addr": "0x400bf818", "stock": "4eb940008dc8", "op": "keep2", "target": "st_track_save"},
+    {"addr": "0x400aacc4", "stock": "4eb940008b06", "op": "keep2", "target": "st_settings_save"},
+    {"addr": "0x400ac2ce", "stock": "4eb94000940c", "op": "keep2", "target": "st_lock_save"},
+    {"addr": "0x400ac2ec", "stock": "4eb940009216", "op": "keep2", "target": "st_locks_save"},
+    {"addr": "0x4011f6a8", "stock": "3169007004c0", "op": "jmp", "target": "st_vel_push"},
+    {"addr": "0x400c5326", "stock": "41f3ba00588f", "op": "jmp", "target": "st_vel_get"},
+    {"addr": "0x400c52b2", "stock": "31810800203c401cb88c", "op": "jmp", "target": "st_vel_set"},
+    {"addr": "0x400c51b4", "stock": "3191080043ee0013", "op": "jmp", "target": "st_vel_route"},
+    {"addr": "0x4003391e", "stock": "3191080043ee0013", "op": "jmp", "target": "st_at_route"},
+    {"addr": "0x400c542c", "stock": "4eb94001224e", "op": "keep2", "target": "st_vel_defaults"}
    ]
   }
  },

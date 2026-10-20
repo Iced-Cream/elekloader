@@ -3,8 +3,8 @@
 The boot copier, the hook bus and mod storage for the Analog Rytm MKII, OS
 1.73 and 1.74. It builds the Digitakt mk1's `core.s`, `settings.s` and
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
-`sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below).
-On its own it changes nothing the unit does.
+`sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
+from 0.3 with `route.s`. On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -50,7 +50,7 @@ What differs from the Digitakt mk1 at these sites:
 - **No machines.** The Digitakt's SRC machine slots (`machines.s`) and its
   firmware exports (`fw.s`) are not ported.
 
-## Mod storage (0.2)
+## Mod storage (0.2, 0.3)
 
 Mods declare fields in their mod.json (`storage`) and read and write them
 with `core_store_get` and `core_store_set`, which mask interrupts while they
@@ -59,12 +59,13 @@ from the build's lockfile. docs/ADAPTING.md ("Mod storage (core-ar2 0.2,
 Analog Rytm MKII)") is the mod writer's guide; `store.c`'s opening comment
 has the byte layout.
 
-Every byte used is one the stock OS never reads or writes; no stock
-function gives up space:
+Every byte used is one the stock OS never reads or writes, or (from 0.3)
+one it only ever holds at 0 and reads, where it matters, through a site
+core hooks; no stock function gives up space:
 
 | scope | live, while in use | saved in |
 |---|---|---|
-| sound | live sound +0x6d..+0x6f | stored sound +0x70..+0x72, with the layout ID (+0x73) and the sound generation (+0x77) |
+| sound | live sound +0x6d..+0x6f; from 0.3 also the 4 velocity routes' amount low bytes, +0x71, +0x74, +0x77, +0x7a (56 bits in all; 24 with 0.2) | stored sound +0x70..+0x72 and (0.3) +0x78..+0x7b, with the layout ID (+0x73) and the sound generation (+0x77) |
 | kit | live kit +0x796..+0x79d (FX words 38-41) | stored kit +0x7c6+0x50..+0x57, with the layout ID (+0x58) and the kit generation (+0x5c) |
 | global | `core_store_globals` (5 bytes a slot) | stored global slot +0x4b..+0x4f |
 | pattern track | live track +785 (64 bytes) | the tagged store |
@@ -76,8 +77,33 @@ project image (4,352 bytes). The stock OS leaves those bytes out of a
 project file, so core hooks the file save and load and the save to a
 buffer in RAM, and carries the store across.
 
-The 22 sites, by `jmp` unless marked, each with its displaced instructions
-in `store.s`:
+**The velocity routes (0.3).** A live sound's four velocity routes (+0x70,
+3 bytes each) hold an amount word, then a destination. The amount is the
+word's high byte: stock writes the low byte only as 0 (the route load's
+byte << 8, the defaults, the menu's whole steps) and saves only the high
+byte, so the four low bytes carry the sound scope's bits 24..55. Where stock
+reads them in a way that matters (the push to the engine, the VELOCITY MOD
+menu's getAmount) they read as 0 again; the menu's setAmount and setRoute
+(paste, undo) keep them, and so does its reset (FUNC+PLAY). Both menus'
+setRoute store only the amount's high byte, so a route pasted from velocity
+into aftertouch keeps the aftertouch low byte at 0, as stock has it. The
+aftertouch routes' low bytes are not used: stock holds them at 0 and core
+leaves them so, which needs no other aftertouch site. Kept in `route.s`.
+
+**Per-part saves (0.3).** After a front-panel edit and on a pattern change,
+stock saves each edited track, a pattern's settings and its parameter locks
+into the stored project one part at a time, not through the pattern
+serializer, so 0.2 kept a pattern-track or pattern field only when the whole
+pattern was saved (SAVE PROJECT, a project file): a field a mod set was lost
+at a power cycle. From 0.3 each of those saves also writes the pattern's
+track and pattern fields into the store. No stock routine loads one of
+those parts by itself: a pattern comes back whole, through the pattern
+load. A field a mod sets from its own page reaches the stored project at
+the next stock save of that pattern's track, settings or locks, or the next
+whole save, as the stock data does.
+
+The 32 sites, by `jmp` unless marked, each with its displaced instructions
+in `store.s` or `route.s`:
 
 | site | 1.73 | 1.74 | why |
 |---|---|---|---|
@@ -94,6 +120,14 @@ in `store.s`:
 | file load (`keep2`) | 0x40035000 | the same | which image is being loaded |
 | SysEx song copy, write, swap (`keep2`) | 0x4018b6ec, 0x4018c09a, 0x4018c2bc | 0x4018b8b8, 0x4018c266, 0x4018c488 | copy whole stored songs but leave the target's store bytes |
 | SysEx pattern copy, write, swap (`keep2`) | 0x4018ba90, 0x4018c736, 0x4018c968 | 0x4018bc5c, 0x4018c902, 0x4018cb34 | clear the target pattern slot's fields, which can't follow the pattern |
+| track save (`keep2`, 0.3) | 0x400bf7ac | 0x400bf818 | an edited track saved by itself (0x40008dc8): the pattern's track and pattern fields too |
+| pattern settings save (`keep2`, 0.3) | 0x400aac58 | 0x400aacc4 | the same, for the settings (0x40008b06) |
+| locks save, one parameter / all (`keep2`, 0.3) | 0x400ac262 / 0x400ac280 | 0x400ac2ce / 0x400ac2ec | the same, for the parameter locks (0x4000940c, 0x40009216) |
+| velocity push to the engine (0.3) | 0x4011f63c | 0x4011f6a8 | the engine gets the amount with its low byte 0 |
+| VELOCITY MOD getAmount (0.3) | 0x400c52ba | 0x400c5326 | the menu reads the amount with its low byte 0 |
+| VELOCITY MOD setAmount (0.3) | 0x400c5246 | 0x400c52b2 | an edit keeps the low byte |
+| setRoute, velocity / aftertouch (0.3) | 0x400c5148 / 0x4003391e | 0x400c51b4 / 0x4003391e | a pasted or undone route stores only the amount's high byte |
+| VELOCITY MOD reset (`keep2`, 0.3) | 0x400c53c0 | 0x400c542c | the defaults (0x4001224e) keep the low bytes |
 
 After CREATE NEW and after every project load (the project init and
 project load sites), core calls the mods' `ev_project` handlers with what
@@ -110,6 +144,12 @@ What it does not do:
   values, if its mod returns.
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
+- **Sounds**: 56 bits, set by the stored sound's spare bytes. The four
+  aftertouch routes' low bytes are free in a live sound too, but there is
+  no stored byte left to keep them in.
+- **voice-dac** (rytm2_mods) hooks the same velocity-route sites itself
+  and so does not combine with 0.3; moved onto mod storage, its route bytes
+  are sound fields.
 - **Projects saved before OS 1.70** are not supported.
 - **Patterns copied by the SysEx project commands** between stored patterns
   (in one project or two), swapped, or written into one from a received
@@ -182,18 +222,34 @@ stock bytes, and that each covers whole instructions.
   One flash (OTHER74) stopped at SUCCESS: REBOOTING and booted normally
   after a power cycle.
 
+- **Mod storage (0.3)**, in an emulator (OS 1.73 and 1.74, 20 Oct 2026):
+  with 0.2, a track and a pattern field put in a live pattern, then a trig
+  placed on that track (stock's track save), read 0 after a power cycle;
+  with 0.3 they read back, and the stock track record was the same as with
+  0.2. A parameter lock alone (the locks save) and a SCALE menu edit alone
+  (the settings save) each carried them too. store-check with a 24-bit and
+  a 32-bit sound field: marking, SAVE PROJECT AS, loading it back and a
+  power cycle kept every marker. With velocity amounts' low bytes set, the
+  VELOCITY MOD menu (open, edit all four amounts, negative ones too) drew
+  every frame as stock did from the same amounts, and the edited amounts
+  and the engine's copies were stock's, with the low bytes kept in the
+  sound and 0 in the engine (with 0.2 they reached the engine, and the menu
+  drew negative amounts one step nearer 0); copy, clear (FUNC+PLAY) and
+  paste kept them; SAVE KIT and RELOAD brought them back. A 0.2 build's
+  lockfile built with 0.3 read the 0.2 project's sound fields in place.
+
 ## Building
 
 For 1.74, give `Analog-Rytm_MKII_OS1.74.syx` instead: the SDK then writes
-`core-0.2-os1.74.elemod` and `hello-marker-1.0-os1.74.elemod`.
+`core-0.3-os1.74.elemod` and `hello-marker-1.0-os1.74.elemod`.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0.elemod \
-    --stock Analog-Rytm_MKII_OS1.73.syx --with mods/core-ar2/out/core-0.2.elemod
+    --stock Analog-Rytm_MKII_OS1.73.syx --with mods/core-ar2/out/core-0.3.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.73.syx \
-    --mod mods/core-ar2/out/core-0.2.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0.elemod \
+    --mod mods/core-ar2/out/core-0.3.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0.elemod \
     --out rytm-hello.syx --version HM01
 ```
