@@ -14,13 +14,14 @@ test('a run of builds: the same lockfiles, notes, symbols and IDs', () => {
   for (const [name, run] of Object.entries<any>(V.runs)) {
     let lock: Lock | null = run.start ?? null
     const core: string | null = run.core ?? null
+    const dev: string = run.device ?? DEV
     run.steps.forEach((decls: Decl[], i: number) => {
       const want = run.results[i]
       if (want.error) {
-        assert.throws(() => allocate(lock, decls, DEV, core), (e: Error) => e.message === want.error, `${name} step ${i}`)
+        assert.throws(() => allocate(lock, decls, dev, core), (e: Error) => e.message === want.error, `${name} step ${i}`)
         return
       }
-      const [l, notes] = allocate(lock, decls, DEV, core)
+      const [l, notes] = allocate(lock, decls, dev, core)
       lock = l
       assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
       assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)

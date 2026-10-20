@@ -77,6 +77,13 @@ DEVICES = {
         'items': {'track': 129 * 13, 'pattern': 129},
         'split': {'track': 2, 'pattern': 4},         # a new lockfile's
     },
+    'analog-four-mk2': {                            # core-a4 (mods/core-a4/store.c)
+        'fixed': {'sound': 32, 'kit': 128, 'global': 64},
+        'live': {'track': 512, 'pattern': 512},
+        'store': 4352 - 10,
+        'items': {'track': 129 * 6, 'pattern': 129},
+        'split': {'track': 2, 'pattern': 4},
+    },
 }
 
 

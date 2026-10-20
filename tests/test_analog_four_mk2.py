@@ -127,6 +127,68 @@ def test_core_a4_sites():
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
     x = [x for x in mod['sites'] if x['target'] == 'core_settings'][0]
     assert int(d['SETTINGS_RET'], 16) == int(x['addr'], 16) + 6
+    # mod storage's sites (core-a4 0.1: 28 of the 36)
+    assert len(mod['sites']) == 36
+    assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 28
+
+
+def test_core_a4_store_bodies():
+    """store.s: each jmp site's displaced instructions, then a jump back to
+    the site plus the bytes it displaced (8 for each)."""
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-a4', 'mod.json')) as fh:
+        sites = {x['target']: x for x in json.load(fh)['sites'] if x['op'] == 'jmp'}
+    with open(os.path.join(ROOT, 'mods', 'core-a4', 'store.s')) as fh:
+        src = fh.read()
+    bodies = re.findall(r'^(st_\w+)_body:\s*\|\s*(0x[0-9a-f]+).*?^\s+jmp\s+(0x[0-9a-f]+)', src, re.M | re.S)
+    assert len(bodies) == 14
+    for name, addr, back in bodies:
+        x = sites[name]
+        assert int(x['addr'], 16) == int(addr, 16), name
+        assert int(back, 16) == int(addr, 16) + len(x['stock']) // 2 == int(addr, 16) + 8, name
+
+
+def _disp16(img, lo, hi, d):
+    """how many moves in [lo, hi) read or write (d16,An) with displacement d,
+    An not the stack pointer (a frame slot is not an object's byte)"""
+    from elekloader.isa import coldfire as cf
+    n = 0
+    for pc, ins in cf.disassemble_lengths(img, DEV.main_load, lo, hi):
+        w = struct.unpack('>H', at(img, pc, 2))[0]
+        if not ins.op.startswith('move') or w >> 12 not in (1, 2, 3):
+            continue
+        ext = [struct.unpack('>H', at(img, pc + k, 2))[0] for k in range(2, ins.length, 2)]
+        if (w >> 3 & 7) == 5 and (w & 7) != 7:          # source (d16,An)
+            n += ext[0] == d
+        if (w >> 6 & 7) == 5 and (w >> 9 & 7) != 7:     # destination (d16,An)
+            n += ext[-1] == d
+    return n
+
+
+def test_the_bytes_mod_storage_uses_are_stocks_spare():
+    """What store.c relies on, in the serializers' code: the song save
+    (0x4000a35e) and load (0x400079a0) use entry bytes +1..+3 (+0x115..+0x117),
+    never +0 (+0x114): the tagged store; the sound save (0x400091bc) and load
+    (0x40008808) never name stored +0xf1..+0xf3; the kit's FX save and load
+    (0x40009300, 0x40008bf2) never name +0x18..+0x37; the global save
+    (0x4000837c) writes 0 to each entry's +3..+7 and the load (0x40007bc6)
+    never reads them; the stored project's magic, version and end marker."""
+    _r, _s, img = stock()
+    for lo, hi in ((0x4000a35e, 0x4000a450), (0x400079a0, 0x40007b92)):
+        for d in (0x115, 0x116, 0x117):
+            assert _disp16(img, lo, hi, d), (hex(lo), hex(d))
+        assert not _disp16(img, lo, hi, 0x114), hex(lo)
+    for lo, hi in ((0x400091bc, 0x400092b8), (0x40008808, 0x40008b8a)):
+        for d in (0xf1, 0xf2, 0xf3):
+            assert not _disp16(img, lo, hi, d), (hex(lo), hex(d))
+    for lo, hi in ((0x40009300, 0x400094d2), (0x40008bf2, 0x40008dca)):
+        for d in range(0x18, 0x38):
+            assert not _disp16(img, lo, hi, d), (hex(lo), hex(d))
+    # the stored project: 0xbeefbaba, version 0x17 and 0xbabeface at +0x1f72d2
+    # (the save 0x4001141e writes them, the load 0x40011054 checks them)
+    for lo, n in ((0x4001141e, 0x34a), (0x40011054, 0x3ca)):
+        code = at(img, lo, n)
+        assert code.count(bytes.fromhex('beefbaba')) == 1 and bytes.fromhex('001f72d2') in code, hex(lo)
 
 
 def test_no_copy_of_the_bootstrap_in_the_main_os():
