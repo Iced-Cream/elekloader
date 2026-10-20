@@ -144,10 +144,14 @@ Nothing is built unless all of these pass:
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
 `global`, `track`, `pattern` or `project`) and `bits` (1-32). Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2); with another
-core a mod that declares storage is refused. The linker:
+core a mod that declares storage is refused. A scope's room can depend on
+the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3). The
+linker:
 
 - reads the build's lockfile, or starts one, and places every field
-  (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both);
+  (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both)
+  within what the build's core keeps; a field an earlier build placed past
+  that (with a newer core) repacks its scope;
 - defines each `sym` as `scope << 28 | bits << 22 | offset`, the offset
   in bits from the start of the scope's bytes, most significant bit first;
 - defines `__store_gen` (the sound, kit, global and track generations,
