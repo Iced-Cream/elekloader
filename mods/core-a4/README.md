@@ -184,6 +184,64 @@ images; 20 Oct 2026). Nothing has run on a unit yet.
   the serializers never name the bytes mod storage uses
   (tests/test_analog_four_mk2.py).
 
+## Testing on a unit
+
+None of this has been done yet; this is the plan, in order, for an Analog
+Four MKII on OS 1.56. Each example's README has its own steps:
+[hello-marker-a4](../../examples/hello-marker-a4),
+[hooks-check-a4](../../examples/hooks-check-a4) and
+[store-check-a4](../../examples/store-check-a4).
+
+**Before the first build**
+
+- Back up the unit with Elektron Transfer (projects and sounds on the
+  +Drive), and keep the stock `Analog-Four_MKII_OS1.56.syx` at hand.
+- Rehearse recovery once with stock: power off, hold FUNC while powering
+  on (the STARTUP menu), press TRIG 4 (OS UPGRADE), and send the stock .syx
+  over **MIDI DIN** (the STARTUP menu's upgrade does not take USB). The unit
+  shows RECEIVING..., then UPGRADING... DO NOT TURN OFF, and reboots into
+  stock.
+- The upgrade's "DOWNGRADE NOT POSSIBLE" check (in the bootstrap and the
+  OS) compares the file's build field (stock's "0204") with a minimum for
+  some newer flash chips. elekloader never changes that field, only the
+  version string, so stock 1.56 can always be sent back.
+
+**Sending a build**
+
+From the running OS: GLOBAL > SYSTEM > OS UPGRADE ("Waiting for SysEx"),
+then send the build's .syx with Transfer over USB, as the Rytm's builds
+were sent. Each build sets its own version string (`--version`), so
+the unit shows which one it runs.
+
+**In this order**
+
+1. **core-a4 + hello-marker-a4 (HM56)**: the unit boots and draws a 3x3
+   square in the top right corner of every screen. Proves the boot copier,
+   the mods' DDR area at 0x47BE0000 and `ev_draw`.
+2. **core-a4 + hooks-check-a4 (HC56)**: every event (tick, draw, key,
+   encoder, the settings row, the render's entry and exit), and that the
+   unit plays and responds as stock.
+3. **core-a4 + store-check-a4 (SC56)**: mod storage through saves, loads,
+   power cycles and CREATE NEW, and a listen test (below).
+4. **A long session with core-a4 alone or with hello-marker-a4**: playback
+   into the effects and the CV outputs, sound and kit edits, pattern and
+   song changes, Overbridge if used, and a power cycle; nothing should
+   behave differently from stock. The Rytm's area was also checked with a
+   DDR canary (rytm-mods-src mods 0016 and 0003); there is no A4 build of
+   it yet, so this core's area rests on the static and emulator evidence
+   plus this session.
+
+**What would be a failure**
+
+- A build that doesn't boot, or stops at a black screen: recover with the
+  STARTUP menu (above) and report the build's version string.
+- Any audible difference from stock with store-check's markers set (the
+  listen test in store-check-a4's README): the sound's spare words are sent
+  to an engine slot that every unused parameter goes to, and that nothing
+  reads it is inferred only.
+- A store-check column that does not empty after loading its project back,
+  or a project event that does not come.
+
 ## Building
 
 ```bash

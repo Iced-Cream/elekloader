@@ -16,6 +16,39 @@ emulator delivered, the two render counts never differed, and SETTINGS
 hello-marker-a4 (HM56) differed from stock only in its 3x3 corner on every
 screen taken.
 
+## Testing on a unit
+
+After [hello-marker-a4](../hello-marker-a4) has booted. core-a4's README
+("Testing on a unit") has the backup, the recovery path and how to send a
+build. On the A4 the bars draw over the top 16 rows of the screen (the top
+bar's text shows through them), and the squares are at the top right:
+
+| what | where | moves when |
+|---|---|---|
+| `ev_tick` | 3x3 square, top right | blinks about once a second, all the time |
+| `ev_key` | the first bar, at the very top | any key: press and release add one each, a repeat one |
+| `ev_enc` | the second bar | any encoder detent (DATA ENTRY A..J and LEVEL) |
+| `ev_settings` | the HOOK TEST row, last in the GLOBAL menu, and the third bar | the row is listed after SYSTEM; selecting it adds one |
+| `ev_render_in` | the fourth bar | always: one pixel per 64 audio blocks, wrapping |
+| `ev_render_out` | a second square, below the first | never: only if the two render counts ever differ |
+
+1. Send the HC56 build. It boots with the bars at the top.
+2. Watch for ten seconds without touching anything: the tick square blinks
+   and the render bar keeps moving; no second square.
+3. Press a few keys (TRIG keys, TRACK keys, the page keys): the key bar
+   grows two pixels a press, and each key does what it does on stock.
+4. Turn each DATA ENTRY knob and the LEVEL knob: the encoder bar grows a
+   pixel a detent, and each knob edits its parameter as on stock.
+5. Press GLOBAL: the menu lists PROJECT, GLOBAL SLOT, MIDI CONFIG, CV
+   CONFIG, SYSEX DUMP, AUDIO ROUTING, (OUTBOX 8 if connected), CONTROL,
+   SYSTEM and HOOK TEST last. Scroll to HOOK TEST and press YES twice: the
+   settings bar grows two pixels and nothing else happens. The other rows
+   open as on stock.
+6. Play a pattern through the effects for a few minutes, with the CV outputs
+   in use if you have them: the sound and the CV are stock's, the render bar
+   moves steadily, and no second square appears.
+7. Power cycle: everything comes back as it was.
+
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx

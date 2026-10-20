@@ -34,6 +34,61 @@ none), at their 1.56 addresses.
 
 Checked in an emulator (20 Oct 2026): see core-a4's README.
 
+## Testing on a unit
+
+After [hooks-check-a4](../hooks-check-a4) has passed. core-a4's README
+("Testing on a unit") has the backup, the recovery path and how to send a
+build. This test writes projects: use an empty project slot for it, and
+keep the Transfer backup.
+
+Reading the screen: seven columns at the top left (pattern tracks,
+patterns, kit sounds, pool sounds, kits, globals, project), each as tall as
+the number of markers that no longer read back (empty means all good); to
+their right a bar for the project events (two pixels each), a dot under it
+when the last event was a load, and up to four dots for the scopes it
+dropped (global, track, pattern, project).
+
+The A4's menus, for the steps below: GLOBAL opens the settings menu (STORE
+CHECK is its last row, after SYSTEM); GLOBAL > PROJECT has LOAD PROJECT,
+SAVE PROJECT AS and MANAGE PROJECTS; LOAD PROJECT lists the projects and
+CREATE NEW. Loading asks "SAVE '...' BEFORE LOADING? Y/N" (answer NO) and
+then "ANY CHANGES WILL BE LOST. PROCEED WITH LOADING? Y/N" (answer YES).
+
+| step | how | expected (in rytm-emu, 20 Oct 2026) |
+|---|---|---|
+| 1. boot SC56 | send the build | every column full; one event, a load; on the first boot of this layout, all four drop dots |
+| 2. mark | GLOBAL, scroll to STORE CHECK, YES | every column empty |
+| 3. save | GLOBAL > PROJECT > SAVE PROJECT AS, an empty slot, YES (keep the name) | every column empty |
+| 4. load another project | LOAD PROJECT, a project saved without mods (or with another build), NO, YES | every column full; two events, a load; drop dots for track, pattern and project (and global, if that project was never saved by this build) |
+| 5. load it back | LOAD PROJECT, the slot from step 3, NO, YES | every column empty; three events; no drop dots |
+| 6. power cycle | off and on | every column empty; one event, a load; no drop dots |
+| 7. CREATE NEW | LOAD PROJECT, CREATE NEW, NO, YES | every column full; the event bar one longer, with no load dot (a new project) |
+
+Then two checks of what reaches the stored project without a save (the A4
+keeps the working project across power cycles, and stock writes its own
+edits there part by part):
+
+- **The current kit**: load the project from step 3 back, press STORE CHECK
+  again, and power cycle without saving. The project column stays empty and
+  the current kit's markers (and its 4 sounds') come back; the kits, kit
+  sounds and pool columns still show the other kits' markers missing, as
+  stock's own unsaved edits to other kits are lost too.
+- **A pattern's tracks**: after STORE CHECK, press RECORD (grid recording),
+  place two trigs on the pattern that is playing, press RECORD again, and
+  power cycle without saving. In the emulator this carried that pattern's
+  six track fields through the power cycle (stock's track save); the
+  columns can't show one pattern, so on a unit this needs a mod that reads
+  one field, or is left to the emulator.
+
+**The listen test.** core-a4 keeps a sound's mod bytes in sound words that
+stock sends to the engine with every parameter push, to the slot every
+unused parameter goes to. Play a pattern with long notes on all four
+synth tracks (and the CV tracks if used), note how it sounds, press STORE
+CHECK (which sets those words in every sound to non-zero markers), and play
+it again: it must sound exactly the same, and the CV outputs must be the
+same. Repeat after loading the project back (step 5). Any difference is a
+failure: report the build and the track.
+
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
