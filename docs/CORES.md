@@ -35,6 +35,7 @@ There is one core file per device and OS:
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | a proof of concept, not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | a proof of concept, not released: build it ([below](#building-a-core)); 1.74 only |
+| Analog Four MKII | 1.56 | `core-a4-0.1.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
@@ -127,6 +128,14 @@ core.
   routes' amount low bytes too, and pattern-track and pattern fields kept
   by stock's saves of one edited track, a pattern's settings or its locks,
   not only by whole-pattern saves. No machines and no firmware exports.
+- **Analog Four MKII** ([mods/core-a4](../mods/core-a4)): core-ar2 0.3
+  with the A4's addresses, every one measured on the A4's own image: the
+  same hook bus (tick about 20 a second, draw, key, encoder, SETTINGS,
+  the render's entry and exit, which cover the digital path: the effects,
+  not the analog voices) and the same mod storage, in bytes of the A4's own
+  sounds, kits, global slots and songs that the stock OS never uses
+  ([mods/core-a4](../mods/core-a4) has where). Checked in rytm-emu's A4
+  build; not yet on a unit.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
@@ -161,7 +170,8 @@ One source, [mods/core/core.s](../mods/core/core.s), is built with each
 device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
 [mods/core-dt2](../mods/core-dt2) for the Digitakt II,
-[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-mc](../mods/core-mc)
+[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-a4](../mods/core-a4)
+for the Analog Four MKII, [mods/core-mc](../mods/core-mc)
 and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
 gives the addresses of every OS it supports (its `os`, and its `ports`):
 the stock file you build with picks them. The Octatrack's has its own
@@ -173,6 +183,7 @@ python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx            
 python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # the Digitone mk1's (or 1.43)
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (1.74 only from 0.3)
+python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx                   # the Analog Four MKII's
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'

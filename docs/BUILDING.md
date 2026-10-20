@@ -16,8 +16,8 @@
    The check below the list says when the set combines: "No conflicts ...
    Ready to build".
 4. **OS version shown**: what the unit will show as its OS version: 4
-   characters on the Digitakt mk1, the Digitone mk1 and the Analog Rytm
-   MKII, 1 to 10 on the Octatrack.
+   characters on the Digitakt mk1, the Digitone mk1, the Analog Rytm MKII
+   and the Analog Four MKII, 1 to 10 on the Octatrack.
 5. **BUILD FIRMWARE**: choose where to save the `.syx`. elekloader builds it,
    verifies it ([below](#what-a-build-guarantees)), and shows its sha256. For the Octatrack it also
    writes the card file, the `.bin` beside it.
@@ -47,8 +47,8 @@ verifies the file. With `pip install .` the command is `elekpatch`.
 
 Send the `.syx` to the unit the way Elektron describes for OS updates
 ([How to update your device](https://support.elektron.se/support/solutions/articles/43000662890-how-to-update-your-device)).
-For the Digitakt mk1, the Digitakt II, the Digitone mk1 and the Analog Rytm
-MKII:
+For the Digitakt mk1, the Digitakt II, the Digitone mk1, the Analog Rytm
+MKII and the Analog Four MKII:
 1. Connect it over USB and open Elektron Transfer.
 2. Select the unit and **Connect**.
 3. Drag the `.syx` onto **Drop files here**.
@@ -75,7 +75,8 @@ Octatrack: hold **FUNC** while powering on, press **TRIG 3** for MIDI
 UPGRADE, and send the stock `.syx` over 5-pin DIN MIDI (USB MIDI does not
 work for this). On the Analog Rytm MKII: hold **FUNC** while powering on for
 the STARTUP menu, press **TRIG 4** for OS UPGRADE, and send the stock `.syx`
-over 5-pin DIN MIDI (not USB).
+over 5-pin DIN MIDI (not USB). The Analog Four MKII's is the same: FUNC at
+power-on, **TRIG 4**, the stock `.syx` over 5-pin DIN MIDI.
 
 ## What a build guarantees
 
@@ -97,7 +98,8 @@ file from its own main OS stream.
 
 The Analog Rytm MKII's files are the Digitakt mk1's family, with five
 sections and no seal. From its own main OS stream, the writer reproduces the
-stock 1.73 and 1.74 files byte for byte.
+stock 1.73 and 1.74 files byte for byte. So are the Analog Four MKII's,
+whose stock 1.56 file the writer reproduces the same way.
 
 The Digitakt II's files are sealed: the container ends in an HMAC-SHA256 of
 the rest, which its bootstrap checks before it flashes anything. elekloader
