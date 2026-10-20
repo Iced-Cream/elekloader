@@ -451,6 +451,9 @@ unit yet.
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
   square; hooks-check-a4 counted every event and listed its SETTINGS row.
+  With store-check-a4, every scope's markers read back after a project
+  save, loading another project, loading it back, and a power cycle, and
+  CREATE NEW cleared them all.
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE,
   the stock file over MIDI DIN: from the manual and the bootstrap's strings,
   not yet checked on a unit.

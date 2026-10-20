@@ -71,7 +71,8 @@ docs match its code.
     Analog Rytm MKII, and `hello-marker-a4` on the Analog Four MKII;
   - `hooks-check-ar2`, a test for the Analog Rytm MKII's core: it
     subscribes to every event core-ar2 has and shows what it counts
-    (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII);
+    (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
+    `store-check-a4` checks its mod storage);
   - `perform-direct`, a real Digitakt II mod: [PRESET] toggles PERFORM
     without [FUNC];
   - `sine-machine`, an SRC machine for core 3.0 that names no firmware
