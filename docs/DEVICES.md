@@ -445,7 +445,12 @@ storage and recovery are not checked on a unit yet.
 - **Mods' area.** `0x47BE0000`-`0x47C00000`, the Rytm's. No code operand
   points into it or its uncached view, and in rytm-emu a watch over it saw
   no access through a cold boot and a session of keys, encoders and PLAY.
-  Not yet checked with a canary on a unit.
+  The OS's one allocator (operator new) has a fixed 16 MB arena,
+  0x41872230-0x42872230, inside the RAM it clears; every task stack is
+  there too, and its fixed buffers outside it (effects, the delay ring,
+  DMA) end at 0x456472C0 (cached view). So 0x456472C0-0x47BE0000 (37.6 MB)
+  is unused as well. Not yet checked with a canary on a unit; HC56 has run
+  code from the area on one.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4/README.md).
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
