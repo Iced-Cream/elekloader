@@ -769,7 +769,9 @@ differs:
 - The A4 writes each parameter edit of the current kit straight into the
   stored project's copy of that kit, so `core_store_set` writes a field of
   the current kit or its sounds there too: like a stock edit, it survives a
-  power cycle without a save.
+  power cycle without a save. And as stock's own edits do, every mod field
+  survives a power cycle straight after SAVE PROJECT AS: core copies what
+  the save wrote of its own bytes back into the stored project.
 - No velocity routes: the sound's room needs no extra sites.
 - core-a4 owns 28 storage sites (mods/core-a4/README.md lists them), among
   them a kit init the Rytm's core does not need.
