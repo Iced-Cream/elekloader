@@ -46,10 +46,18 @@ facts below are otherwise static and emulator evidence.
 - The OS clears 0x40253000-0x448B6D50 at start (0x400010FA, the Rytm's
   0x4000083A) and runs its stack down from 0x48000000.
 - Mods' area: 0x47BE0000-0x47C00000, the Rytm's and the Digitakt mk1's.
-  No operand in the code points into it or its uncached view (0x4FBE0000);
-  the highest DDR the code names ends near 0x456472C0 (cached view). In
-  rytm-emu a watch over the area saw no access through a cold boot, keys,
-  encoders and PLAY. Not yet checked on a unit.
+  No operand in the code points into it or its uncached view (0x4FBE0000).
+  What the OS addresses at run time is bounded: the heap is one buddy
+  allocator (operator new 0x400653B8) over a fixed 16 MB arena,
+  0x41872230-0x42872230, whose descriptor (0x40212338) is static data no
+  code rewrites; the task stacks are static; both lie in the RAM cleared at
+  start. The buffers outside it (effects, the 4 MB delay ring at uncached
+  0x4D000000, console and DMA buffers) have fixed sizes and end at
+  uncached 0x4D6472C0 (cached 0x456472C0). In rytm-emu, watches over the
+  area and over 0x448B6D50-0x44C00000 and 0x456472C0-0x47BE0000 saw no
+  access through a cold boot, a busy session, a project save and a load;
+  the boot stack used only 0x47FFFFD0-0x47FFFFFF. Not yet checked on a unit
+  with a canary.
 - UI: the periodic UI routine (0x40098754) is the Rytm's (0x400A2AAA on
   1.73) instruction for instruction, with its object's fields moved (the
   idle counter +0x918, the Rytm's +0x748): about 20 Hz, a 128 x 64
