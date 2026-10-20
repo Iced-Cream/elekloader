@@ -33,7 +33,7 @@ type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, 
 const DEVICES: Record<string, Spec> = {
   'analog-rytm-mk2': {
     fixed: { sound: 24, kit: 64, global: 40 },
-    coreFixed: [['0.3', { sound: 56 }]],      // from that core's version on
+    coreFixed: [['0.3', { sound: 56 }]],      // from that core's version on (0.3: OS 1.74 only)
     live: { track: 512, pattern: 512 },        // the most the split can give an item
     store: 4352 - 10,                           // bytes after the header
     items: { track: 129 * 13, pattern: 129 },

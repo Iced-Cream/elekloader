@@ -1,6 +1,8 @@
 # store-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s mod storage (core 0.3, OS 1.73 and 1.74).
+A test for [core-ar2](../../mods/core-ar2)'s mod storage (core 0.3). From
+1.1 it is for OS 1.74 only, as core 0.3 is; 1.0, with core 0.2, was for 1.73
+and 1.74.
 It declares a field in every scope and does nothing until asked:
 
 | field | scope | bits |
@@ -35,8 +37,8 @@ event was a load (none for CREATE NEW), then one dot for each scope that
 load dropped: global, track, pattern, project.
 
 It names the live objects and two firmware routines itself (core exports
-none): the live objects are at the same addresses on 1.73 and 1.74, and the
-routines' 1.74 addresses are in `ports`, as in hooks-check-ar2.
+none), at their 1.74 addresses (`mod.json`'s `os`; 1.0 had 1.73 as its `os`
+and 1.74 in `ports`, as hooks-check-ar2 has).
 
 Checked in an emulator and on a unit, on 1.73 and 1.74 (19 Oct 2026; 1.0,
 with core 0.2), and 1.1 with core 0.3 in an emulator (20 Oct 2026): see
@@ -47,7 +49,7 @@ core-ar2's README. 1.1 adds `sc_sound_b` and needs core 0.3.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/store-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.3-os1.74.elemod --mod examples/store-check-ar2/out/store-check-1.1-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.3.elemod --mod examples/store-check-ar2/out/store-check-1.1.elemod \
     --out rytm-store.syx --version SC01 --lockfile rytm-store.lock.json
 ```
 

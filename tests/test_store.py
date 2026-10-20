@@ -123,7 +123,7 @@ def test_the_split_grows_and_moves_the_store():
 
 def test_what_does_not_fit_is_refused():
     assert 'sound' in refused(store.allocate, None, [('a', 'x', 'sound', 32), ('a', 'y', 'sound', 25)], DEV)
-    # core-ar2 0.2 keeps 24 bits a sound, 0.3 56
+    # core-ar2 0.2 keeps 24 bits a sound, 0.3 (OS 1.74 only) 56
     assert 'with core 0.2 (56 with a newer core)' in refused(store.allocate, None,
                                                              [('a', 'x', 'sound', 25)], DEV, '0.2')
     # three bytes a pattern track would not fit in the store

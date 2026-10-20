@@ -24,7 +24,8 @@ field where it was from one build to the next:
   fields are packed again from bit 0: projects and library sounds from older
   generations load that scope at defaults;
 - a scope's room can depend on the core's version (core-ar2 0.3 keeps 56
-  bits a sound, 0.2 24): bits a newer core added come after the older
+  bits a sound, 0.2 24; 0.3 is for OS 1.74 only, so a 1.73 build has 0.2's
+  room): bits a newer core added come after the older
   core's, so its placements keep their meaning; a field that lies past what
   the build's core keeps repacks its scope;
 - the tagged store's split (bytes per pattern track and per pattern) grows
@@ -70,7 +71,7 @@ IDS_TABLE = 'core_store_ids'
 DEVICES = {
     'analog-rytm-mk2': {
         'fixed': {'sound': 24, 'kit': 64, 'global': 40},
-        'core_fixed': (('0.3', {'sound': 56}),),     # from that core's version on
+        'core_fixed': (('0.3', {'sound': 56}),),     # from that core's version on (0.3: OS 1.74 only)
         'live': {'track': 512, 'pattern': 512},     # the most the split can give an item
         'store': 4352 - 10,                          # bytes after the header
         'items': {'track': 129 * 13, 'pattern': 129},

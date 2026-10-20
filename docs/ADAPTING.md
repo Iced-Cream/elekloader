@@ -164,7 +164,8 @@ The sites core owns (do not patch them):
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
   0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
 - from core-ar2 0.2, on both Rytm releases, 22 more for mod storage, and
-  from 0.3 10 more (32 in all; listed under "Mod storage").
+  from 0.3, which is for 1.74 only (0.2 is the last core with 1.73), 10
+  more (32 in all; listed under "Mod storage").
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -614,7 +615,11 @@ the template copy of slot -1's load (by jsr).
 ### Mod storage (core-ar2 0.2, Analog Rytm MKII)
 
 From core-ar2 0.2 a Rytm mod can keep its own values with the project:
-per sound, kit, global slot, pattern track, pattern or project. They live in
+per sound, kit, global slot, pattern track, pattern or project. Core-ar2
+0.3 is for OS 1.74 only; 0.2 is the last core with 1.73, and stays as it
+was released. A 1.73 build takes 0.2, the newest core for that OS, with
+0.2's room and saves; a mod that needs 0.3 (`"core": "0.3"` in
+`resources`) builds for 1.74 only. They live in
 bytes the stock OS never reads or writes (from 0.3 also in bytes it only
 ever holds at 0, read where it matters through sites core hooks), so a
 project saved with mods still loads on the stock OS, and no stock function
@@ -639,7 +644,7 @@ core_store_set(STORE(my_accent), live_pattern, track, v + 1);
 
 | scope | item | index | room per item | kept in |
 |---|---|---|---|---|
-| `sound` | the live sound (a kit's, or the pool's) | unused | 56 bits (24 with core-ar2 0.2) | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste); bits 24..55 sit in the velocity routes' amount low bytes, which stock holds at 0 |
+| `sound` | the live sound (a kit's, or the pool's) | unused | 56 bits (24 with core-ar2 0.2, so on 1.73) | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste); bits 24..55 sit in the velocity routes' amount low bytes, which stock holds at 0 |
 | `kit` | the live kit | unused | 64 bits | the kit's own spare bytes, so it travels with the kit |
 | `global` | unused | the slot, 0-3 | 40 bits | the global slot's spare bytes |
 | `track` | the live pattern | the track, 0-12 | 8 x T bits | the project's tagged store |
@@ -677,8 +682,8 @@ bytes in a project file, so core also hooks the file save and load
 stored project when stock saves that item there. A sound's or kit's go with
 the stock save of that sound or kit. Pattern-track and pattern fields go
 whenever stock saves any part of that pattern (from core-ar2 0.3: an edited
-track, the pattern's settings, its parameter locks; with 0.2 only the whole
-pattern, at SAVE PROJECT or into a project file), and then the whole
+track, the pattern's settings, its parameter locks; with 0.2, so on 1.73,
+only the whole pattern, at SAVE PROJECT or into a project file), and then the whole
 pattern's. A field a mod sets from its own page with no stock edit is
 kept by the next of those saves, as stock's own data is; until then a power
 cycle loses it, as it loses an unsaved stock edit.
@@ -734,14 +739,13 @@ project commands copy, write and swap whole stored songs (0x4018b6ec,
 0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)
 and whole stored patterns (0x4018ba90, 0x4018c736, 0x4018c968 on 1.73;
 0x4018bc5c, 0x4018c902, 0x4018cb34 on 1.74).
-Core-ar2 0.3 owns 10 more: the calls through which stock saves an
-edited pattern track, a pattern's settings and its parameter locks by
-themselves (0x400bf7ac, 0x400aac58, 0x400ac262 and 0x400ac280 on 1.73;
-0x400bf818, 0x400aacc4, 0x400ac2ce and 0x400ac2ec on 1.74), and the
-velocity routes' push to the engine (0x4011f63c; 0x4011f6a8), the VELOCITY
-MOD menu's getAmount (0x400c52ba; 0x400c5326), setAmount (0x400c5246;
-0x400c52b2), setRoute (0x400c5148; 0x400c51b4) and reset (0x400c53c0;
-0x400c542c), and the aftertouch menu's setRoute (0x4003391e on both).
+Core-ar2 0.3, on 1.74 only, owns those 22 at their 1.74 addresses and 10
+more: the calls through which stock saves an edited pattern track, a
+pattern's settings and its parameter locks by themselves (0x400bf818,
+0x400aacc4, 0x400ac2ce and 0x400ac2ec), and the velocity routes' push to
+the engine (0x4011f6a8), the VELOCITY MOD menu's getAmount (0x400c5326),
+setAmount (0x400c52b2), setRoute (0x400c51b4) and reset (0x400c542c), and
+the aftertouch menu's setRoute (0x4003391e).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 

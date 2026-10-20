@@ -17,12 +17,12 @@
 |
 | Each stub is a jmp site's displaced instructions, reimplemented; the
 | resume addresses and SOUND_CHANGED (SoundConfigChangedInfo's vtable) come
-| from mod.json's defsym, per OS.
+| from mod.json's defsym (OS 1.74).
         .text
         .globl  st_vel_push, st_vel_get, st_vel_set, st_vel_route, st_at_route
         .align  2
 
-| The push to the engine (0x4011f63c on 1.73): `movew %a1@(112),%a0@(1216)`,
+| The push to the engine (0x4011f6a8): `movew %a1@(112),%a0@(1216)`,
 | the velocity route's amount word to the engine's copy. d3 is free: it is
 | set again two instructions on.
 st_vel_push:
@@ -31,7 +31,7 @@ st_vel_push:
         move.w  %d3,1216(%a0)
         jmp     VEL_PUSH_RET
 
-| getAmount (0x400c52ba): `lea %a3@(0,%a3:l:2),%a0; addql #4,%sp`, then the
+| getAmount (0x400c5326): `lea %a3@(0,%a3:l:2),%a0; addql #4,%sp`, then the
 | read of route a3's amount word at routes d0 and the branch to the exit.
 st_vel_get:
         lea     (0,%a3,%a3.l*2),%a0
@@ -40,7 +40,7 @@ st_vel_get:
         and.l   #0xffffff00,%d0
         jmp     VEL_GET_RET
 
-| setAmount (0x400c5246): `movew %d1,%a0@(0,%d0:l); movel #SOUND_CHANGED,%d0`
+| setAmount (0x400c52b2): `movew %d1,%a0@(0,%d0:l); movel #SOUND_CHANGED,%d0`
 | with d1 the new (clamped, whole-step) amount; the route's low byte goes
 | back into it first.
 st_vel_set:
@@ -53,7 +53,7 @@ st_vel_set:
         move.l  #SOUND_CHANGED,%d0
         jmp     VEL_SET_RET
 
-| setRoute (0x400c5148 velocity, 0x4003391e aftertouch): `movew
+| setRoute (0x400c51b4 velocity, 0x4003391e aftertouch): `movew
 | %a1@,%a0@(0,%d0:l); lea %fp@(19),%a1`, a whole route's amount word from a
 | copy at a1. Only its high byte is stored: the route keeps its low byte.
 st_vel_route:

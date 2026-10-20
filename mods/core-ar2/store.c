@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.3: mod storage on the Analog Rytm MKII (OS 1.73 and 1.74: the
- * routines called here are at the same addresses in both; some of the sites
- * move, mod.json's ports).
+/* core-ar2 0.3: mod storage on the Analog Rytm MKII, OS 1.74 only (core 0.2
+ * is the last with 1.73). Every address here is 1.74's.
  *
  * Mods declare fields in their mod.json ("storage"); elekloader places them
  * at build time from the build's lockfile (docs/ADAPTING.md, "Mod storage")
@@ -35,7 +34,7 @@
  * The SysEx project commands that copy, swap or write whole stored songs go
  * through st_song_copy, which leaves the target's store bytes, and those for
  * whole stored patterns through st_pattern_copy, which clears the target
- * slot's fields (three sites each, at different addresses on 1.73 and 1.74).
+ * slot's fields (three sites each).
  *
  * Stock saves an edited pattern track, a pattern's settings and its
  * parameter locks into the stored project one part at a time, not through
@@ -353,7 +352,7 @@ static void part_out(unsigned char *rec, unsigned char *live)
     pattern_out(img, n, live, store_ok(img, SC_TRACK), store_ok(img, SC_PATTERN));
 }
 
-/* 0x400bf7ac's call (1.73): (stored track, live track, a, b, c); the track is found
+/* 0x400bf818's call: (stored track, live track, a, b, c); the track is found
  * from where its record sits */
 int st_track_save(unsigned char *dst, unsigned char *live, int a, int b, int c)
 {
@@ -371,7 +370,7 @@ int st_track_save(unsigned char *dst, unsigned char *live, int a, int b, int c)
     return r;
 }
 
-/* 0x400aac58's call (1.73): (stored pattern +13089, live pattern +85683) */
+/* 0x400aacc4's call: (stored pattern +13089, live pattern +85683) */
 int st_settings_save(unsigned char *dst, unsigned char *live, int a)
 {
     int r = SETTINGS_SAVE(dst, live, a, 0, 0);
@@ -380,7 +379,7 @@ int st_settings_save(unsigned char *dst, unsigned char *live, int a)
     return r;
 }
 
-/* 0x400ac262's call (1.73): one parameter's locks on one track */
+/* 0x400ac2ce's call: one parameter's locks on one track */
 int st_lock_save(unsigned char *dst, unsigned char *live, int a, int param, int track)
 {
     int r = LOCK_SAVE(dst, live, a, param, track);
@@ -389,7 +388,7 @@ int st_lock_save(unsigned char *dst, unsigned char *live, int a, int param, int 
     return r;
 }
 
-/* 0x400ac280's call (1.73): all of a pattern's locks */
+/* 0x400ac2ec's call: all of a pattern's locks */
 int st_locks_save(unsigned char *dst, unsigned char *live, int a)
 {
     int r = LOCKS_SAVE(dst, live, a, 0, 0);
@@ -506,7 +505,7 @@ int st_sound_init(unsigned char *sound, int a, int b, int c)
     return r;
 }
 
-/* 0x400c53c0's call (1.73), the VELOCITY MOD menu's reset of a sound's velocity
+/* 0x400c542c's call, the VELOCITY MOD menu's reset of a sound's velocity
  * routes (routes: the live sound +0x70): the routes go to stock's defaults,
  * the fields in their low bytes stay */
 void st_vel_defaults(unsigned char *routes)
