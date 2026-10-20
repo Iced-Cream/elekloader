@@ -4,8 +4,9 @@ MCF5441x-family CPU, the Digitakt mk1's); the main OS runs from DDR at
 0x40000400. Measured on OS 1.56, by comparison with the Rytm 1.74
 (elekloader's analog-rytm-mk2 profile and mods/core-ar2 0.3, the core
 mods/core-a4 starts from) in Ghidra and on the stock images, with rytm-emu's
-A4 build where noted. Proof-of-concept profile: nothing here is checked on
-a unit yet.
+A4 build where noted. Proof-of-concept profile: on a unit (20 Oct 2026),
+a build of core-a4 with hooks-check-a4 booted and ran every event; the
+facts below are otherwise static and emulator evidence.
 
 - The container: ELE3, sysex id 0x0B, sections 5 (meta), 2 (bootstrap,
   with the STARTUP menu), 1 (FPGA bitstream), 3 (MAIN OS, packed) and 8

@@ -152,8 +152,14 @@ What it does not do:
 
 ## Checked so far
 
-In an emulator only (rytm-emu, with a local change that accepts modified A4
-images; 20 Oct 2026). Nothing has run on a unit yet.
+On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
+[hooks-check-a4](../../examples/hooks-check-a4)) booted and passed every
+check: the tick, draw, key, encoder and SETTINGS events and the render's
+entry and exit. Mod storage, the mods' area over a long session, and
+recovery have not run on a unit yet.
+
+In an emulator (rytm-emu, with a local change that accepts modified A4
+images; 20 Oct 2026):
 
 - **The hook bus** [emu]: with core alone (A401) the unit boots as stock, with
   the same frames and a final screen identical to stock's.

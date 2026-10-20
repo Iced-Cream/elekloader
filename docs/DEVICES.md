@@ -413,8 +413,9 @@ A proof of concept: the profile (`analog_four_mk2.py`, where each fact's
 evidence is) and a core (mods/core-a4) built from core-ar2 0.3's sources.
 The A4 runs on the Analog Rytm MKII's platform, but every address, size and
 count here was found again in the A4's own image (Ghidra, and rytm-emu's A4
-build, 20 Oct 2026), none copied from the Rytm. Nothing is checked on a
-unit yet.
+build, 20 Oct 2026), none copied from the Rytm. On a unit (20 Oct 2026), a build of core-a4
+with hooks-check-a4 (HC56) booted and every event ran as expected; mod
+storage and recovery are not checked on a unit yet.
 
 - **Files.** The Rytm's family (ELE3, the same SysEx transport), device byte
   `0x0B`, version field at `0x14`, no trailer. Five sections: 5, 2 (the

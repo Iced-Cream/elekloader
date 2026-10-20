@@ -7,7 +7,9 @@ with the A4's `fill_rect` (0x40059f1a) and `std::string` constructor
 checked by its callers. What each bar and square means is in
 [hooks-check-ar2's README](../hooks-check-ar2/README.md).
 
-Not yet run on a unit. In rytm-emu's A4 build (20 Oct 2026, build HC56,
+On a unit (OS 1.56, 20 Oct 2026), HC56 passed every check above.
+
+In rytm-emu's A4 build (20 Oct 2026, build HC56,
 with an A4 "modified image" fallback added to the emulator): the tick ran
 at about 20 Hz and its square blinked, each key press counted twice (down
 and up) and each repeat once, the encoder counted every detent the
