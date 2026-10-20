@@ -90,6 +90,13 @@ project and the stored project's name only. So:
   of one of its sounds through to the stored copy of that kit, with its ID
   and generation, as stock writes each parameter edit there. Other kits and
   the pool reach the stored project through kit saves.
+- **SAVE PROJECT AS**: stock writes only the project's name into the stored
+  project, its own data being there already. After a whole save of the live
+  project into another image (the file, a buffer), core copies the bytes it
+  owns from that image into the stored project, part by part as the save
+  wrote them (global slots, kits and their sounds, the pool, the tagged
+  store), so a power cycle straight after the save keeps the mods' fields as
+  it keeps stock's. Only core's bytes are written.
 
 The 28 storage sites, by `jmp` unless marked, each with its displaced
 instructions in `store.s`:
@@ -123,7 +130,8 @@ What differs from core-ar2 0.3:
   global slot sent and received as SysEx keeps its mod data in the same
   layout (the Rytm's slot has no room for one and drops it).
 - **The kit keeps 128 bits**, and a kit init site clears them.
-- **The current kit's write-through** (above).
+- **The current kit's write-through, and the copy into the stored project
+  after SAVE PROJECT AS** (above).
 - **Six tracks a pattern**: the pattern-track scope is 129 x 6 items, so a
   track field of up to 2 bytes each fits the default split and 3 bytes fit
   too (the Rytm's 13 tracks don't).
@@ -131,11 +139,11 @@ What differs from core-ar2 0.3:
 What it does not do:
 
 - **Fields of other kits and of the pool** set by a mod reach the stored
-  project at the next stock save of that kit or sound (a kit save, a project
-  file save and load), not at once; the current kit's reach it at once.
+  project at the next stock save of that kit or sound, or the next SAVE
+  PROJECT AS, not at once; the current kit's reach it at once.
 - **Track and pattern fields** reach the stored project at the next stock
-  save of that pattern's track, settings or locks, or the next project file
-  save and load, as on the Rytm.
+  save of that pattern's track, settings or locks, or the next SAVE PROJECT
+  AS, as on the Rytm.
 - **Patterns copied by the SysEx project commands** don't take their
   pattern-track and pattern fields with them; core clears the target slot's.
 - The spare sound and FX words reach the engine through stock's parameter
@@ -158,6 +166,9 @@ images; 20 Oct 2026). Nothing has run on a unit yet.
 - **Mod storage** [emu], with [store-check-a4](../../examples/store-check-a4)
   marking every field of every item:
   - after marking, every marker read back;
+  - SAVE PROJECT AS, then a power cycle straight away: every marker read
+    back (before the copy into the stored project, only the project scope
+    did);
   - SAVE PROJECT AS, then loading another project: every scope dropped
     (zeros; the project event reported the track, pattern and project
     scopes dropped);

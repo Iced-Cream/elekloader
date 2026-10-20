@@ -62,7 +62,13 @@
  *     index 0, the 128 patterns 1..128, as on the Rytm;
  *   - stock writes each parameter edit of the current kit straight into the
  *     stored project's copy of it, so core_store_set writes a field of that
- *     kit or its sounds through to the copy too (write_through).
+ *     kit or its sounds through to the copy too (write_through);
+ *   - SAVE PROJECT AS writes only the project's name into the stored
+ *     project (stock's data is already there, edit by edit), so after a
+ *     whole save of the live project into another image core copies its own
+ *     bytes from that image into the stored project (st_file_save): a power
+ *     cycle straight after the save keeps the mods' fields as it keeps
+ *     stock's.
  *
  * The SysEx project commands that copy, swap or write whole stored songs go
  * through st_song_copy, which leaves the target's store bytes, and those for
@@ -113,6 +119,15 @@
 #define SONGS_AT 0x1e4834                       /* the working song, then the 16 songs */
 #define SONG_SIZE 0x518
 #define SONG_ENTRIES 0x114
+
+/* the stored copy of the current kit, which stock writes each parameter edit
+ * into, and where the kits are */
+#define WORKING_KIT (S + 0x1989c6)
+#define WORKING_KIT_INDEX (S + 0x199330)
+#define LIVE_KITS ((unsigned char *)0x411e9936)  /* the live project +0xb95cea: the kits as edited */
+#define LIVE_KIT_SIZE 0x960
+#define KIT_SOUNDS 0x1c                         /* a live kit's 4 sounds, 0x152 B each */
+#define STORED_KIT_SOUNDS 0x20                  /* a stored kit's, 0x15e B each */
 
 /* From the linker, out of the lockfile: the IDs this build reads (its own
  * first, then its ancestors', zero-terminated), the generations (sound, kit,
@@ -606,12 +621,69 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
 
 /* 0x40020772 (the buffer save), 0x400a77e4 (the file save) and 0x400a503c
  * (the background save): (image, live project, parts, progress) */
+/* A whole save of the live project into another image (SAVE PROJECT AS's
+ * file, a buffer) leaves the stored project as it was: stock writes only the
+ * project's name there, its own data having reached it edit by edit. A mod's
+ * fields reach it only through stock's saves, so after such a save core
+ * copies the bytes it owns from the image the save just wrote into the
+ * stored project, part by part as the save wrote them (flags: 2 the global
+ * slots, 4 the kits and their sounds, 8 the patterns, 0x20 the sound pool).
+ * Then a power cycle straight after the save keeps the mods' fields, as it
+ * keeps stock's own edits. Only core's bytes are copied. */
+#define LIVE_PROJECT ((void *)0x40653c4c)
+#define KITS_AT 0x199334                        /* an image's 128 kits, then */
+#define KIT_STORED 0x96a
+#define POOL_AT 0x1e9ed0                        /* its 128 pool sounds */
+#define SOUND_STORED_SIZE 0x15e
+
+static void sound_bytes(unsigned char *to, const unsigned char *from)
+{
+    unsigned j;
+    for (j = 0; j < SOUND_BYTES; j++)
+        to[sound_at(j) + SOUND_STORED] = from[sound_at(j) + SOUND_STORED];
+    for (j = 0; j < 4; j++)
+        to[sound_id_at[j]] = from[sound_id_at[j]];
+    to[SOUND_GEN] = from[SOUND_GEN];
+}
+
+static void kit_bytes(unsigned char *to, const unsigned char *from)
+{
+    unsigned j;
+    for (j = 0; j < KIT_BYTES + 5; j++)         /* the data, the ID and the generation */
+        to[KIT_SPARE + j] = from[KIT_SPARE + j];
+    for (j = 0; j < 4; j++)
+        sound_bytes(to + STORED_KIT_SOUNDS + SOUND_STORED_SIZE * j,
+                    from + STORED_KIT_SOUNDS + SOUND_STORED_SIZE * j);
+}
+
+static void to_stored(const unsigned char *img, int flags)
+{
+    unsigned i, j;
+    if (flags & 2)
+        for (i = 0; i < 4; i++)
+            for (j = 0; j < GLOBAL_ID + 5; j++)
+                S[GLOBALS_AT + GLOBAL_STORED * i + global_at(j)] = img[GLOBALS_AT + GLOBAL_STORED * i + global_at(j)];
+    if (flags & 4) {
+        for (i = 0; i < 128; i++)
+            kit_bytes(S + KITS_AT + KIT_STORED * i, img + KITS_AT + KIT_STORED * i);
+        if (rd32(img + (WORKING_KIT_INDEX - S)) == rd32(WORKING_KIT_INDEX))   /* the same kit's copy */
+            kit_bytes(WORKING_KIT, img + (WORKING_KIT - S));
+    }
+    if (flags & 0x20)
+        for (i = 0; i < 128; i++)
+            sound_bytes(S + POOL_AT + SOUND_STORED_SIZE * i, img + POOL_AT + SOUND_STORED_SIZE * i);
+    if (flags & 8)
+        store_copy(S, (unsigned char *)img, 0, STORE_BYTES);
+}
+
 int st_file_save(unsigned char *dst, void *live, int flags, void *progress)
 {
     int r;
     st_image = dst;
     r = PROJECT_SAVE(dst, live, flags, progress);
     st_image = S;
+    if (r && dst != S && live == LIVE_PROJECT && is_image(dst))
+        to_stored(dst, flags);
     return r;
 }
 
@@ -724,12 +796,6 @@ static volatile unsigned char *field_byte(unsigned scope, volatile unsigned char
  * kit's other copies reach the stored project only through kit saves. A
  * field set in that kit or in one of its sounds is written through to the
  * copy the same way, with its layout ID and generation. */
-#define WORKING_KIT (S + 0x1989c6)
-#define WORKING_KIT_INDEX (S + 0x199330)
-#define LIVE_KITS ((unsigned char *)0x411e9936)  /* the live project +0xb95cea: the kits as edited */
-#define LIVE_KIT_SIZE 0x960
-#define KIT_SOUNDS 0x1c                         /* a live kit's 4 sounds, 0x152 B each */
-#define STORED_KIT_SOUNDS 0x20                  /* a stored kit's, 0x15e B each */
 
 static void write_through(unsigned scope, unsigned char *item)
 {
