@@ -148,7 +148,9 @@ What it does not do:
   pattern-track and pattern fields with them; core clears the target slot's.
 - The spare sound and FX words reach the engine through stock's parameter
   pushes, into the slot every unused parameter goes to; that nothing reads
-  that slot is inferred, not yet checked by ear on a unit.
+  that slot is inferred from the code, and on a unit (21 Oct 2026) a
+  pattern sounded the same by ear before and after store-check-a4 set
+  every sound's markers.
 
 ## Checked so far
 
@@ -161,7 +163,8 @@ marker back after SAVE PROJECT AS and a power cycle, loading another
 project (zeros, as it should) and loading the project back, a power cycle,
 and a Transfer round trip of the project file; CREATE NEW cleared every
 field, and on the new project, marking and a power cycle without saving
-kept the project fields. A listen test with the markers set, the mods'
+kept the project fields. With every marker set, a pattern on all four
+synth tracks and the effects sounded the same by ear as before. The mods'
 area over a long session and recovery have not run on a unit yet.
 
 In an emulator (rytm-emu, with a local change that accepts modified A4

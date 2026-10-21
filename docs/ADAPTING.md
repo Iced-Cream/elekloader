@@ -775,9 +775,9 @@ differs:
 - No velocity routes: the sound's room needs no extra sites.
 - core-a4 owns 28 storage sites (mods/core-a4/README.md lists them), among
   them a kit init the Rytm's core does not need.
-- Checked in rytm-emu's A4 build, not yet on a unit. The spare sound and
-  effects words reach an engine slot the stock OS appears not to use; a
-  listen test on a unit with fields set is still to come.
+- Checked in rytm-emu's A4 build and on a unit (store-check-a4). The spare sound and
+  effects words reach an engine slot the stock OS appears not to use; on
+  a unit, a pattern sounded the same by ear with every field set.
 
 `examples/store-check-a4` is store-check-ar2 for the A4.
 
