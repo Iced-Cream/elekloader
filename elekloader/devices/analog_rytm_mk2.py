@@ -3,7 +3,7 @@
 platform, an MCF54418); the main OS runs from DDR at 0x40000400. Measured
 on OS 1.73, by comparison with the Digitakt mk1 1.54 (elekloader's
 digitakt-mk1 profile and mods/core, whose 1.54 port is the core this one
-starts from) in Ghidra and on the stock images. Proof-of-concept profile.
+starts from) in Ghidra and on the stock images.
 1.74's file differs from 1.73's only in the main OS (and the version
 string's section 5): the same bootstrap, FPGA bitstream and ARM image. Its
 main OS is 1.73's with code added in two places (Outbox 8's main-output

@@ -23,7 +23,7 @@ file on your own machine, and you flash it the way you flash any OS update.
 | Digitone (mk1) and Digitone Keys | 1.43, 1.44 | supported |
 | Octatrack (MKI and MKII) | 1.40C | supported: whole builds (format-1 mods); linkable mods with its own core: boots on an MKII, not yet run on an MKI |
 | Model:Cycles, Model:Samples | 1.13 | supported: linkable mods with their own core (the hook bus's tick, draw, key and encoder events); builds work on both units (Transfer over USB) |
-| Analog Rytm MKII | 1.73, 1.74 | experimental: linkable mods with its own core, a proof of concept (the hook bus's tick, draw, key, encoder, SETTINGS and render events); builds with the core work on a unit (Transfer over USB) |
+| Analog Rytm MKII | 1.74 | supported: linkable mods with its own core (the hook bus's tick, draw, key, encoder, SETTINGS and render events); builds with the core work on a unit (Transfer over USB) |
 | other Elektron devices | | planned: see [docs/DEVICES.md](docs/DEVICES.md) |
 
 ## Get started
