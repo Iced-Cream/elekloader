@@ -471,8 +471,9 @@ Recovery to stock worked on the unit (21 Oct 2026).
   core-a4's storage spec, and `tools/parity.ts` takes the A4's cases
   (`stocks.a456`, `dirs.a4`: core-a4 with each example, alone and together,
   the examples without core, a check, and each Rytm core on the other
-  device). The web page's list of where to download each stock OS does not
-  name the A4 yet.
+  device). Its eleven cases (six builds, a check, four refusals) give the
+  same files, messages and checks as the Python (21 Oct 2026). The web page's
+  list of where to download each stock OS does not name the A4 yet.
 
 ## What a new device needs besides its profile
 
