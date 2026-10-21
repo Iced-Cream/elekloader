@@ -2,7 +2,7 @@
  "id": "core", "version": "0.4",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; and pages.s: parameter pages and parameter overrides mods add through the tables core_pages and core_params, from the first instructions of the four routines a page goes through, and the page keys' lists, stock's pages and then the ones mods add through core_view_pages. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; and pages.s: parameter pages and parameter overrides mods add through the tables core_pages and core_params, from the first instructions of the four routines a page goes through, and the page keys' lists, stock's pages and then the ones mods add through core_view_pages, which the page key steps through (skipping a page while its mod says it is hidden, with the page's title in the header), and which keeps its page when the view is shown again. On its own it changes nothing the unit does.",
  "device": "analog-rytm-mk2", "os": "1.74",
  "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "route.s", "pages.s"],
  "defsym": {
@@ -38,7 +38,11 @@
   "VIEW6_RET": "0x400cb14e", "VIEW6_LIST": "0x401e1dbc", "VIEW6_N": "1",
   "VIEW7_RET": "0x400cb1a0", "VIEW7_LIST": "0x401e1db8", "VIEW7_N": "1",
   "VIEW8_RET": "0x400cb1f8", "VIEW8_LIST": "0x401e1db4", "VIEW8_N": "1",
-  "VIEW9_RET": "0x400cb264", "VIEW9_LIST": "0x401e1db0", "VIEW9_N": "1"
+  "VIEW9_RET": "0x400cb264", "VIEW9_LIST": "0x401e1db0", "VIEW9_N": "1",
+  "CYCLE_RET": "0x4003ab9c",
+  "STR_FROM_CSTR": "0x401bcff0",
+  "UI_SET_TITLE": "0x40035fe8",
+  "STR_DTOR": "0x401bb540"
  },
  "sites": [
   {"addr": "0x400008c0", "stock": "4eb9400014cc", "op": "jsr", "target": "boot"},
@@ -94,7 +98,9 @@
   {"addr": "0x400cb144", "stock": "72012f01203c401e1dbc", "op": "jmp", "target": "core_view_6"},
   {"addr": "0x400cb196", "stock": "72012f01203c401e1db8", "op": "jmp", "target": "core_view_7"},
   {"addr": "0x400cb1ee", "stock": "72012f01203c401e1db4", "op": "jmp", "target": "core_view_8"},
-  {"addr": "0x400cb25a", "stock": "72012f01203c401e1db0", "op": "jmp", "target": "core_view_9"}
+  {"addr": "0x400cb25a", "stock": "72012f01203c401e1db0", "op": "jmp", "target": "core_view_9"},
+  {"addr": "0x4003ab86", "stock": "222a008c52814c4018022542008c2f0a4eb940078580", "op": "jmp", "target": "core_cycle"},
+  {"addr": "0x400cbd3e", "stock": "6710", "op": "bytes", "new": "6010", "kind": "code"}
  ],
  "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4},
  "resources": {"names": ["timer:DTIM0"]}

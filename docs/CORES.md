@@ -129,8 +129,9 @@ core.
   not only by whole-pattern saves. From 0.4, parameter pages: core owns
   the entries of the four page routines and asks the mods' `core_pages`
   and `core_params` entries, and builds each page key's list from stock's
-  pages and the mods' `core_view_pages` entries, so several mods with
-  pages fit one build, behind the same key too
+  pages and the mods' `core_view_pages` entries (a page can be hidden; the
+  key shows each page's title and a view keeps its page), so several mods
+  with pages fit one build, behind the same key too
   ("Parameter pages (core-ar2 0.4, Analog Rytm MKII)" in ADAPTING.md). No
   machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It

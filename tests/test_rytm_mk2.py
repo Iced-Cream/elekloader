@@ -140,25 +140,25 @@ def test_core_ar2_sites():
     assert int(d['SETTINGS_RET'], 16) == moved(0x400db87e) + 6
     # SoundConfigChangedInfo's vtable (data, which moves otherwise): the
     # immediate the velocity setAmount site displaces
-    vset = [x for x in mod['sites'] if x['target'] == 'st_vel_set'][0]
+    vset = [x for x in mod['sites'] if x.get('target') == 'st_vel_set'][0]
     assert d['SOUND_CHANGED'] == '0x' + vset['stock'][-8:]
     # each jmp stub's resume address: its site plus the bytes it displaces
     # (st_vel_get also does the read after them and resumes at the exit)
     for k, t in (('VEL_PUSH_RET', 'st_vel_push'), ('VEL_SET_RET', 'st_vel_set'),
                  ('VEL_ROUTE_RET', 'st_vel_route'), ('AT_ROUTE_RET', 'st_at_route')):
-        x = [x for x in mod['sites'] if x['target'] == t][0]
+        x = [x for x in mod['sites'] if x.get('target') == t][0]
         assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
     # parameter pages (core-ar2 0.4): a jmp at each routine's entry, and each
     # stub resumes after the instructions it displaces
     for k, t in (('PAGE_INFO_RET', 'core_page_info'), ('GET_RET', 'core_param_get'),
                  ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
-        x = [x for x in mod['sites'] if x['target'] == t][0]
+        x = [x for x in mod['sites'] if x.get('target') == t][0]
         assert x['op'] == 'jmp' and len(x['stock']) // 2 in (6, 8), x
         assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
     # the page keys' lists (core-ar2 0.4): each view's `moveq #n,%d1; movel
     # %d1,%sp@-; movel #list,%d0` is a site, and defsym has its list, length
     # and resume
-    views = sorted((x for x in mod['sites'] if x['target'].startswith('core_view_')),
+    views = sorted((x for x in mod['sites'] if x.get('target', '').startswith('core_view_')),
                    key=lambda x: int(x['target'][10:]))
     assert len(views) == 10
     for i, x in enumerate(views):
@@ -167,10 +167,22 @@ def test_core_ar2_sites():
         assert int.from_bytes(b[6:10], 'big') == int(d['VIEW%d_LIST' % i], 16), x
         assert int(d['VIEW%d_RET' % i], 16) == a + 10, x
         assert img[a + 10 - DEV.main_load:a + 12 - DEV.main_load] == bytes.fromhex('2f00'), x   # the list's push
-    # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites and
-    # the 10 view sites
-    assert len(mod['sites']) == 54
-    assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 32
+    # the page key's step: from the index's load to the invalidate's call,
+    # resuming at the `pea %a2@(144)` stock follows it with; and the FX page
+    # code's `beqs` around its go-back-to-the-first-page call, made a `bras`
+    x = [x for x in mod['sites'] if x.get('target') == 'core_cycle'][0]
+    a = int(x['addr'], 16)
+    assert x['op'] == 'jmp' and x['stock'].startswith('222a008c') and x['stock'].endswith('2f0a4eb940078580'), x
+    assert int(d['CYCLE_RET'], 16) == a + len(x['stock']) // 2, x
+    assert img[a + 22 - DEV.main_load:a + 26 - DEV.main_load] == bytes.fromhex('486a0090'), x
+    x = [x for x in mod['sites'] if x['addr'] == '0x400cbd3e'][0]
+    assert x['op'] == 'bytes' and x['stock'] == '6710' and x['new'] == '6010', x
+    o = 0x400cbd3e + 2 + 0x10 - DEV.main_load                # the branch skips setsel(view, 0)
+    assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
+    # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
+    # the 10 view sites, the step and the FX keep
+    assert len(mod['sites']) == 56
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 32
 
 
 def test_no_copy_of_the_bootstrap_in_the_main_os():

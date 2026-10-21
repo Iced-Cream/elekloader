@@ -811,8 +811,16 @@ mods can add pages behind one key:
 ```
 
 ```c
-const struct core_view_page my_view_page = {CORE_VIEW_COMP, 14};
+const struct core_view_page my_view_page = {CORE_VIEW_COMP, 14, 0};
 ```
+
+The third field, `shown`, is 0 or `int32_t shown(void *view)`: the page key
+asks it on each press and steps over the page while it answers 0 (voice-dac
+hides DAC FILTER while DAC SUM is off). Core also does two things for every
+view, so no mod needs to: it puts the new page's title in the header after
+each step (stock showed the title of the page left), and a view keeps its
+page when it is shown again (stock sent the FX track's views back to their
+first page; the voice track's already kept theirs).
 
 The views are `CORE_VIEW_SRC`, `SAMPLE`, `FILTER`, `AMP`, `LFO` (a voice
 track's), `DELAY`, `REVERB`, `DIST`, `COMP` and `FX_LFO` (the FX track's).

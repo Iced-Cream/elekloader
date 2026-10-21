@@ -26,7 +26,11 @@
  *     {"to": "core_view_pages", "order": 30, "data": "00000000",
  *      "relocs": [[0, "abs32", "sym:my_view_page", 0]]}
  *
- *     const struct core_view_page my_view_page = {CORE_VIEW_COMP, 14};
+ *     const struct core_view_page my_view_page = {CORE_VIEW_COMP, 14, 0};
+ *
+ * The page key steps over the page while shown, if set, answers 0, and puts
+ * each page's title in the header. A view keeps its page when it is shown
+ * again (stock's FX track went back to the first page).
  */
 #ifndef ELEKLOADER_AR2_PAGES_H
 #define ELEKLOADER_AR2_PAGES_H
@@ -77,6 +81,7 @@ struct core_param {
 struct core_view_page {
     int32_t view;           /* CORE_VIEW_* */
     int32_t page;           /* a page id: a mod's own (core_pages), or a stock one listed again */
+    int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it */
 };
 
 #endif

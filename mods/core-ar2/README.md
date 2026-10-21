@@ -195,8 +195,18 @@ The page keys' lists: each view's constructor passes its list to a setter
 (0x401a1e46) with `moveq #n,%d1; movel %d1,%sp@-; movel #list,%d0`, ten
 times in one routine. Core takes those three instructions per view and
 passes a list of its own instead (`view_list`): stock's pages, then the
-`core_view_pages` entries for that view, in order. The view keeps it as a
-vector at +0x7c, the selected index at +0x8c.
+`core_view_pages` entries for that view, in order. The view keeps a copy
+as a vector at +0x7c, the selected index at +0x8c.
+
+The page key's step (`core_cycle`, at 0x4003ab86 over the index's
+`remsl`, its store and the invalidate) skips a page whose entry's `shown`
+answers 0, then pushes the new page's title to the header as stock's
+page_view_activate does. The view is told by its copy of the list: the
+first of core's ten lists with the same pages. The FX track's page code
+asked a view shown again to go back to its first page (0x400cbd3e, a
+`beqs` around that call); core makes it a `bras`, so FX views keep their
+page as the voice track's do. Both were mods' hooks before (voice-dac's
+cycle, lfo-rnd's title, comp-preview's set-page slot).
 
 | view | site (1.74) | stock pages |
 |---|---|---|
@@ -215,7 +225,10 @@ vector at +0x7c, the selected index at +0x8c.
 themselves (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents,
 velocity-humanise), or that patch a page key's list (also comp-preview
 1.0), overlap core's sites and are refused at link; their 0.4 versions
-contribute entries instead.
+contribute entries instead. Mods that hook the page key's step or the COMP
+view's set-page slot themselves (lfo-rnd 1.2's and voice-dac 1.3's first
+builds, comp-preview 1.1's) overlap them too. `core_view_pages` entries have three fields, so a mod built with the
+two-field entry of the first 0.4 test builds must be rebuilt.
 
 ## Checked so far
 

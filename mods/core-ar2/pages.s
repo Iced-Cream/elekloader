@@ -157,9 +157,13 @@ core_param_text:
 | the pages mods add to that view, in core_view_pages' order. The page key
 | steps through it as through stock's. Entries are {view, page}, view one of
 | CORE_VIEW_* (analog-rytm-mk2/pages.h). Several mods may add pages to one
-| view; a view holds at most VIEW_MAX pages and drops the rest.
+| view; a view holds at most VIEW_MAX pages and drops the rest. An entry is
+| {view, page, shown}: shown, when not 0, is `int shown(void *view)`, asked
+| on each press of the page key, and the key steps over the page while it
+| answers 0.
         .equ    VIEW_MAX, 16
         .equ    VIEWS, 10
+        .equ    VIEW_SHOWN, VIEWS * VIEW_MAX * 4  | each page's shown, after the lists
         .globl  core_view_0, core_view_1, core_view_2, core_view_3, core_view_4
         .globl  core_view_5, core_view_6, core_view_7, core_view_8, core_view_9
 
@@ -197,11 +201,13 @@ view_list:
         add.l   %d0,%a0
         move.l  (%a0)+,%a1                | stock's list
         move.l  (%a0),%d3                 | and its length
+        lea     VIEW_SHOWN(%a2),%a0
         moveq   #0,%d1
 1:      cmp.l   %d3,%d1
         bge.s   2f
         move.l  (%a1)+,%d4
         move.l  %d4,(%a2,%d1.l*4)
+        clr.l   (%a0,%d1.l*4)             | stock's pages are always shown
         addq.l  #1,%d1
         bra.s   1b
 2:      lea     core_view_pages,%a1
@@ -215,12 +221,107 @@ view_list:
         bge.s   3b                        | full
         move.l  4(%a0),%d4
         move.l  %d4,(%a2,%d1.l*4)
+        move.l  8(%a0),%d4
+        lea     VIEW_SHOWN(%a2),%a0
+        move.l  %d4,(%a0,%d1.l*4)
         addq.l  #1,%d1
         bra.s   3b
-9:      move.l  %a2,%d0
+9:      lea     view_len,%a0
+        move.l  %d1,(%a0,%d2.l*4)
+        move.l  %a2,%d0
         movem.l (%sp),%d2-%d4/%a2
         lea     16(%sp),%sp
         rts
+
+| The page key's cycle (core_cycle), over `movel %a2@(140),%d1; addql #1,%d1;
+| remsl %d0,%d2:%d1; movel %d2,%a2@(140); movel %a2,%sp@-; jsr VIEW_INVALIDATE`,
+| reached when the view a2 lists more than one page, d0 of them. The next
+| page whose shown answers non-0 (or has none) is selected; when none does,
+| the page stays. The view is invalidated as stock does, a2 left pushed for
+| stock's addql #8, and then its new page's title goes to the header, as
+| stock's page_view_activate pushes it: stock pushes it before the cycle, so
+| the header showed the page left. The view keeps a copy of its list, so
+| it is told by its pages: the first of core's lists with the same pages
+| (LFO's and FX LFO's are the same while no mod adds to either, and then
+| neither has a shown). A view with none of core's lists steps as stock's.
+| d3 is the key handler's answer and kept; d2 is free here, as stock
+| overwrites it.
+        .equ    VIEW_SEL, 140
+        .equ    VIEW_PAGES, 124
+        .equ    VIEW_UI, 108
+        .equ    VT_TITLE, 0x4c
+        .globl  core_cycle
+core_cycle:
+        lea     -16(%sp),%sp
+        movem.l %d3-%d5/%a3,(%sp)
+        move.l  %d0,%d4                   | the length
+        move.l  VIEW_SEL(%a2),%d5
+        moveq   #0,%d2                    | which of core's lists the view holds:
+        lea     view_len,%a1              | the view keeps a copy, so by its pages
+6:      cmp.l   (%a1,%d2.l*4),%d4
+        bne.s   8f
+        move.l  VIEW_PAGES(%a2),%a0
+        lea     view_buf,%a3
+        move.l  %d2,%d0
+        lsl.l   #6,%d0
+        add.l   %d0,%a3
+        move.l  %d4,%d1
+7:      move.l  (%a0)+,%d0
+        cmp.l   (%a3)+,%d0
+        bne.s   8f
+        subq.l  #1,%d1
+        bne.s   7b
+        lea     view_buf + VIEW_SHOWN,%a3 | the same pages: that view's shown
+        move.l  %d2,%d0
+        lsl.l   #6,%d0
+        add.l   %d0,%a3
+        bra.s   1f
+8:      addq.l  #1,%d2
+        moveq   #VIEWS,%d0
+        cmp.l   %d0,%d2
+        blt.s   6b
+        sub.l   %a3,%a3                   | none: stock's steps
+1:      move.l  %d4,%d3                   | tries
+2:      addq.l  #1,%d5
+        cmp.l   %d4,%d5
+        blt.s   3f
+        moveq   #0,%d5
+3:      move.l  %a3,%d0
+        beq.s   5f
+        move.l  (%a3,%d5.l*4),%d0
+        beq.s   5f
+        move.l  %d0,%a0
+        move.l  %a2,-(%sp)
+        jsr     (%a0)
+        addq.l  #4,%sp
+        tst.l   %d0
+        bne.s   5f
+        subq.l  #1,%d3
+        bne.s   2b                        | after d4 tries d5 is the page again
+5:      move.l  %d5,VIEW_SEL(%a2)
+        movem.l (%sp),%d3-%d5/%a3
+        lea     16(%sp),%sp
+        move.l  %a2,-(%sp)
+        jsr     VIEW_INVALIDATE
+        lea     -8(%sp),%sp               | the string at 0, its allocator's byte at 7
+        move.l  %a2,-(%sp)
+        move.l  (%a2),%a0
+        move.l  VT_TITLE(%a0),%a0
+        jsr     (%a0)                     | d0 = the title
+        addq.l  #4,%sp
+        pea     7(%sp)
+        move.l  %d0,-(%sp)
+        pea     8(%sp)
+        jsr     STR_FROM_CSTR
+        lea     12(%sp),%sp
+        move.l  %sp,-(%sp)
+        move.l  VIEW_UI(%a2),-(%sp)
+        jsr     UI_SET_TITLE
+        addq.l  #8,%sp
+        move.l  %sp,-(%sp)
+        jsr     STR_DTOR
+        lea     12(%sp),%sp               | the string and its argument
+        jmp     CYCLE_RET
 
 | stock's list and length, per view (mod.json's defsym)
         .align  2
@@ -233,4 +334,6 @@ view_stock:
         .bss
         .align  2
 view_buf:
-        .space  VIEWS * VIEW_MAX * 4
+        .space  VIEWS * VIEW_MAX * 4 * 2  | the lists, then each page's shown
+view_len:
+        .space  VIEWS * 4
