@@ -165,7 +165,9 @@ and a Transfer round trip of the project file; CREATE NEW cleared every
 field, and on the new project, marking and a power cycle without saving
 kept the project fields. With every marker set, a pattern on all four
 synth tracks and the effects sounded the same by ear as before. The mods'
-area over a long session and recovery have not run on a unit yet.
+area over a long session has not been checked with a canary on a unit.
+Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
+the unit back to stock 1.56 (21 Oct 2026).
 
 In an emulator (rytm-emu, with a local change that accepts modified A4
 images; 20 Oct 2026):

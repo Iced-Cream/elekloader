@@ -68,8 +68,8 @@ evidence.
   frame, the view controller loaded from +0x20 and the frame skipped when
   it is null.
 - Recovery: STARTUP menu (hold FUNC at power-on), TRIG 4 (OS UPGRADE),
-  stock .syx over MIDI DIN; from the manual and the bootstrap's strings,
-  not yet checked on a unit.
+  stock .syx over MIDI DIN; checked on a unit with stock 1.56 after the
+  test builds (21 Oct 2026).
 """
 from . import Device, Release
 

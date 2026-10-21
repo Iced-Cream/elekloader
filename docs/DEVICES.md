@@ -417,7 +417,7 @@ build, 20 Oct 2026), none copied from the Rytm. On a unit, a build of core-a4
 with hooks-check-a4 (HC56, 20 Oct 2026) booted and every event ran as
 expected, and one with store-check-a4 (SC56, 21 Oct 2026) kept every scope's
 fields through saves, loads, power cycles and a Transfer round trip.
-Recovery is not checked on a unit yet.
+Recovery to stock worked on the unit (21 Oct 2026).
 
 - **Files.** The Rytm's family (ELE3, the same SysEx transport), device byte
   `0x0B`, version field at `0x14`, no trailer. Five sections: 5, 2 (the
@@ -463,8 +463,8 @@ Recovery is not checked on a unit yet.
   save, loading another project, loading it back, and a power cycle, and
   CREATE NEW cleared them all.
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE,
-  the stock file over MIDI DIN: from the manual and the bootstrap's strings,
-  not yet checked on a unit.
+  the stock file over MIDI DIN. Checked on a unit with stock 1.56 after the
+  test builds (21 Oct 2026).
 - **The TypeScript engine** (js/) has the profile too (`ANALOG_FOUR_MK2`).
 
 ## What a new device needs besides its profile
