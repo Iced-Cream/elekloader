@@ -137,6 +137,14 @@ Analog Rytm MKII)"). What differs there:
 - The render events cover the audio interrupt's digital path: the sample
   voices, the delay and the reverb. The drum voices are analog and are not
   in it.
+- From 0.4, `core_audio_load` (a `uint32_t`, `analog-rytm-mk2/load.h`) is
+  the last audio block's time as a share of the block, in 256ths, timed by
+  core from its own `ev_render_in` (order 0) to its `ev_render_out` (order
+  100). Stock alone peaks near 84% while a pattern plays. Work a mod can
+  skip without changing the sound (an estimate, a meter) should stand aside
+  while it is high, so the audio and the UI keep their time; never thin the
+  sound itself for it. comp-preview stands aside above 95% and comes back
+  below 88%.
 - A SETTINGS row is listed after SYSTEM.
 - The key and encoder events are built as the Digitakt mk1's are, by
   constructors with the same fields, so the table's `ev` offsets hold

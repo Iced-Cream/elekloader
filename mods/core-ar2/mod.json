@@ -2,9 +2,13 @@
  "id": "core", "version": "0.4",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; and pages.s: parameter pages and parameter overrides mods add through the tables core_pages and core_params, from the first instructions of the four routines a page goes through, and the page keys' lists, stock's pages and then the ones mods add through core_view_pages, which the page key steps through (skipping a page while its mod says it is hidden, with the page's title in the header), and which keeps its page when the view is shown again. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; and pages.s: parameter pages and parameter overrides mods add through the tables core_pages and core_params, from the first instructions of the four routines a page goes through, and the page keys' lists, stock's pages and then the ones mods add through core_view_pages, which the page key steps through (skipping a page while its mod says it is hidden, with the page's title in the header), and which keeps its page when the view is shown again; and load.s: the audio interrupt's load, core_audio_load, for mods with work they can skip. On its own it changes nothing the unit does.",
  "device": "analog-rytm-mk2", "os": "1.74",
- "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "route.s", "pages.s"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "route.s", "pages.s", "load.s"],
+ "subscribe": [
+  {"event": "ev_render_in", "fn": "core_load_in", "order": 0},
+  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}
+ ],
  "defsym": {
   "DRAWALL": "0x400790f2",
   "KEYDISP": "0x400a0336",

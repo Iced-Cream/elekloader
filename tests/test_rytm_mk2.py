@@ -182,6 +182,10 @@ def test_core_ar2_sites():
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
     # the 10 view sites, the step and the FX keep
     assert len(mod['sites']) == 56
+    # the audio load (0.4): core times its own render events, first in and last out
+    sub = {x['event']: x for x in mod['subscribe']}
+    assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
+    assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 32
 
 

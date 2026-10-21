@@ -230,6 +230,19 @@ view's set-page slot themselves (lfo-rnd 1.2's and voice-dac 1.3's first
 builds, comp-preview 1.1's) overlap them too. `core_view_pages` entries have three fields, so a mod built with the
 two-field entry of the first 0.4 test builds must be rebuilt.
 
+## The audio load (0.4)
+
+`load.s` subscribes core to its own `ev_render_in` (order 0) and
+`ev_render_out` (order 100) and reads DMA timer 0's counter at each:
+`core_audio_load` is the last block's time as a share of the block, in
+256ths (`analog-rytm-mk2/load.h`). Mods with work that does not change the
+sound skip it while the load is high (comp-preview's estimate, above 95%).
+On a unit (cpu-probe, 21 Oct 2026, a pattern playing): stock with core alone
+averaged 78-80% of the time in the interrupt and peaked at 82-84%; all
+eleven rytm2_mods mods and duck added 1 to 2 points; fx-sends' chorus about
+5; comp-preview's estimate 4 to 5; with voice-dac's DAC SUM on as well, the
+peak reached 95%, with no audible artefacts.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`

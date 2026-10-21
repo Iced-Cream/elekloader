@@ -131,7 +131,8 @@ core.
   and `core_params` entries, and builds each page key's list from stock's
   pages and the mods' `core_view_pages` entries (a page can be hidden; the
   key shows each page's title and a view keeps its page), so several mods
-  with pages fit one build, behind the same key too
+  with pages fit one build, behind the same key too; and the audio
+  interrupt's load, `core_audio_load`, for work a mod can skip
   ("Parameter pages (core-ar2 0.4, Analog Rytm MKII)" in ADAPTING.md). No
   machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
