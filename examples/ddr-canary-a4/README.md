@@ -34,7 +34,7 @@ square. It names fill_rect itself, at its 1.56 address.
 
 Checked in an emulator (rytm-emu's A4 build: clean sweeps, and one word
 written into the gap on purpose was caught at its address) and on a unit
-(CA56, 21 Oct 2026: clean through a session of normal use and after a power
+(CA56, 21 Oct 2026: clean through a session of normal use (Overbridge included) and after a power
 cycle).
 
 ```bash
