@@ -32,7 +32,8 @@ pattern, project). A 3x3 square at the right end blinks while the mod runs.
 It names the live objects and two firmware routines itself (core exports
 none), at their 1.56 addresses.
 
-Checked in an emulator (20 Oct 2026): see core-a4's README.
+Checked in an emulator (20 Oct 2026) and on a unit (21 Oct 2026, SC56): see
+core-a4's README.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)

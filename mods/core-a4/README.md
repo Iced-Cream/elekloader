@@ -155,8 +155,14 @@ What it does not do:
 On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
 [hooks-check-a4](../../examples/hooks-check-a4)) booted and passed every
 check: the tick, draw, key, encoder and SETTINGS events and the render's
-entry and exit. Mod storage, the mods' area over a long session, and
-recovery have not run on a unit yet.
+entry and exit. Build SC56 (core-a4 with
+[store-check-a4](../../examples/store-check-a4), 21 Oct 2026) read every
+marker back after SAVE PROJECT AS and a power cycle, loading another
+project (zeros, as it should) and loading the project back, a power cycle,
+and a Transfer round trip of the project file; CREATE NEW cleared every
+field, and on the new project, marking and a power cycle without saving
+kept the project fields. A listen test with the markers set, the mods'
+area over a long session and recovery have not run on a unit yet.
 
 In an emulator (rytm-emu, with a local change that accepts modified A4
 images; 20 Oct 2026):

@@ -135,8 +135,8 @@ core.
   not the analog voices) and the same mod storage, in bytes of the A4's own
   sounds, kits, global slots and songs that the stock OS never uses
   ([mods/core-a4](../mods/core-a4) has where). Checked in rytm-emu's A4
-  build; on a unit, the hook bus with hooks-check-a4 (mod storage not
-  yet).
+  build; on a unit, the hook bus with hooks-check-a4 and mod storage with
+  store-check-a4.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
