@@ -68,7 +68,7 @@ A format-2 mod is a relocatable object:
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
-| `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2; "Mod storage" below) |
+| `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 
 ### The linker
 
@@ -143,10 +143,10 @@ Nothing is built unless all of these pass:
 
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
 `global`, `track`, `pattern` or `project`) and `bits` (1-32). Only a core
-that imports `__store_gen` takes them (core-ar2 from 0.2); with another
+that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
-which is for OS 1.74 only: a 1.73 build has 0.2's 24). The
+which is for OS 1.74 only: a 1.73 build has 0.2's 24; 32 with core-a4 0.1). The
 linker:
 
 - reads the build's lockfile, or starts one, and places every field
@@ -177,7 +177,8 @@ first 4 bytes of a SHA-256 of the layout (`store.layout_id`: the format, the
 device, `split`, `generation`, `next`, `fields` and `freed`, not the ID or
 the ancestors), taken whenever the layout changes; a lockfile whose ID came
 from somewhere else keeps it until then. docs/ADAPTING.md ("Mod storage
-(core-ar2 0.2, Analog Rytm MKII)") has the rest.
+(core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4 0.1, Analog
+Four MKII)") has the rest.
 
 ### DSP code
 
@@ -207,7 +208,7 @@ The linker places, in the area the claiming mod frees, every DSP section
 the payload's words in the image. Nothing else about the build changes: a
 set of mods without DSP code links to the same bytes as before.
 
-## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II, Analog Rytm MKII)
+## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II, Analog Rytm MKII, Analog Four MKII)
 
 This is a convention between mods for these devices, not a rule of the
 loader. The table gives the Digitakt mk1 1.53's sites, which 1.54 has at
@@ -238,6 +239,10 @@ from 0.3 the core is for 1.74 only, and 0.2 is the last with 1.73). It declares 
 `ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md)
 and the table `core_store_ids` (entry 4, filled by the linker: below); no
 `.fast` copy table, so no `.fast` code.
+The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's
+events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
+0x400999f8, 0x40099a40, 0x400d05d2, 0x401013c6 and 0x401040f6
+(`mods/core-a4/mod.json`), and no `.fast` code either.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

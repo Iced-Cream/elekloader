@@ -467,7 +467,12 @@ Recovery to stock worked on the unit (21 Oct 2026).
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE,
   the stock file over MIDI DIN. Checked on a unit with stock 1.56 after the
   test builds (21 Oct 2026).
-- **The TypeScript engine** (js/) has the profile too (`ANALOG_FOUR_MK2`).
+- **The TypeScript engine** (js/) has the profile too (`ANALOG_FOUR_MK2`) and
+  core-a4's storage spec, and `tools/parity.ts` takes the A4's cases
+  (`stocks.a456`, `dirs.a4`: core-a4 with each example, alone and together,
+  the examples without core, a check, and each Rytm core on the other
+  device). The web page's list of where to download each stock OS does not
+  name the A4 yet.
 
 ## What a new device needs besides its profile
 
