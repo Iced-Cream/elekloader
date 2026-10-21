@@ -749,6 +749,59 @@ the aftertouch menu's setRoute (0x4003391e).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 
+### Parameter pages (core-ar2 0.4, Analog Rytm MKII)
+
+From core-ar2 0.4 core owns the entries of the four stock routines every
+parameter page goes through, and a mod adds a page, or changes how a stock
+parameter turns or reads, through two tables instead of hooking them
+itself. Before 0.4 each mod jumped from the first instructions of these
+routines, so two mods with pages could not be in one build. The routines
+(OS 1.74):
+
+| routine | entry | what it does |
+|---|---|---|
+| page_info(page) | 0x400ff5e0 | a page's entry: its name, then the ids on knobs A..H |
+| page_get_value(view, id, lock) | 0x40038462 | a knob's value, 8.8 |
+| param_apply_delta(view, id, delta, func) | 0x400378a6 | a turn: delta 8.8, func 1 while FUNC is held |
+| param_value_text(obj, id, value, buf) | 0x400a864c | the value's text |
+
+A mod contributes to `core_pages` (one entry per page of its own) and to
+`core_params` (one entry per range of ids it answers for, its own pages'
+or stock's), with `elekloader/sdk/include/analog-rytm-mk2/pages.h`:
+
+```json
+"contribute": [
+  {"to": "core_pages", "order": 14, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:my_page", 0]]},
+  {"to": "core_params", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:my_params", 0]]}
+]
+```
+
+```c
+#include "analog-rytm-mk2/pages.h"
+const struct core_page my_page = {14, "MY PAGE", {449, 450, 0, 0, 0, 0, 0, 0}};
+const struct core_param my_params = {449, 450, my_get, my_delta, my_text};
+```
+
+- `get(id, &value)` returns 1 with the value in 8.8, or 0 to pass.
+- `delta(view, id, delta, func)` returns 1 when it took the turn: core then
+  redraws the view, and stock neither applies the turn nor makes a lock.
+  0 passes.
+- `text(t)` gets param_value_text's own arguments as a `struct core_text`.
+  It returns 0 to pass, 1 when it wrote `t->buf`, or 2 to have stock format
+  `t->id` and `t->value`, which it may have changed (a page knob shown as a
+  stock parameter's text).
+
+Any of the three may be 0. Entries are asked in `order`; the first that
+answers wins, then stock. A page id must be one stock does not have
+(0..11) and no other mod in the build uses (rytm2_mods use 12 and 13); the
+page key's list must still name the page, which stays the mod's own keep2
+on that list. Core only passes calls on, so a build with no entries
+behaves as stock. Deeper hooks inside these routines (a mod that rewrites
+one value's text further in) still work: core resumes each routine where
+its own jump ends.
+
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 
 Holding a track key (T1-T4) on its own, about half a second, is core's: it

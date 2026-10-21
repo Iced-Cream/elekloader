@@ -113,7 +113,7 @@ def test_the_os_stores_from_0x300000():
 
 def test_core_ar2_sites():
     """Every site's stock bytes, and that each covers whole instructions.
-    Core-ar2 0.3 is for 1.74 only (0.2 is the last core with 1.73): on 1.73
+    Core-ar2 0.3 and later are for 1.74 only (0.2 is the last core with 1.73): on 1.73
     its build is refused."""
     _r, _s, img = stock()
     with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
@@ -148,8 +148,15 @@ def test_core_ar2_sites():
                  ('VEL_ROUTE_RET', 'st_vel_route'), ('AT_ROUTE_RET', 'st_at_route')):
         x = [x for x in mod['sites'] if x['target'] == t][0]
         assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
-    # mod storage's sites (core-ar2 0.3: 32 of the 40)
-    assert len(mod['sites']) == 40
+    # parameter pages (core-ar2 0.4): a jmp at each routine's entry, and each
+    # stub resumes after the instructions it displaces
+    for k, t in (('PAGE_INFO_RET', 'core_page_info'), ('GET_RET', 'core_param_get'),
+                 ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
+        x = [x for x in mod['sites'] if x['target'] == t][0]
+        assert x['op'] == 'jmp' and len(x['stock']) // 2 in (6, 8), x
+        assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
+    # mod storage's sites (core-ar2 0.3: 32 of the 40) and the 4 page sites
+    assert len(mod['sites']) == 44
     assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 32
 
 

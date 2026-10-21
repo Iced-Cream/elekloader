@@ -1,10 +1,10 @@
 # core-ar2
 
-The boot copier, the hook bus and mod storage for the Analog Rytm MKII. From
+The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII. From
 0.3 it is for OS 1.74 only; 0.2 is the last core with 1.73 (below). It builds the Digitakt mk1's `core.s`, `settings.s` and
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
-from 0.3 with `route.s`. On its own it changes nothing the unit does.
+from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below). On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -170,6 +170,33 @@ What it does not do:
   slot's fields instead, so the pattern loads with its mods' defaults, as a
   pattern received as a SysEx dump does. A target project saved with another
   mod layout keeps its store as it is.
+
+## Parameter pages (0.4)
+
+`pages.s` takes the first instructions of the four routines every parameter
+page goes through and hands each call to the mods' entries in `core_pages`
+and `core_params` before stock (docs/ADAPTING.md, "Parameter pages (core-ar2
+0.4, Analog Rytm MKII)"; the SDK header is `analog-rytm-mk2/pages.h`). Each
+stub runs the instructions its jump displaced and resumes after them, so
+deeper hooks in these routines (filter-hz's text, ctrl-all's turn) are
+untouched:
+
+| routine | site (1.74) | displaced | resumes |
+|---|---|---|---|
+| page_info | 0x400ff5e0 | `moveq #11,%d1; movel %sp@(4),%d0` | 0x400ff5e6 |
+| page_get_value | 0x40038462 | `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@` | 0x4003846a |
+| param_apply_delta | 0x400378a6 | the same | 0x400378ae |
+| param_value_text | 0x400a864c | `lea %sp@(-20),%sp; moveml %d2-%d4/%a2-%a3,%sp@` | 0x400a8654 |
+
+A turn a mod takes is followed by core's call to the view's redraw
+(0x40078580), so the mod's own value shows at once. A page of a mod's own
+still needs its page key's list to name it (the mod's keep2 on the list
+address, as lfo-rnd does on LFO's and voice-dac on FILTER's).
+
+**Breaking change.** Mods built for 0.3 that jumped from these entries
+themselves (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents,
+velocity-humanise) overlap core's sites and are refused at link; their
+0.4 versions contribute entries instead.
 
 ## Checked so far
 
