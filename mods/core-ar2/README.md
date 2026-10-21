@@ -241,7 +241,12 @@ On a unit (cpu-probe, 21 Oct 2026, a pattern playing): stock with core alone
 averaged 78-80% of the time in the interrupt and peaked at 82-84%; all
 eleven rytm2_mods mods and duck added 1 to 2 points; fx-sends' chorus about
 5; comp-preview's estimate 4 to 5; with voice-dac's DAC SUM on as well, the
-peak reached 95%, with no audible artefacts.
+peak reached 95%, with no audible artefacts. The 100% that cpu-probe's CPU
+reading touches in that case is the whole processor, the interface's tasks
+included: they get less idle time, not less than they need (the knobs keep
+responding). With the guard the readings were 92% and a 94% peak, within a
+point of the build without it, so at these loads it rarely engages: it is a
+ceiling for heavier builds, not a fix for anything heard.
 
 ## Checked so far
 
@@ -339,6 +344,18 @@ stock bytes, and that each covers whole instructions.
   COMP cycled COMP, preview, DUCK, DUCK ducked from its source and stayed
   shown on leaving the FX track. fx-sends' CHORUS SEND page (Q4F4, without
   lfo-rnd) opened behind AMP and its chorus played on its track only.
+
+- **Page key's step and audio load (0.4) on a unit** (21 Oct 2026): the
+  same three builds plus core, voice-dac and duck alone. FILTER stayed on
+  FILTER with DAC SUM off and stepped FILTER, DAC FILTER, FILTER with it on;
+  LFO stepped LFO, LFO RND, LFO; the header named each page after the step,
+  also in the builds without lfo-rnd; COMP, the preview and DUCK were each
+  kept on coming back to the FX track, with and without comp-preview.
+  `core_audio_load`: readings with cpu-probe matched the builds before it.
+  In the busiest case (DAC SUM, fx-sends' chorus and the preview) CPU still
+  read 100% at times, with the audio interrupt at 92% and peaking at 94%;
+  the preview's trace stopped now and then and came back by itself, knobs
+  and values kept responding meanwhile, and nothing was audible.
 
 ## Building
 
