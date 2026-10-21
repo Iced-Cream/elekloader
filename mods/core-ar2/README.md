@@ -189,14 +189,33 @@ untouched:
 | param_value_text | 0x400a864c | `lea %sp@(-20),%sp; moveml %d2-%d4/%a2-%a3,%sp@` | 0x400a8654 |
 
 A turn a mod takes is followed by core's call to the view's redraw
-(0x40078580), so the mod's own value shows at once. A page of a mod's own
-still needs its page key's list to name it (the mod's keep2 on the list
-address, as lfo-rnd does on LFO's and voice-dac on FILTER's).
+(0x40078580), so the mod's own value shows at once.
+
+The page keys' lists: each view's constructor passes its list to a setter
+(0x401a1e46) with `moveq #n,%d1; movel %d1,%sp@-; movel #list,%d0`, ten
+times in one routine. Core takes those three instructions per view and
+passes a list of its own instead (`view_list`): stock's pages, then the
+`core_view_pages` entries for that view, in order. The view keeps it as a
+vector at +0x7c, the selected index at +0x8c.
+
+| view | site (1.74) | stock pages |
+|---|---|---|
+| SRC | 0x400caf04 | 0 |
+| SAMPLE | 0x400caf7e | 4, 5 |
+| FILTER | 0x400cafee | 6 |
+| AMP | 0x400cb040 | 7 |
+| LFO | 0x400cb096 | 3 |
+| DELAY | 0x400cb0e8 | 8 |
+| REVERB | 0x400cb144 | 9 |
+| DIST | 0x400cb196 | 10 |
+| COMP | 0x400cb1ee | 11 |
+| FX LFO | 0x400cb25a | 3 |
 
 **Breaking change.** Mods built for 0.3 that jumped from these entries
 themselves (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents,
-velocity-humanise) overlap core's sites and are refused at link; their
-0.4 versions contribute entries instead.
+velocity-humanise), or that patch a page key's list (also comp-preview
+1.0), overlap core's sites and are refused at link; their 0.4 versions
+contribute entries instead.
 
 ## Checked so far
 

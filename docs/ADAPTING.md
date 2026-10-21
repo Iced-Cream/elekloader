@@ -795,10 +795,33 @@ const struct core_param my_params = {449, 450, my_get, my_delta, my_text};
 
 Any of the three may be 0. Entries are asked in `order`; the first that
 answers wins, then stock. A page id must be one stock does not have
-(0..11) and no other mod in the build uses (rytm2_mods use 12 and 13); the
-page key's list must still name the page, which stays the mod's own keep2
-on that list. Core only passes calls on, so a build with no entries
-behaves as stock. Deeper hooks inside these routines (a mod that rewrites
+(0..11) and no other mod in the build uses (rytm2_mods use 12 and 13, the
+AE ports 14 and 15). Core only passes calls on, so a build with no entries
+behaves as stock.
+
+**The page keys' lists.** A page key steps through its view's list of
+pages. Core builds each list: stock's pages first, in stock's order, then
+the pages mods add through `core_view_pages`, in `order` (ties by mod id),
+so the first press of a page key lands where it does on stock and several
+mods can add pages behind one key:
+
+```json
+{"to": "core_view_pages", "order": 30, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_view_page", 0]]}
+```
+
+```c
+const struct core_view_page my_view_page = {CORE_VIEW_COMP, 14};
+```
+
+The views are `CORE_VIEW_SRC`, `SAMPLE`, `FILTER`, `AMP`, `LFO` (a voice
+track's), `DELAY`, `REVERB`, `DIST`, `COMP` and `FX_LFO` (the FX track's).
+A page may be a stock one listed again (comp-preview lists page 11 a
+second time); a mod that does so tells its entry apart by the view's
+selected index (+0x8c) and list (+0x7c), not by "past the first entry",
+since other mods' pages can follow. Lower `order` sits closer to stock's
+pages; rytm2_mods and the AE ports use 20 for a key's first added page and
+30 after it. A view holds 16 pages at most. Deeper hooks inside these routines (a mod that rewrites
 one value's text further in) still work: core resumes each routine where
 its own jump ends.
 

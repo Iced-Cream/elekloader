@@ -2,7 +2,7 @@
  "id": "core", "version": "0.4",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; and pages.s: parameter pages and parameter overrides mods add through the tables core_pages and core_params, from the first instructions of the four routines a page goes through. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; and pages.s: parameter pages and parameter overrides mods add through the tables core_pages and core_params, from the first instructions of the four routines a page goes through, and the page keys' lists, stock's pages and then the ones mods add through core_view_pages. On its own it changes nothing the unit does.",
  "device": "analog-rytm-mk2", "os": "1.74",
  "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "route.s", "pages.s"],
  "defsym": {
@@ -28,7 +28,17 @@
   "GET_RET": "0x4003846a",
   "DELTA_RET": "0x400378ae",
   "TEXT_RET": "0x400a8654",
-  "VIEW_INVALIDATE": "0x40078580"
+  "VIEW_INVALIDATE": "0x40078580",
+  "VIEW0_RET": "0x400caf0e", "VIEW0_LIST": "0x401e1dd8", "VIEW0_N": "1",
+  "VIEW1_RET": "0x400caf88", "VIEW1_LIST": "0x401e1dd0", "VIEW1_N": "2",
+  "VIEW2_RET": "0x400caff8", "VIEW2_LIST": "0x401e1dcc", "VIEW2_N": "1",
+  "VIEW3_RET": "0x400cb04a", "VIEW3_LIST": "0x401e1dc8", "VIEW3_N": "1",
+  "VIEW4_RET": "0x400cb0a0", "VIEW4_LIST": "0x401e1dc4", "VIEW4_N": "1",
+  "VIEW5_RET": "0x400cb0f2", "VIEW5_LIST": "0x401e1dc0", "VIEW5_N": "1",
+  "VIEW6_RET": "0x400cb14e", "VIEW6_LIST": "0x401e1dbc", "VIEW6_N": "1",
+  "VIEW7_RET": "0x400cb1a0", "VIEW7_LIST": "0x401e1db8", "VIEW7_N": "1",
+  "VIEW8_RET": "0x400cb1f8", "VIEW8_LIST": "0x401e1db4", "VIEW8_N": "1",
+  "VIEW9_RET": "0x400cb264", "VIEW9_LIST": "0x401e1db0", "VIEW9_N": "1"
  },
  "sites": [
   {"addr": "0x400008c0", "stock": "4eb9400014cc", "op": "jsr", "target": "boot"},
@@ -74,8 +84,18 @@
   {"addr": "0x400ff5e0", "stock": "720b202f0004", "op": "jmp", "target": "core_page_info"},
   {"addr": "0x40038462", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_param_get"},
   {"addr": "0x400378a6", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_param_delta"},
-  {"addr": "0x400a864c", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_param_text"}
+  {"addr": "0x400a864c", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_param_text"},
+  {"addr": "0x400caf04", "stock": "72012f01203c401e1dd8", "op": "jmp", "target": "core_view_0"},
+  {"addr": "0x400caf7e", "stock": "72022f01203c401e1dd0", "op": "jmp", "target": "core_view_1"},
+  {"addr": "0x400cafee", "stock": "72012f01203c401e1dcc", "op": "jmp", "target": "core_view_2"},
+  {"addr": "0x400cb040", "stock": "72012f01203c401e1dc8", "op": "jmp", "target": "core_view_3"},
+  {"addr": "0x400cb096", "stock": "72012f01203c401e1dc4", "op": "jmp", "target": "core_view_4"},
+  {"addr": "0x400cb0e8", "stock": "72012f01203c401e1dc0", "op": "jmp", "target": "core_view_5"},
+  {"addr": "0x400cb144", "stock": "72012f01203c401e1dbc", "op": "jmp", "target": "core_view_6"},
+  {"addr": "0x400cb196", "stock": "72012f01203c401e1db8", "op": "jmp", "target": "core_view_7"},
+  {"addr": "0x400cb1ee", "stock": "72012f01203c401e1db4", "op": "jmp", "target": "core_view_8"},
+  {"addr": "0x400cb25a", "stock": "72012f01203c401e1db0", "op": "jmp", "target": "core_view_9"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4},
  "resources": {"names": ["timer:DTIM0"]}
 }

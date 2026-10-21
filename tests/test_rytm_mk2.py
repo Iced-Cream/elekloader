@@ -155,8 +155,21 @@ def test_core_ar2_sites():
         x = [x for x in mod['sites'] if x['target'] == t][0]
         assert x['op'] == 'jmp' and len(x['stock']) // 2 in (6, 8), x
         assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
-    # mod storage's sites (core-ar2 0.3: 32 of the 40) and the 4 page sites
-    assert len(mod['sites']) == 44
+    # the page keys' lists (core-ar2 0.4): each view's `moveq #n,%d1; movel
+    # %d1,%sp@-; movel #list,%d0` is a site, and defsym has its list, length
+    # and resume
+    views = sorted((x for x in mod['sites'] if x['target'].startswith('core_view_')),
+                   key=lambda x: int(x['target'][10:]))
+    assert len(views) == 10
+    for i, x in enumerate(views):
+        a, b = int(x['addr'], 16), bytes.fromhex(x['stock'])
+        assert b[0] == 0x72 and b[1] == int(d['VIEW%d_N' % i]) and b[2:6] == bytes.fromhex('2f01203c'), x
+        assert int.from_bytes(b[6:10], 'big') == int(d['VIEW%d_LIST' % i], 16), x
+        assert int(d['VIEW%d_RET' % i], 16) == a + 10, x
+        assert img[a + 10 - DEV.main_load:a + 12 - DEV.main_load] == bytes.fromhex('2f00'), x   # the list's push
+    # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites and
+    # the 10 view sites
+    assert len(mod['sites']) == 54
     assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 32
 
 

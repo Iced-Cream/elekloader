@@ -34,7 +34,7 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Rytm MKII | 1.74 | `core-ar2-0.4.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise) do not link with it: their sites overlap core's page sites |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.4.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
@@ -128,7 +128,9 @@ core.
   by stock's saves of one edited track, a pattern's settings or its locks,
   not only by whole-pattern saves. From 0.4, parameter pages: core owns
   the entries of the four page routines and asks the mods' `core_pages`
-  and `core_params` entries, so several mods with pages fit one build
+  and `core_params` entries, and builds each page key's list from stock's
+  pages and the mods' `core_view_pages` entries, so several mods with
+  pages fit one build, behind the same key too
   ("Parameter pages (core-ar2 0.4, Analog Rytm MKII)" in ADAPTING.md). No
   machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It

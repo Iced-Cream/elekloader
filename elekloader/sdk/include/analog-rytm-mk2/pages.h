@@ -18,8 +18,15 @@
  *
  * Entries are asked in table order (by "order"); the first that answers wins.
  * A page id must be one stock does not have (stock's are 0..11) and no other
- * mod uses; the page key's list still has to name it (a keep2 on the list's
- * address, as in mods/core-ar2/README.md). A function left 0 passes.
+ * mod uses. A function left 0 passes.
+ *
+ * The page key reaches the page through core_view_pages: its view, and the
+ * page. Each view's list is stock's pages, then the mods' entries in order:
+ *
+ *     {"to": "core_view_pages", "order": 30, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_view_page", 0]]}
+ *
+ *     const struct core_view_page my_view_page = {CORE_VIEW_COMP, 14};
  */
 #ifndef ELEKLOADER_AR2_PAGES_H
 #define ELEKLOADER_AR2_PAGES_H
@@ -53,6 +60,23 @@ struct core_param {
      * redraws the view and stock makes no lock), 0 to pass */
     int (*delta)(void *view, int32_t id, int32_t delta, int32_t func);
     int (*text)(struct core_text *t);
+};
+
+/* the page keys' views (a voice track's five, then the FX track's) */
+#define CORE_VIEW_SRC 0         /* page 0, the machine's */
+#define CORE_VIEW_SAMPLE 1      /* pages 4 and 5 */
+#define CORE_VIEW_FILTER 2      /* page 6 */
+#define CORE_VIEW_AMP 3         /* page 7 */
+#define CORE_VIEW_LFO 4         /* page 3 */
+#define CORE_VIEW_DELAY 5       /* page 8 */
+#define CORE_VIEW_REVERB 6      /* page 9 */
+#define CORE_VIEW_DIST 7        /* page 10 */
+#define CORE_VIEW_COMP 8        /* page 11 */
+#define CORE_VIEW_FX_LFO 9      /* page 3, on the FX track */
+
+struct core_view_page {
+    int32_t view;           /* CORE_VIEW_* */
+    int32_t page;           /* a page id: a mod's own (core_pages), or a stock one listed again */
 };
 
 #endif

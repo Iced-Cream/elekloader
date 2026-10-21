@@ -149,3 +149,88 @@ core_param_text:
         lea     -20(%sp),%sp
         movem.l %d2-%d4/%a2-%a3,(%sp)
         jmp     TEXT_RET
+
+| Page-key lists (core_view_pages). Each view's constructor hands its page
+| list to a setter: `moveq #n,%d1; movel %d1,%sp@-; movel #list,%d0;
+| movel %d0,%sp@-`. Core takes the first three of those per view and
+| hands back a list of its own: stock's pages first, in stock's order, then
+| the pages mods add to that view, in core_view_pages' order. The page key
+| steps through it as through stock's. Entries are {view, page}, view one of
+| CORE_VIEW_* (analog-rytm-mk2/pages.h). Several mods may add pages to one
+| view; a view holds at most VIEW_MAX pages and drops the rest.
+        .equ    VIEW_MAX, 16
+        .equ    VIEWS, 10
+        .globl  core_view_0, core_view_1, core_view_2, core_view_3, core_view_4
+        .globl  core_view_5, core_view_6, core_view_7, core_view_8, core_view_9
+
+        .macro  VIEWSTUB n
+core_view_\n:
+        moveq   #\n,%d0
+        bsr.w   view_list                 | d0 = the list, d1 = its length
+        move.l  %d1,-(%sp)
+        jmp     VIEW\n\()_RET
+        .endm
+        VIEWSTUB 0
+        VIEWSTUB 1
+        VIEWSTUB 2
+        VIEWSTUB 3
+        VIEWSTUB 4
+        VIEWSTUB 5
+        VIEWSTUB 6
+        VIEWSTUB 7
+        VIEWSTUB 8
+        VIEWSTUB 9
+
+| view_list(d0 = view) -> d0 = the view's list, d1 = its length. Keeps every
+| register but d0, d1, a0 and a1, as the constructor's code around it needs.
+view_list:
+        lea     -16(%sp),%sp
+        movem.l %d2-%d4/%a2,(%sp)
+        move.l  %d0,%d2                   | the view
+        lea     view_buf,%a2
+        move.l  %d2,%d0
+        lsl.l   #6,%d0                    | VIEW_MAX longs a view
+        add.l   %d0,%a2
+        lea     view_stock,%a0
+        move.l  %d2,%d0
+        lsl.l   #3,%d0
+        add.l   %d0,%a0
+        move.l  (%a0)+,%a1                | stock's list
+        move.l  (%a0),%d3                 | and its length
+        moveq   #0,%d1
+1:      cmp.l   %d3,%d1
+        bge.s   2f
+        move.l  (%a1)+,%d4
+        move.l  %d4,(%a2,%d1.l*4)
+        addq.l  #1,%d1
+        bra.s   1b
+2:      lea     core_view_pages,%a1
+3:      move.l  (%a1)+,%d0
+        beq.s   9f
+        move.l  %d0,%a0
+        cmp.l   (%a0),%d2
+        bne.s   3b
+        moveq   #VIEW_MAX,%d4
+        cmp.l   %d4,%d1
+        bge.s   3b                        | full
+        move.l  4(%a0),%d4
+        move.l  %d4,(%a2,%d1.l*4)
+        addq.l  #1,%d1
+        bra.s   3b
+9:      move.l  %a2,%d0
+        movem.l (%sp),%d2-%d4/%a2
+        lea     16(%sp),%sp
+        rts
+
+| stock's list and length, per view (mod.json's defsym)
+        .align  2
+view_stock:
+        .long   VIEW0_LIST, VIEW0_N, VIEW1_LIST, VIEW1_N, VIEW2_LIST, VIEW2_N
+        .long   VIEW3_LIST, VIEW3_N, VIEW4_LIST, VIEW4_N, VIEW5_LIST, VIEW5_N
+        .long   VIEW6_LIST, VIEW6_N, VIEW7_LIST, VIEW7_N, VIEW8_LIST, VIEW8_N
+        .long   VIEW9_LIST, VIEW9_N
+
+        .bss
+        .align  2
+view_buf:
+        .space  VIEWS * VIEW_MAX * 4
