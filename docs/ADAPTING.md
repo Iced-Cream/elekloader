@@ -430,7 +430,7 @@ A knob (`struct cm_knob`); a 0 field is the stock one:
 | +0, +4 | name, lname | its label on the SRC page, and its long name (the pop-up) |
 | +8, +12 | lfo, lfo_long | its names on the LFO page: the DEST box's, and the DEST list's (0: name and lname; a blank knob reads "Unused") |
 | +16 | look | the parameter id whose UI record and graphic it borrows (byte): how a turn moves it, its knob |
-| +17 | flags | 1 blank (it shows and turns nothing), 2 the range min-max, 4 the default def, 8 knob D is not a sample (turning it does not open the sample list), 16 the machine draws the knob's graphic (`draw`; a `cm_ui_v31` page: on a `cm_ui_v3` page the stock graphic is drawn, and +36 is not called) |
+| +17 | flags | 1 blank (it shows and turns nothing), 2 the range min-max, 4 the default def, 8 knob D is not a sample (turning it does not open the sample list; from machine-pages 1.3, SRC keeps a one-page machine's page instead of stepping to the empty waveform view), 16 the machine draws the knob's graphic (`draw`; a `cm_ui_v31` page: on a `cm_ui_v3` page the stock graphic is drawn, and +36 is not called) |
 | +20, +24, +28 | min, max, def | 8.8 |
 | +32 | fmt | `int f(char *buf, int value, int ctx, int machine)`: its value's text into buf, returning nonzero (0: the stock text). ctx 0 is the value under a turning knob, about 5 characters; 1 the pop-up, up to 15 |
 | +36 | gfx | `int f(int value)`: the value its graphic shows, from the one the firmware gives it (both 8.8) |
@@ -1261,9 +1261,12 @@ knobs and title in its vtables. Only one of them could be in a build. Core
   {L, R} 32-bit samples, before it goes to the main outputs, the headphones
   and the 12-channel bus the USB stream is built from. A handler changes it
   in place, and the scope, spectrum and tuner show the change. Handlers run
-  by their `order`, each on what the one before left. With none, core runs
-  four instructions more than the stock (the call, a test, a branch and
-  the return).
+  by their `order`, each on what the one before left. The EMAC is the
+  stage's: MACSR is 0xA0 (fractional, saturating), and its loop right
+  after the event accumulates into ACC0 and ACC1 from 0. A handler may use
+  the EMAC: core puts MACSR back and clears ACC0 and ACC1 after the
+  handlers. With none, core runs four instructions more than the stock
+  (the call, a test, a branch and the return).
 - **`core_mpages`**: pages of the master view (FUNC+LFO steps through
   them). Contribute a pointer to a `struct core_mpage` (`core3.h`): the stock
   page it follows (11 COMP, 12 internal mixer, 13 external mixer; any other
