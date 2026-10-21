@@ -298,10 +298,26 @@ stock bytes, and that each covers whole instructions.
   lockfile built with 0.3 read the 0.2 project's sound fields in place
   (checked on 1.73 only, with that 1.73 build).
 
+- **Parameter pages (0.4)**, in an emulator (OS 1.74, 21 Oct 2026): with
+  rytm2_mods' 0.4 versions, every page screen of the same key and knob
+  sequences was pixel-identical to the v1.2 release build on core 0.3
+  (LFO RND, FUNC + VEL, euclid OP, DAC FILTER with filter-hz's Hz text);
+  comp-preview 1.1's COMP and preview screens matched 1.0's; with duck
+  added, COMP cycled COMP, preview, DUCK.
+
+- **Parameter pages (0.4) on a unit** (21 Oct 2026), sent with Transfer
+  over USB: with all eleven rytm2_mods mods (Q4A4), LFO RND, DAC FILTER
+  (shown only with DAC SUM on), euclid OP, FUNC + VEL, the COMP preview
+  and the keys no mod uses all behaved as on core 0.3, and the VELOCITY
+  MOD menu kept the mods' values. With duck and cpu-probe added (Q4D4),
+  COMP cycled COMP, preview, DUCK, DUCK ducked from its source and stayed
+  shown on leaving the FX track. fx-sends' CHORUS SEND page (Q4F4, without
+  lfo-rnd) opened behind AMP and its chorus played on its track only.
+
 ## Building
 
-Core 0.3 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.3.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.4 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.4.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -310,8 +326,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.3.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.4.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.3.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.4.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```
