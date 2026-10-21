@@ -57,7 +57,9 @@ evidence.
   0x4D000000, console and DMA buffers) have fixed sizes and end at
   uncached 0x4D6472C0 (cached 0x456472C0). In rytm-emu, watches over the
   area and over 0x448B6D50-0x44C00000 and 0x456472C0-0x47BE0000 saw no
-  access through a cold boot, a busy session, a project save and a load;
+  access through a cold boot, a busy session, a project save and a load,
+  a power-off save, SysEx sent and received (a whole-project dump of
+  2.3 MB included) and a five-minute mixed session;
   the boot stack used only 0x47FFFFD0-0x47FFFFFF. Not yet checked on a unit
   with a canary.
 - UI: the periodic UI routine (0x40098754) is the Rytm's (0x400A2AAA on
