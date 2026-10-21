@@ -32,6 +32,11 @@ Over every screen (y = 0 is the bottom row):
 A clean run shows the sweep bar growing and nothing else but the blinking
 square. It names fill_rect itself, at its 1.56 address.
 
+Checked in an emulator (rytm-emu's A4 build: clean sweeps, and one word
+written into the gap on purpose was caught at its address) and on a unit
+(CA56, 21 Oct 2026: clean through a session of normal use and after a power
+cycle).
+
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx

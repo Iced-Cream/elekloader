@@ -451,8 +451,10 @@ Recovery to stock worked on the unit (21 Oct 2026).
   0x41872230-0x42872230, inside the RAM it clears; every task stack is
   there too, and its fixed buffers outside it (effects, the delay ring,
   DMA) end at 0x456472C0 (cached view). So 0x456472C0-0x47BE0000 (37.6 MB)
-  is unused as well. Not yet checked with a canary on a unit; HC56 has run
-  code from the area on one.
+  is unused as well. On a unit (21 Oct 2026), ddr-canary-a4 filled the
+  mods' area after the mods' data, 0x448B6D50-0x44C00000 and that gap with a
+  pattern and read them back with no word changed, through a session of
+  normal use and after a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4/README.md).
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a

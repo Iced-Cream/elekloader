@@ -60,8 +60,10 @@ evidence.
   access through a cold boot, a busy session, a project save and a load,
   a power-off save, SysEx sent and received (a whole-project dump of
   2.3 MB included) and a five-minute mixed session;
-  the boot stack used only 0x47FFFFD0-0x47FFFFFF. Not yet checked on a unit
-  with a canary.
+  the boot stack used only 0x47FFFFD0-0x47FFFFFF. On a unit (21 Oct 2026)
+  ddr-canary-a4 filled the area after the mods' data and both gaps with
+  address ^ 0xC0DEF00D and read them back with no word changed, through a
+  session of normal use and after a power cycle.
 - UI: the periodic UI routine (0x40098754) is the Rytm's (0x400A2AAA on
   1.73) instruction for instruction, with its object's fields moved (the
   idle counter +0x918, the Rytm's +0x748): about 20 Hz, a 128 x 64

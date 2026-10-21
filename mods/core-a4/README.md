@@ -164,8 +164,10 @@ project (zeros, as it should) and loading the project back, a power cycle,
 and a Transfer round trip of the project file; CREATE NEW cleared every
 field, and on the new project, marking and a power cycle without saving
 kept the project fields. With every marker set, a pattern on all four
-synth tracks and the effects sounded the same by ear as before. The mods'
-area over a long session has not been checked with a canary on a unit.
+synth tracks and the effects sounded the same by ear as before. With
+[ddr-canary-a4](../../examples/ddr-canary-a4) (CA56), no word changed in the
+mods' area after the mods' data or in the two unused gaps, through a session
+of normal use and after a power cycle (21 Oct 2026).
 Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
 the unit back to stock 1.56 (21 Oct 2026).
 
