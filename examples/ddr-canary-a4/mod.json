@@ -1,0 +1,17 @@
+{
+ "id": "ddr-canary",
+ "version": "0.1",
+ "title": "DDR canary",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for the Analog Four MKII's unused DDR: fills the mods' area after the mods' data and the two gaps the profile names with a pattern, reads them back for as long as it runs, and draws what changed as bars along the top of the screen.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["canary.c"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "cn_tick", "order": 60},
+  {"event": "ev_draw", "fn": "cn_draw", "order": 60}
+ ],
+ "requires": ["core"]
+}
