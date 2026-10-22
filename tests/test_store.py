@@ -159,6 +159,24 @@ def test_a_sounds_room_is_its_cores():
     assert l7['ancestors'][0] == l6['id'] and any('layout ID' in n for n in notes)
 
 
+def test_the_analog_four_mk2s_room():
+    """core-a4 (mods/core-a4/store.c): 32 bits a sound, 128 a kit, 64 a global
+    slot, and the 4,342 bytes of the tagged store for 129 x 6 pattern tracks,
+    129 patterns and the project."""
+    a4 = 'analog-four-mk2'
+    assert store.supports(a4)
+    assert store.capacity(a4, {'track': 2, 'pattern': 4}) == {
+        'sound': 32, 'kit': 128, 'global': 64, 'track': 16, 'pattern': 32,
+        'project': 8 * (4342 - 774 * 2 - 129 * 4)}
+    assert 'sound' in refused(store.allocate, None, [('a', 'x', 'sound', 33)], a4)
+    assert 'kit' in refused(store.allocate, None, [('a', 'x', 'kit', 32), ('a', 'y', 'kit', 32),
+                                                   ('a', 'z', 'kit', 32), ('a', 'w', 'kit', 32),
+                                                   ('a', 'v', 'kit', 1)], a4)
+    # six tracks a pattern: three bytes a track still fit (the Rytm's 13 do not)
+    lock, _ = store.allocate(None, [('a', 'x', 'track', 17)], a4)
+    assert lock['split'] == {'track': 3, 'pattern': 4} and lock['device'] == a4
+
+
 def test_ancestors_keep_the_newest_15():
     lock, _ = store.allocate(None, [], DEV)
     seen = [lock['id']]

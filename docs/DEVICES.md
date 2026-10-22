@@ -407,6 +407,74 @@ Digitakt's in the places elekloader depends on.
   hooks-check-ar2 (HC74) work as the 1.73 ones do; in rytm-emu both boot
   as stock 1.74 does, differing only where the mod draws.
 
+## The Analog Four MKII (1.56)
+
+A proof of concept: the profile (`analog_four_mk2.py`, where each fact's
+evidence is) and a core (mods/core-a4) built from core-ar2 0.3's sources.
+The A4 runs on the Analog Rytm MKII's platform, but every address, size and
+count here was found again in the A4's own image (Ghidra, and rytm-emu's A4
+build, 20 Oct 2026), none copied from the Rytm. On a unit, a build of core-a4
+with hooks-check-a4 (HC56, 20 Oct 2026) booted and every event ran as
+expected, and one with store-check-a4 (SC56, 21 Oct 2026) kept every scope's
+fields through saves, loads, power cycles and a Transfer round trip.
+Recovery to stock worked on the unit (21 Oct 2026).
+
+- **Files.** The Rytm's family (ELE3, the same SysEx transport), device byte
+  `0x0B`, version field at `0x14`, no trailer. Five sections: 5, 2 (the
+  bootstrap, with the STARTUP menu), 1 (an FPGA bitstream), 3 (MAIN OS) and
+  8 (the same ARM image as the Rytm's). The writer reproduces the stock file
+  byte for byte from its own main OS stream.
+- **Staging.** The bootstrap's loader (`0x80000590`) is the Rytm's call for
+  call, with a byte-identical depacker: section 3 from flash at its container
+  offset + `0x80000`, to `0x40200000`, unpacked in place to `0x40000400`.
+  Stock's in-place gap is 540,192 bytes; elekloader's repack of stock,
+  649,113.
+- **Flash.** `flash_limit` is `0x300000`, where the OS keeps its voice
+  calibration record (`RBOW`, 0xE56 bytes). The settings store is the
+  Rytm's, `0x380000`-`0x400000`; there is no store at `0x340000`.
+  elekloader's repack of stock ends at `0x1A2D10` (Elektron's at
+  `0x188390`).
+- **No protected range.** Every call into the SPI NOR routines comes from
+  the calibration record, the settings store, the factory console, the in-OS
+  upgrade or the COKI copy (which erases 0x400000-0xc00000 after copying it
+  to the card); none writes bytes of the main OS. The main OS holds no copy
+  of the bootstrap: the one thing they share is a 1,175-byte font-width
+  table. tests/test_analog_four_mk2.py checks both.
+- **The OS entry** is the Rytm's apart from addresses and one constant (it
+  ORs 0x06 into 0xFC044000, the Digitakt mk1's value); the boot site is
+  `0x40001180`. The OS clears `0x40253000`-`0x448B6D50` at start and runs
+  its stack down from `0x48000000`.
+- **Mods' area.** `0x47BE0000`-`0x47C00000`, the Rytm's. No code operand
+  points into it or its uncached view, and in rytm-emu a watch over it saw
+  no access through a cold boot and a session of keys, encoders and PLAY.
+  The OS's one allocator (operator new) has a fixed 16 MB arena,
+  0x41872230-0x42872230, inside the RAM it clears; every task stack is
+  there too, and its fixed buffers outside it (effects, the delay ring,
+  DMA) end at 0x456472C0 (cached view). So 0x456472C0-0x47BE0000 (37.6 MB)
+  is unused as well. On a unit (21 Oct 2026), ddr-canary-a4 filled the
+  mods' area after the mods' data, 0x448B6D50-0x44C00000 and that gap with a
+  pattern and read them back with no word changed, through a session of
+  normal use (Overbridge included) and after a power cycle.
+- **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
+  mod storage in bytes of the A4's own structures (mods/core-a4/README.md).
+  In rytm-emu (with a fallback added so it accepts a patched A4 image), a
+  build with core alone runs as stock does, with the same frames and a
+  byte-identical screen; hello-marker-a4 differs from stock only in its
+  square; hooks-check-a4 counted every event and listed its SETTINGS row.
+  With store-check-a4, every scope's markers read back after a project
+  save, loading another project, loading it back, and a power cycle, and
+  CREATE NEW cleared them all.
+- **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE,
+  the stock file over MIDI DIN. Checked on a unit with stock 1.56 after the
+  test builds (21 Oct 2026).
+- **The TypeScript engine** (js/) has the profile too (`ANALOG_FOUR_MK2`) and
+  core-a4's storage spec, and `tools/parity.ts` takes the A4's cases
+  (`stocks.a456`, `dirs.a4`: core-a4 with each example, alone and together,
+  the examples without core, a check, and each Rytm core on the other
+  device). Its eleven cases (six builds, a check, four refusals) give the
+  same files, messages and checks as the Python (21 Oct 2026). The web page's
+  list of where to download each stock OS does not name the A4 yet.
+
 ## What a new device needs besides its profile
 
 - **Sealed files.** `trailer='hmac'` with `hmac_key_from` (the Digitakt

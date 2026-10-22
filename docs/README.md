@@ -46,7 +46,8 @@ docs match its code.
   [mods/seq-events-dn1](../mods/seq-events-dn1) (its step fire as events;
   the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1)),
   [mods/core-dt2](../mods/core-dt2) (Digitakt II),
-  [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII), and
+  [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
+  [mods/core-a4](../mods/core-a4) (Analog Four MKII), and
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
   and [mods/intercepts-ot](../mods/intercepts-ot) (Octatrack).
 - **A whole mod on core-dn1 3.2's exclusive audio:**
@@ -67,9 +68,12 @@ docs match its code.
   - `hello-marker`, one C function on the draw event that puts a small square
     in the corner of every screen; `hello-marker-dt2`, `hello-marker-ot` and
     `hello-marker-ar2` do the same on the Digitakt II, the Octatrack and the
-    Analog Rytm MKII;
+    Analog Rytm MKII, and `hello-marker-a4` on the Analog Four MKII;
   - `hooks-check-ar2`, a test for the Analog Rytm MKII's core: it
-    subscribes to every event core-ar2 has and shows what it counts;
+    subscribes to every event core-ar2 has and shows what it counts
+    (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
+    `store-check-a4` checks its mod storage and `ddr-canary-a4` the DDR
+    the profile calls unused);
   - `perform-direct`, a real Digitakt II mod: [PRESET] toggles PERFORM
     without [FUNC];
   - `sine-machine`, an SRC machine for core 3.0 that names no firmware

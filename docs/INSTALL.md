@@ -62,6 +62,8 @@ publishes it:
   (one file serves both), from Elektron's Octatrack downloads;
 - Analog Rytm MKII: `Analog-Rytm_MKII_OS1.74.syx` or `..._OS1.73.syx`, from
   Elektron's Analog Rytm MKII downloads;
+- Analog Four MKII: `Analog-Four_MKII_OS1.56.syx`, from Elektron's Analog
+  Four MKII downloads;
 - Model:Cycles or Model:Samples: the OS 1.13 `.syx`, from Elektron's
   Model:Cycles or Model:Samples downloads.
 

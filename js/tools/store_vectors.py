@@ -59,6 +59,17 @@ CORE_RUNS = {
     'core 0.3: sound past 24 bits': ('0.3', [[F('a', 's', 'sound', 24)],
                                              [F('a', 's', 'sound', 24), F('b', 's2', 'sound', 32)]]),
 }
+# runs on another device (each scope's room is that device's): the Analog Four MKII (core-a4)
+DEV_RUNS = {
+    'a4: every scope': ('analog-four-mk2', [EVERY + [F('c', 'c_kit', 'kit', 32), F('c', 'c_glo', 'global', 32)]]),
+    'a4: room': ('analog-four-mk2', [[F('a', 's', 'sound', 32), F('a', 'k%d' % i, 'kit', 32)] for i in range(1)]
+                 + [[F('a', 's', 'sound', 32)] + [F('a', 'k%d' % i, 'kit', 32) for i in range(4)]]
+                 + [[F('a', 's', 'sound', 32)] + [F('a', 'k%d' % i, 'kit', 32) for i in range(5)]]),
+    'a4: the split grows': ('analog-four-mk2', [[F('a', 't1', 'track', 16)],
+                                                [F('a', 't1', 'track', 16), F('a', 't2', 'track', 9)],
+                                                [F('a', 't1', 'track', 16), F('a', 't2', 'track', 9),
+                                                 F('a', 't3', 'track', 32), F('a', 't4', 'track', 32)]]),
+}
 # a lockfile a core 0.3 build made, with a sound field past bit 24, then built with core 0.2
 LATE = {'core 0.3 then 0.2': ([F('a', 's', 'sound', 24), F('b', 's2', 'sound', 8)],
                               '0.2', [F('b', 's2', 'sound', 8)]),
@@ -99,12 +110,12 @@ DECLS = {
 
 def main():
     out = {'runs': {}, 'locks': {}, 'decls': {}}
-    def run(lock, steps, core):
+    def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
             try:
-                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, core)
-                syms, tab = store.symbols(lock, DEV)
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], dev, core)
+                syms, tab = store.symbols(lock, dev)
                 res.append({'lock': lock, 'notes': notes, 'symbols': syms, 'ids': [t.hex() for t in tab],
                             'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
             except ModError as e:
@@ -114,6 +125,8 @@ def main():
         out['runs'][name] = {'steps': steps, 'core': None, 'results': run(None, steps, None)}
     for name, (core, steps) in CORE_RUNS.items():
         out['runs'][name] = {'steps': steps, 'core': core, 'results': run(None, steps, core)}
+    for name, (dev, steps) in DEV_RUNS.items():
+        out['runs'][name] = {'steps': steps, 'core': None, 'device': dev, 'results': run(None, steps, None, dev)}
     for name, (first, core, then) in LATE.items():
         lock, _ = store.allocate(None, [tuple(d) for d in first], DEV, '0.3')
         out['runs'][name] = {'start': lock, 'steps': [then], 'core': core, 'results': run(lock, [then], core)}

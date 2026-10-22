@@ -41,7 +41,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 |---|---|
 | `elekloader/devices/` | everything device-specific: one profile per product, releases by hash |
 | `elekloader/formats.py` | one interface over the OS file families (`Device.container`); `load` also takes Elektron's zip |
-| `elekloader/syx.py` | the Digitakt mk1's, Digitone mk1's, Digitakt II's and Analog Rytm MKII's family (ELE3, SysEx; the II's sealed with an HMAC): parse, write (only the main OS changes), verify |
+| `elekloader/syx.py` | the Digitakt mk1's, Digitone mk1's, Digitakt II's, Analog Rytm MKII's and Analog Four MKII's family (ELE3, SysEx; the II's sealed with an HMAC): parse, write (only the main OS changes), verify |
 | `elekloader/elek.py` | the Octatrack's family (ELEK, legacy SysEx, the ELUP card file): the same |
 | `elekloader/elemod.py` | the mod format: shared validation, format 1, the instruction check, `summarize` |
 | `elekloader/link.py` | format 2: the linker and its checks |
@@ -52,6 +52,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `elekloader/codec/`, `elekloader/isa/` | code from digikit (GPL-2.0-or-later): change it only with a round-trip test |
 | `mods/core/`, `mods/core-dn1/`, `mods/core-dt2/` | the core mod (the hook bus every format-2 mod needs): one `core.s` (with `settings.s`, `render.s` and `fast.s` where the device uses them), each device's addresses and sites in its `mod.json`, each further OS version's in its `ports`. `elekloader/sdk/include/digitone-mk1/core3.h` and `core3.inc` describe core-dn1 3.0's exports and tables to mods |
 | `mods/core-ar2/` | the Analog Rytm MKII's core: `core.s`, `settings.s` and `render.s` with the Rytm's addresses |
+| `mods/core-a4/` | the Analog Four MKII's core, a proof of concept: core-ar2 0.3's hook bus (`core.s`, `settings.s`, `render.s`) and mod storage (`store.c`, `store.s`) with the A4's addresses |
 | `mods/core-ot/` | the Octatrack's core: its RAM reserve (from 0.3 sized to the mods by the linker: the profile's `reserve`) and `.boot`, and from 0.2 its own hook bus (`bus.s`, with the draw site's gate in `gate.s`) |
 | `mods/dspbus-ot/` | the Octatrack's optional DSP bus: frees SPATIALIZER's DSP words for mods' DSP code and declares `ev_dsp_rx` (data sites only, no code) |
 | `mods/intercepts-ot/` | the Octatrack's intercepts, a companion: 19 sites a mod intercepts, one mod at a time, each an event whose records `{claims, entry}` give it to one mod, with Modwerk's Octatrack base's names (docs/ADAPTING.md, "Intercepts on the Octatrack"); `sdk.octabam --intercepts` moves octabam's detours there |
@@ -78,6 +79,7 @@ ELEKLOADER_OT_SYX=... ELEKLOADER_OCTABAM=... python tests/test_octabam.py
 ELEKLOADER_DN_SYX=... python tests/test_digitone.py
 ELEKLOADER_DT2_SYX=... python tests/test_digitakt2.py
 ELEKLOADER_AR2_SYX=... python tests/test_rytm_mk2.py
+ELEKLOADER_A4_SYX=... python tests/test_analog_four_mk2.py
 ELEKLOADER_RELEASES=<folder of stock files> python tests/test_releases.py   # every known release, and the cores for it
 ELEKLOADER_STOCK=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 python packaging/build_web.py --pyodide pyodide-core-<v>.tar.bz2 --core core-*.elemod --out build/site

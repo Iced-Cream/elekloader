@@ -7,8 +7,8 @@
 //                                                              refusal, the log, the live check, every describe
 //
 // config.json names your files: {"root": "/tmp/elekparity", "map": [["C:/", "/mnt/c/"]], "scratch": "<a folder>",
-// "stocks": {"dt153": ..., "dt154": ..., "dt153zip": ..., "dn143": ..., "dn144": ..., "ot": ..., "otbin": ..., "ar173": ..., "ar174": ...},
-// "dirs": {"dt": ..., "release": ..., "octabam": ..., "dtmod": ..., "ar": ...}, "files": {"octatrick": ..., "bundle": ...}}.
+// "stocks": {"dt153": ..., "dt154": ..., "dt153zip": ..., "dn143": ..., "dn144": ..., "ot": ..., "otbin": ..., "ar173": ..., "ar174": ..., "a456": ...},
+// "dirs": {"dt": ..., "release": ..., "octabam": ..., "dtmod": ..., "ar": ..., "a4": ...}, "files": {"octatrick": ..., "bundle": ...}}.
 // Both sides see each file under the same path (root/<case>/stock/<name>, root/<case>/mods/<name>), so the
 // manifests, which name those paths, must match byte for byte too.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
@@ -105,6 +105,25 @@ function plan(configPath: string, casesPath: string) {
     add('ar174 core + store-check', 'ar174', [core, store])
     add('ar174 store-check without core', 'ar174', [store])
     if (cfg.stocks.ar173) add('ar173 core 0.3, made for 1.74', 'ar173', [core])
+  }
+  // the Analog Four MKII 1.56 (optional: stocks.a456, and dirs.a4 with core-0.1.elemod, hello-marker-1.0.elemod,
+  // hooks-check-0.1.elemod, store-check-1.0.elemod and ddr-canary-0.1.elemod built from mods/core-a4 and
+  // examples/*-a4)
+  if (cfg.stocks.a456 && cfg.dirs.a4) {
+    const core = f('a4', 'core-0.1.elemod'), hello = f('a4', 'hello-marker-1.0.elemod')
+    const hooks = f('a4', 'hooks-check-0.1.elemod'), store = f('a4', 'store-check-1.0.elemod')
+    const canary = f('a4', 'ddr-canary-0.1.elemod')
+    add('a456 core alone', 'a456', [core])
+    add('a456 core + hello-marker', 'a456', [core, hello])
+    add('a456 core + hooks-check', 'a456', [core, hooks])
+    add('a456 core + store-check', 'a456', [core, store])
+    add('a456 core + ddr-canary', 'a456', [core, canary])
+    add('a456 core + all', 'a456', [core, hello, hooks, store, canary])
+    add('a456 hooks-check without core', 'a456', [hooks])
+    add('a456 store-check without core', 'a456', [store])
+    add('a456 check only', 'a456', [core, store], 'TEST', { check_only: true })
+    if (cfg.dirs.ar) add('a456 core-ar2 0.3', 'a456', [f('ar', 'core-0.3.elemod')])
+    if (cfg.stocks.ar174) add('ar174 core-a4', 'ar174', [core])
   }
 
   const scratch = cfg.scratch

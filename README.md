@@ -24,6 +24,7 @@ file on your own machine, and you flash it the way you flash any OS update.
 | Octatrack (MKI and MKII) | 1.40C | supported: whole builds (format-1 mods); linkable mods with its own core: boots on an MKII, not yet run on an MKI |
 | Model:Cycles, Model:Samples | 1.13 | supported: linkable mods with their own core (the hook bus's tick, draw, key and encoder events); builds work on both units (Transfer over USB) |
 | Analog Rytm MKII | 1.74 | supported: linkable mods with its own core (the hook bus's tick, draw, key, encoder, SETTINGS and render events); builds with the core work on a unit (Transfer over USB) |
+| Analog Four MKII | 1.56 | experimental: linkable mods with its own core, a proof of concept (core-a4: the Analog Rytm MKII's hook bus and mod storage); the hook bus, mod storage, the unused DDR and recovery checked on a unit (hooks-check-a4, store-check-a4, ddr-canary-a4) |
 | other Elektron devices | | planned: see [docs/DEVICES.md](docs/DEVICES.md) |
 
 ## Get started
@@ -57,7 +58,8 @@ work for this). On a Model:Cycles or Model:Samples, hold **FUNC** while
 powering on, press **TRIG 4** for OS UPGRADE, and send the stock `.syx` over
 5-pin DIN MIDI. On an Analog Rytm MKII, hold **FUNC** while powering on for
 the STARTUP menu, press **TRIG 4** for OS UPGRADE, and send the stock `.syx`
-over 5-pin DIN MIDI (not USB).
+over 5-pin DIN MIDI (not USB). The Analog Four MKII's is the Rytm's: FUNC
+at power-on, **TRIG 4**, the stock `.syx` over 5-pin DIN MIDI.
 
 ## Mods
 

@@ -96,7 +96,7 @@ what you see when it is broken (section 5 has the fixes).
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 
-### The hook bus (core's events): the Digitakt mk1, the Digitone mk1, the Digitakt II and the Analog Rytm MKII
+### The hook bus (core's events): the Digitakt mk1, the Digitone mk1, the Digitakt II, the Analog Rytm MKII and the Analog Four MKII
 
 Handlers are C functions (arguments on the stack; d0-d1/a0-a1 free,
 everything else kept; the result in d0). `order` sorts handlers of one
@@ -153,6 +153,15 @@ Analog Rytm MKII)"). What differs there:
 - core-ar2 exports no firmware locations (`fw_*`): a mod names each
   firmware address itself, for each OS (3.10).
 
+The Analog Four MKII's core (mods/core-a4 0.1, OS 1.56) is core-ar2 0.3 at
+the A4's sites: the same events, `ev_project` and mod storage ("Mod storage
+(core-a4 0.1, Analog Four MKII)"), with the same differences from the
+Digitakt mk1. On the A4, the SETTINGS menu is the GLOBAL key's, and its rows
+come after SYSTEM; the render events cover the audio interrupt's digital
+path (the effects and the inputs), since the voices are analog. core-a4
+exports no firmware locations either. `examples/hello-marker-a4`,
+`hooks-check-a4`, `store-check-a4` and `ddr-canary-a4` are mods for it.
+
 The sites core owns (do not patch them):
 - Digitakt mk1 1.53 and 1.54: 0x40000538, 0x4000a770, 0x4000a7d6,
   0x4000b770, 0x4000b7ba, 0x40058800, 0x40077428, 0x400784c8;
@@ -173,7 +182,10 @@ The sites core owns (do not patch them):
   0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
 - from core-ar2 0.2, on both Rytm releases, 22 more for mod storage, and
   from 0.3, which is for 1.74 only (0.2 is the last core with 1.73), 10
-  more (32 in all; listed under "Mod storage").
+  more (32 in all; listed under "Mod storage");
+- Analog Four MKII 1.56: 0x40001180, 0x40098898, 0x40098900, 0x400999f8,
+  0x40099a40, 0x400d05d2, 0x401013c6, 0x401040f6, and 28 more for mod
+  storage (mods/core-a4/README.md lists them).
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -733,7 +745,7 @@ sets things up per project, subscribes to `ev_project`:
 
 | event | when | C prototype | notes |
 |---|---|---|---|
-| `ev_project` | Analog Rytm MKII only (core-ar2 from 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
+| `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -756,6 +768,38 @@ setAmount (0x400c52b2), setRoute (0x400c51b4) and reset (0x400c542c), and
 the aftertouch menu's setRoute (0x4003391e).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
+
+### Mod storage (core-a4 0.1, Analog Four MKII)
+
+core-a4 has the Rytm's mod storage, above, with the A4's own objects: the
+same six scopes, `storage` declarations, lockfile, tagged store, checks and
+`ev_project`. A mod includes `elekloader/sdk/include/analog-four-mk2/store.h`
+instead, and its lockfile defaults to `analog-four-mk2.lock.json`. What
+differs:
+
+| scope | item | index | room per item | kept in |
+|---|---|---|---|---|
+| `sound` | the live sound (a kit's, or the pool's) | unused | 32 bits | the sound's own spare bytes, with its copy of the layout ID and generation |
+| `kit` | the live kit | unused | 128 bits | the kit's own spare bytes (its effects block's unused words) |
+| `global` | unused | the slot, 0-3 | 64 bits | the global slot's spare bytes, with its own copy of the ID: a slot sent and received as SysEx by the same layout keeps its mod data |
+| `track` | the live pattern | the track, 0-5 (four synth tracks, FX, CV) | 8 x T bits | the project's tagged store (129 x 6 pattern tracks) |
+| `pattern` | the live pattern | unused | 8 x P bits | the project's tagged store |
+| `project` | unused | unused | what is left | the project's tagged store |
+
+- The A4 writes each parameter edit of the current kit straight into the
+  stored project's copy of that kit, so `core_store_set` writes a field of
+  the current kit or its sounds there too: like a stock edit, it survives a
+  power cycle without a save. And as stock's own edits do, every mod field
+  survives a power cycle straight after SAVE PROJECT AS: core copies what
+  the save wrote of its own bytes back into the stored project.
+- No velocity routes: the sound's room needs no extra sites.
+- core-a4 owns 28 storage sites (mods/core-a4/README.md lists them), among
+  them a kit init the Rytm's core does not need.
+- Checked in rytm-emu's A4 build and on a unit (store-check-a4). The spare sound and
+  effects words reach an engine slot the stock OS appears not to use; on
+  a unit, a pattern sounded the same by ear with every field set.
+
+`examples/store-check-a4` is store-check-ar2 for the A4.
 
 ### Parameter pages (core-ar2 0.4, Analog Rytm MKII)
 
