@@ -127,8 +127,24 @@ def test_core_a4_sites():
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
     x = [x for x in mod['sites'] if x['target'] == 'core_settings'][0]
     assert int(d['SETTINGS_RET'], 16) == int(x['addr'], 16) + 6
-    # mod storage's sites (core-a4 0.1: 28 of the 36)
-    assert len(mod['sites']) == 36
+    # parameter pages (0.2): each page stub resumes after the 6 or 8 bytes
+    # its site displaced; page_info's moveq is the last stock page (47), and
+    # param_value_text opens with two pushes and a load, not the Rytm's
+    # lea and moveml
+    for k, t in (('PAGE_INFO_RET', 'core_page_info'), ('GET_RET', 'core_param_get'),
+                 ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
+        x = [x for x in mod['sites'] if x['target'] == t][0]
+        assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, t
+    pages = {x['target']: x['stock'] for x in mod['sites'] if x['target'].startswith('core_pa')}
+    assert pages['core_page_info'] == '722f202f0004'
+    assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
+    assert pages['core_param_text'] == '2f032f02242f0014'
+    # the audio load (0.2): core times its own render events, first in and last out
+    sub = {x['event']: x for x in mod['subscribe']}
+    assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
+    assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
+    # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page sites
+    assert len(mod['sites']) == 40
     assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 28
 
 

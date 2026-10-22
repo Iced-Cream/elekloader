@@ -48,6 +48,34 @@ What differs from the Rytm at these sites:
   digital path (effects and the inputs). Another vector 191 handler
   (0x401162a4) exists, as on the Rytm; core hooks only the main one.
 
+## Parameter pages (0.2)
+
+From 0.2, `pages.s` is core-ar2 0.4's parameter routines at the A4's
+(docs/ADAPTING.md, "Parameter pages (core-a4 0.2, Analog Four MKII)"), and
+core builds core-ar2's `load.s` for `core_audio_load`. Each A4 site is the
+Rytm 1.74 routine's counterpart, found by its code and its callers:
+
+| routine | A4 1.56 | Rytm 1.74 | displaced | note |
+|---|---|---|---|---|
+| page_info | 0x400f6212 | 0x400ff5e0 | `moveq #47,%d1; movel %sp@(4),%d0` | stock's pages are 0..47 (the Rytm's 0..11); an entry is 0x2c bytes, the name and ten knob ids, in a table at 0x401b31e8 |
+| page_get_value | 0x40023d54 | 0x40038462 | `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@` | the Rytm's prologue and frame; slot 21 of each of the 9 page views' vtables |
+| param_apply_delta | 0x400232e2 | 0x400378a6 | the same | slot 22 |
+| param_value_text | 0x4009ea68 | 0x400a864c | `movel %d3,%sp@-; movel %d2,%sp@-; movel %sp@(20),%d2` | the same arguments; slot 30 of the ParameterSet vtables (the Rytm's 21) |
+
+The redraw after a turn a mod takes is VIEW_INVALIDATE, 0x40061a58 (the
+Rytm's 0x40078580, the same code). No page site overlaps one of 0.1's.
+
+core-ar2 0.4's page-key lists (`core_view_pages`), its page-key step and
+its FX view fix have no counterpart here. The A4's main screen makes one
+view per page, 29 in all (0x400c1366), and each page key steps through a
+list of views for each track type (every track, synth, FX, CV); stock
+already keeps each track type's page when it is shown again. Adding views
+needs a hook where the main screen builds them (0x400c2370) and a wider
+range for the current view's index (0..28, at 0x400add1c). Whether that
+index is saved with the project or the settings is not yet traced, which
+decides whether a mod's view can be selected at power-on, so 0.2 leaves
+views out.
+
 ## Mod storage
 
 Mods declare fields in their mod.json (`storage`) and read and write them
@@ -221,8 +249,8 @@ images; 20 Oct 2026):
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.lint examples/store-check-a4/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.1.elemod
+    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.2.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.1.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.2.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
