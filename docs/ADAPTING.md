@@ -846,7 +846,33 @@ const struct core_param my_params = {449, 450, my_get, my_delta, my_text};
   stock parameter's text).
 
 Any of the three may be 0. Entries are asked in `order`; the first that
-answers wins, then stock. A page id must be one stock does not have
+answers wins, then stock.
+
+**A page whose knobs follow the sound (core-ar2 0.6).** A page that leaves a
+knob empty for some settings of the selected sound (voice-dac's DAC FILTER
+has no RES for its 1-pole types, and neither FRQ nor RES with TYP OFF)
+contributes to `core_page_fns` instead of `core_pages`:
+
+```json
+{"to": "core_page_fns", "order": 14, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_page_fn", 0]]}
+```
+
+```c
+static const struct core_page *my_info(int32_t page)
+{
+    return my_type() ? &my_page : &my_page_short;
+}
+const struct core_page_fn my_page_fn = {14, my_info};
+```
+
+page_info asks `info(page)` on every call, before `core_pages`, and answers
+the entry it returns (its own `page` field is not read); 0 passes to
+`core_pages` and stock. Every reader of a page calls page_info afresh (the
+knobs' draw, the knob -> id lookup of a turn), so the page follows at its
+next redraw, and an empty knob draws stock's empty-knob mark and takes no
+turn, as on stock's REVERB and DISTORTION pages. `info` runs in the UI
+task, with the C convention (d0/d1/a0/a1 scratch). A page id must be one stock does not have
 (0..11) and no other mod in the build uses (rytm2_mods use 12 and 13, the
 AE ports 14 and 15). Core only passes calls on, so a build with no entries
 behaves as stock.

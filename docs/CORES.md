@@ -140,7 +140,9 @@ core.
   own in one of the hidden slots 34..43, written into the machine table and
   the slot's parameter records at boot, and the linker refuses two mods
   that take one slot ("Machines (core-ar2 0.5, Analog Rytm MKII)" in
-  ADAPTING.md). No firmware exports.
+  ADAPTING.md). From 0.6, a page's entry can come from a function
+  (`core_page_fns`), so its knobs can follow the selected sound. No
+  firmware exports.
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4)): core-ar2 0.3
   with the A4's addresses, every one measured on the A4's own image: the
   same hook bus (tick about 20 a second, draw, key, encoder, SETTINGS,
