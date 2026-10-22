@@ -2,7 +2,7 @@
 // The linker's checks that need no firmware: tests/test_units.py's counterparts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DIGITAKT_MK1, DIGITONE_MK1, targetOf } from '../src/devices.ts'
+import { ANALOG_RYTM_MK2, DIGITAKT_MK1, DIGITONE_MK1, targetOf } from '../src/devices.ts'
 import { Mod2, check } from '../src/link.ts'
 
 test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes or the stock image', () => {
@@ -33,4 +33,19 @@ test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes
     contribute: [{ to: 'core_params', data: '00000000', relocs: [[0, 'abs32', 'sym:p', 0]] }],
   }, 't')
   assert.deepEqual(t.impliedNames(new Uint8Array(0)), [])
+})
+
+test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
+  const ar = ANALOG_RYTM_MK2, r = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(r.mainLen)
+  const mod = (id: string, slot: number) => new Mod2({
+    elemod: 2, id, version: '1', target: targetOf(ar, r),
+    sections: { '.run': { align: 4, parts: [['hex', slot.toString(16).padStart(8, '0') + '00'.repeat(92)]] } },
+    symbols: { m: ['.run', 0] },
+    contribute: [{ to: 'core_machines', data: '00000000', relocs: [[0, 'abs32', 'sym:m', 0]] }],
+  }, id)
+  assert.deepEqual(mod('a', 36).impliedNames(image), ['machine:36'])
+  assert.ok(check([mod('a', 36), mod('b', 36)], image).includes('a 1 and b 1 both claim machine:36'))
+  assert.ok(!check([mod('c', 36), mod('d', 37)], image).some(p => p.includes('claim')))
+  assert.deepEqual(mod('e', 53).impliedNames(image), [])
 })

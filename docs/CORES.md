@@ -34,7 +34,7 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Rytm MKII | 1.74 | `core-ar2-0.4.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.5.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Four MKII | 1.56 | `core-a4-0.1.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
@@ -134,8 +134,12 @@ core.
   key shows each page's title and a view keeps its page), so several mods
   with pages fit one build, behind the same key too; and the audio
   interrupt's load, `core_audio_load`, for work a mod can skip
-  ("Parameter pages (core-ar2 0.4, Analog Rytm MKII)" in ADAPTING.md). No
-  machines and no firmware exports.
+  ("Parameter pages (core-ar2 0.4, Analog Rytm MKII)" in ADAPTING.md).
+  From 0.5, machines: a mod's `core_machines` entry puts a machine of its
+  own in one of the hidden slots 34..43, written into the machine table and
+  the slot's parameter records at boot, and the linker refuses two mods
+  that take one slot ("Machines (core-ar2 0.5, Analog Rytm MKII)" in
+  ADAPTING.md). No firmware exports.
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4)): core-ar2 0.3
   with the A4's addresses, every one measured on the A4's own image: the
   same hook bus (tick about 20 a second, draw, key, encoder, SETTINGS,
@@ -202,7 +206,7 @@ python -m elekloader.sdk.build mods/dspbus-ot --stock OCTATRACK_OS1.40C.syx     
 The SDK writes `out/core-<version>.elemod`; a release renames each as the
 table above does ([RELEASING.md](RELEASING.md)).
 
-A new core version may drop an old OS: core-ar2 0.3 and 0.4 build for the
+A new core version may drop an old OS: core-ar2 0.3 to 0.5 build for the
 Analog Rytm MKII 1.74 only, and 0.2 is the last core with 1.73. A build takes the
 newest core it has for the stock OS ([above](#how-a-build-picks-one)), so a
 1.73 build takes 0.2 when it is given, and a mod that needs 0.3 is refused

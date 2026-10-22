@@ -885,6 +885,59 @@ pages; rytm2_mods and the AE ports use 20 for a key's first added page and
 one value's text further in) still work: core resumes each routine where
 its own jump ends.
 
+### Machines (core-ar2 0.5, Analog Rytm MKII)
+
+The Rytm has 53 machine slots. 34..52 hold hidden factory machines: stock
+gives them a voice mask of 0, so no track may pick them, and nothing else
+of theirs is used. From core-ar2 0.5 a mod takes one of slots 34..43 for a
+machine of its own through the table `core_machines`, with
+`elekloader/sdk/include/analog-rytm-mk2/machines.h`:
+
+```json
+"contribute": [
+  {"to": "core_machines", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:my_machine", 0]]}
+],
+"resources": {"core": "0.5"}
+```
+
+```c
+#include "analog-rytm-mk2/machines.h"
+static void my_engine(int32_t voice, void *frame, uint16_t *blk, int32_t pitch)
+{
+    CORE_ENGINE_BD_CLASSIC(voice, frame, blk, pitch);
+}
+const struct core_machine my_machine = {
+    36, my_engine, 0, CORE_VOICE_BD, 0, "BD COPY", "BDCP",
+    {{"Level", "LEV", 0, 127, 100, 0}, {"Tune", "TUN", 32, 96, 58, 1}, /* ... */}};
+```
+
+At boot, before the OS reads them, core writes the entry's engine, home
+track (the machine list files it under that track; -1 for none), voice
+mask and names into the machine table, and each knob's name, label, range,
+default and centring into the slot's parameter records. A record keeps
+its id, its index in the sound (9..16, LEV first) and its CC and NRPN, so
+sounds store the knobs and MIDI reaches them as any machine's. A knob
+whose name is 0 keeps its record as stock has it. Slots 35..42 have all
+eight records; 34 and 43 have five, and a knob with no record is ignored.
+Each entry's slot is the resource `machine:<n>`, which elekloader names
+for it, so a second mod with the same slot is refused at link. Slots
+44..52 (the TEST machines) are not offered, since mods already use their
+records as spare parameters.
+
+The engine is called once per 32-frame block for each voice running the
+machine, from the audio interrupt, as stock's are: `frame` is the analog
+control frame and `blk` the track's parameter block (word k is the
+sound's index 9 + k). It may call a stock engine (`CORE_ENGINE_*`) with a
+block it fills itself, which is how the AE TX machines are built. A value's
+text, or how a knob turns, can be changed through `core_params` (Parameter
+pages, above).
+
+A kit or sound that uses the machine, loaded on a build without the mod,
+gets DISABLE on that track, as stock does for any machine its voice may
+not run. `examples/machine-ar2` is the smallest machine: BD COPY, BD
+CLASSIC under another name.
+
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 
 Holding a track key (T1-T4) on its own, about half a second, is core's: it

@@ -189,6 +189,32 @@ def test_core_ar2_sites():
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 32
 
 
+
+def test_core_ar2_machines():
+    """core-ar2 0.5's machines (machines.c): the tables it writes at boot hold what it assumes.
+    Slots 34..52 are hidden by their voice mask alone; each owns its parameter records at
+    sound indices 9..16 (all eight in slots 35..42); the engine table is data in the image (BD HARD's engine first). And
+    the core runs core_boot_init from its .boot and has the table core_machines."""
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.5 is for 1.74')
+
+    def l(a):
+        return struct.unpack('>i', img[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    assert l(0x402906dc) == 0x40111360                    # engine[0], BD HARD
+    assert l(0x402906dc + 4 * 27) == 0x40113f68            # DISABLE
+    for m in range(53):
+        mask = img[0x401bf42c + 2 * m + 1 - DEV.main_load]
+        assert (mask == 0) == (m >= 34), m
+        k = sorted(l(0x401bfbc8 + 0x34 * i + 4) for i in range(469) if l(0x401bfbc8 + 0x34 * i) == m)
+        assert len(set(k)) == len(k) and set(k) <= set(range(9, 17)), (m, k)
+        assert 35 <= m <= 42 and k == list(range(9, 17)) or not 35 <= m <= 42, (m, k)
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    assert j['defsym'].get('BOOT_INIT') == '1' and 'core_machines' in j['collections']
+    assert 'machines.c' in j['sources']
+    assert ('core_machines', 0, 53, 'machine') in DEV.slot_claims
+
 def test_no_copy_of_the_bootstrap_in_the_main_os():
     """The main OS holds no copy of the bootstrap (section 2). No 512 bytes of
     its first 0x7d94 (zero-padded tables and data follow them) are in
