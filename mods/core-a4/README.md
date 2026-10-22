@@ -74,7 +74,19 @@ needs a hook where the main screen builds them (0x400c2370) and a wider
 range for the current view's index (0..28, at 0x400add1c). Whether that
 index is saved with the project or the settings is not yet traced, which
 decides whether a mod's view can be selected at power-on, so 0.2 leaves
-views out.
+views out. It is saved: each track type's view index is a signed byte of
+the project settings (storage +8..+0xA, written by 0x4000aabe on project
+save, SysEx and the power-off state), and the loader (0x4000a6d2) turns
+any index outside 0..28 into 0, PERFORMANCE. So a project saved with a
+mod's view opens on PERFORMANCE without the mod, and a core that adds
+views must widen the loader's range as well as the setter's.
+
+In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
+screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
+knobs turned) identical to stock's, pixel for pixel; with pages-check-a4
+(PC56), AMP PAN read its value in hex (centre `40`), the bar counted each
+step, and every other knob was stock's. `core_audio_load` read about 0x7a
+(48%) there, an emulator figure.
 
 ## Mod storage
 

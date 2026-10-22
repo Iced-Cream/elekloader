@@ -6,9 +6,10 @@
  *     "00" to "7F", where stock shows its own text;
  *   - delta: counts each turn and passes it on, so the knob still turns;
  *   - get: passes.
- * Each turn of PAN also lengthens a 2-pixel bar along the top of the screen
- * (mod 128), so a turn that reaches core shows even where stock draws no
- * text.
+ * Each step PAN turns (a value step, not an encoder count) also lengthens a
+ * 2-pixel bar along the bottom of the screen (mod 128), so a turn that
+ * reaches core shows even where stock draws no text. (The top rows are the
+ * page's inverted header.)
  */
 #include <stdint.h>
 #include "analog-four-mk2/pages.h"
@@ -46,7 +47,7 @@ void pc_draw(void *bmp, void *ctrl)
 {
     unsigned n = pc_turns & 127;
     (void)ctrl;
-    FILLRECT(bmp, 0, 60, 127, 61, 0);
+    FILLRECT(bmp, 0, 0, 127, 1, 0);
     if (n)
-        FILLRECT(bmp, 0, 60, (int)n - 1, 61, 1);
+        FILLRECT(bmp, 0, 0, (int)n - 1, 1, 1);
 }

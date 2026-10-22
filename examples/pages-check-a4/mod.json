@@ -4,7 +4,7 @@
  "title": "Pages check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
- "description": "A test for core-a4 0.2's parameter routines on the Analog Four MKII: AMP PAN's value shows as two hex digits through core_params, and each turn of it lengthens a bar along the top of the screen.",
+ "description": "A test for core-a4 0.2's parameter routines on the Analog Four MKII: AMP PAN's value shows as two hex digits through core_params, and each step it turns lengthens a bar along the bottom of the screen.",
  "device": "analog-four-mk2",
  "os": "1.56",
  "sources": ["pages.c"],
