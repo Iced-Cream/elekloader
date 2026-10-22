@@ -268,8 +268,7 @@ are refused at link.
 Slots 44..52 (the TEST machines) are not offered: mods use their records as
 spare parameters (fx-sends, voice-dac). A kit saved with an added machine
 loads on a build without the mod with that track's machine set to DISABLE,
-as stock does for a machine its voice may not run (code reading; a unit test
-is planned).
+as stock does for a machine its voice may not run (checked on a unit, below).
 
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
@@ -390,6 +389,12 @@ stock bytes, and that each covers whole instructions.
   36 and the voice's engine to the example's; its SRC page matched BD
   CLASSIC's. Not checked: its sound (the emulator's audio is too quiet to
   compare), and a kit with it loading as DISABLE without the mod.
+
+- **Machines (0.5) on a unit** (22 Oct 2026), with the example and all
+  eleven rytm2_mods v1.3 mods (M5A4): BD COPY was in the BD track's machine
+  list, played as BD CLASSIC with its knobs, and came back after SAVE KIT, a
+  power cycle and RELOAD. On the same build without the example (M5N4) that
+  kit loaded with BD on DISABLE and the rest as saved.
 
 ## Building
 
