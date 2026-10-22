@@ -927,8 +927,8 @@ What differs from the Rytm:
 - The current view is saved with the project, one index for each track
   type. Core widens the range stock accepts for it, 0..28, to 0..44, so a
   mod's view comes back after a power cycle or a project load; a project
-  saved on a view the build lacks opens on stock's (stock alone opens it on
-  PERFORMANCE).
+  saved on a view the build lacks opens on MIXER, stock's fallback for an
+  index with no view (stock alone opens it on PERFORMANCE).
 - Stock already keeps each track type's page when its view is shown again,
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a

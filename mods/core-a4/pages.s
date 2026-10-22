@@ -171,7 +171,7 @@ core_param_text:
 | (0x4000a6d2, which takes anything above to 0): mod.json's byte sites widen
 | both to 28 + VIEW_MAX. An index with no view falls back as stock's do
 | (0x400c0470), so a project saved with a view a build no longer has opens
-| on stock's.
+| on MIXER.
         .equ    VIEW_MAX, 16
         .equ    VIEW_FIRST, 29
         .equ    V_TYPE, 0

@@ -34,7 +34,7 @@
  *
  * The page key steps over the view while shown, if set, answers 0. At most
  * 16 views in a build. A project saved on a view a later build does not have
- * opens on stock's.
+ * opens on MIXER (stock alone: PERFORMANCE).
  */
 #ifndef ELEKLOADER_A4_PAGES_H
 #define ELEKLOADER_A4_PAGES_H

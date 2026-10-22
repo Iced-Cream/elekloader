@@ -98,7 +98,16 @@ screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
 knobs turned) identical to stock's, pixel for pixel; with pages-check-a4
 (PC56), AMP PAN read its value in hex (centre `40`), the bar counted each
 step, and every other knob was stock's. `core_audio_load` read about 0x7a
-(48%) there, an emulator figure.
+(48%) there, an emulator figure. With the views, A402 drew all 90 screens
+of every page key (pressed one to three times, on synth, FX and CV tracks)
+as stock does; on PC56 the AMP key stepped AMP, then CHECK once PAN had
+turned, with CHECK's title and its knob A working; CHECK came back after a
+power cycle and through a SysEx settings dump. The same project opened on
+MIXER with core alone (the index kept, with no view: stock's own fallback,
+until a page key is pressed) and on PERFORMANCE with stock. The OS uses a
+view's page id only through page_info and to pick the parameter set
+(0x400a647c, which singles out pages 1, 3, 4, 5 and 47), so mod pages from
+48 are safe.
 
 ## Mod storage
 
