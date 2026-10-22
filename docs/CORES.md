@@ -147,9 +147,10 @@ core.
   build; on a unit, the hook bus with hooks-check-a4 and mod storage with
   store-check-a4. From 0.2, core-ar2 0.4's parameter routines: core owns
   the entries of the four page routines and asks the mods' `core_pages` and
-  `core_params` entries, and `core_audio_load`; not core-ar2's page-key
-  lists, since each A4 page is a view of its own ("Parameter pages (core-a4
-  0.2, Analog Four MKII)" in ADAPTING.md).
+  `core_params` entries, adds the views mods list in `core_view_pages`
+  behind the page keys (each A4 page is a view of its own), and
+  `core_audio_load` ("Parameter pages (core-a4 0.2, Analog Four MKII)" in
+  ADAPTING.md).
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods

@@ -25,9 +25,8 @@
 |       which it may have changed (a page knob shown as a stock one)
 | Entries are asked in the table's order; the first answer wins.
 |
-| The A4 has no counterpart of core-ar2's page-key lists (core_view_pages):
-| each of its pages is a view of its own, and the page keys step through
-| lists of views. 0.2 does not add views.
+| core_view_pages is the A4's own (below): each of its pages is a view of
+| its own, and the page keys step through lists of views.
 |
 | Each stub is a jmp site's displaced instructions, reimplemented; the resume
 | addresses come from mod.json's defsym (OS 1.56).
@@ -157,3 +156,160 @@ core_param_text:
         move.l  20(%sp),%d2
         jmp     TEXT_RET
 
+
+| Views behind the page keys (core_view_pages). Each A4 page is a view of
+| its own: the main screen's constructor (0x400c1366) makes 29 of them,
+| indices 0..28, and each page key steps through a list of indices kept for
+| each (track type, key). An entry is {type, key, page, shown}: core makes a
+| parameter page view for the page (a mod's own, from core_pages, or a stock
+| one), as stock makes its last ones, gives it the next index from 29 on,
+| and appends the index to that key's list, after stock's views and the
+| entries before it. Stock's loop after the hook then gives every listed
+| view its key, place and length. At most VIEW_MAX views; the rest are
+| dropped. The current view's index is a signed byte of the project
+| settings, kept 0..28 by the setter (0x400add08) and the loader
+| (0x4000a6d2, which takes anything above to 0): mod.json's byte sites widen
+| both to 28 + VIEW_MAX. An index with no view falls back as stock's do
+| (0x400c0470), so a project saved with a view a build no longer has opens
+| on stock's.
+        .equ    VIEW_MAX, 16
+        .equ    VIEW_FIRST, 29
+        .equ    V_TYPE, 0
+        .equ    V_KEY, 4
+        .equ    V_PAGE, 8
+        .equ    V_SHOWN, 12
+
+| The hook (0x400c2370): `lea %sp@(12),%sp; moveal %fp@(8),%a0`, after view
+| 28's calls and before the loop. this is at 8(%fp); d0, d1 and a1 are free.
+| Locals: 0 the shared pointer {obj, ctrl}, 8 the index, 12 the type, 16
+| the key.
+        .globl  core_views
+core_views:
+        lea     12(%sp),%sp
+        movem.l %d2-%d7/%a2-%a5,-(%sp)
+        lea     -20(%sp),%sp
+        move.l  8(%fp),%a3
+        lea     core_view_pages,%a4
+        lea     view_ent,%a5
+        moveq   #VIEW_FIRST,%d6
+1:      move.l  (%a4)+,%d0
+        beq.w   9f
+        cmp.l   #VIEW_FIRST + VIEW_MAX,%d6
+        bge.w   9f
+        move.l  %d0,%a2
+        pea     0x1c4                     | the view, as stock's: new(0x1c4)
+        jsr     OP_NEW
+        addq.l  #4,%sp
+        move.l  %d0,%d7
+        move.l  V_KEY(%a2),-(%sp)         | ParameterPageView(obj, page, key)
+        move.l  V_PAGE(%a2),-(%sp)
+        move.l  %d7,-(%sp)
+        jsr     VIEW_CTOR
+        lea     12(%sp),%sp
+        move.l  %d7,-(%sp)                | the shared pointer
+        pea     4(%sp)
+        jsr     SP_MAKE
+        addq.l  #8,%sp
+        move.l  %d6,8(%sp)                | views[index] = it
+        pea     8(%sp)
+        pea     0x1bc(%a3)
+        jsr     MAP_SLOT
+        addq.l  #8,%sp
+        pea     (%sp)
+        move.l  %d0,-(%sp)
+        jsr     SP_MOVE
+        addq.l  #8,%sp
+        pea     4(%sp)
+        jsr     SP_RELEASE
+        addq.l  #4,%sp
+        move.l  V_TYPE(%a2),12(%sp)       | the key's list for the track type
+        pea     12(%sp)
+        pea     0x1a4(%a3)
+        jsr     TYPE_MAP
+        addq.l  #8,%sp
+        move.l  V_KEY(%a2),16(%sp)
+        pea     16(%sp)
+        move.l  %d0,-(%sp)
+        jsr     KEY_MAP
+        addq.l  #8,%sp
+        move.l  %d0,%a0                   | push_back(index), as stock's own
+        move.l  4(%a0),%a1
+        cmp.l   8(%a0),%a1
+        beq.s   2f
+        move.l  %d6,(%a1)+
+        move.l  %a1,4(%a0)
+        bra.s   3f
+2:      pea     8(%sp)
+        move.l  %a0,-(%sp)
+        jsr     VEC_PUSH
+        addq.l  #8,%sp
+3:      move.l  %a2,(%a5)+                | the view's entry and object
+        move.l  %d7,VIEW_MAX * 4 - 4(%a5)
+        addq.l  #1,%d6
+        bra.w   1b
+9:      sub.l   #VIEW_FIRST,%d6
+        move.l  %d6,view_n
+        lea     20(%sp),%sp
+        movem.l (%sp)+,%d2-%d7/%a2-%a5
+        move.l  8(%fp),%a0
+        jmp     VIEWS_RET
+
+| The page key's step (0x400c4202): `movel %a0@,%sp@-; movel %a2,%sp@-;
+| jsr 0x400bea38` (pc-relative), the view's selection. a0 is the next
+| entry of the key's list, a4 the list {begin, end, cap}, d0 the current
+| view's entry (or end). A core view whose shown answers 0 is stepped over,
+| wrapping at the end; when every entry is, the view stays. d2, a2, a3 and
+| a5 are stock's and kept.
+        .globl  core_cycle
+core_cycle:
+        tst.l   view_n
+        beq.s   8f
+        movem.l %d3-%d5,-(%sp)
+        move.l  %d0,%d3                   | the current entry
+        move.l  %a0,%d5                   | the candidate
+        move.l  4(%a4),%d4
+        sub.l   (%a4),%d4
+        asr.l   #2,%d4                    | tries: the list's length
+1:      move.l  %d5,%a0
+        move.l  (%a0),%d0
+        sub.l   #VIEW_FIRST,%d0
+        blt.s   7f                        | stock's: always shown
+        cmp.l   view_n,%d0
+        bge.s   7f
+        lsl.l   #2,%d0
+        lea     view_ent,%a1
+        move.l  (%a1,%d0.l),%a1
+        move.l  V_SHOWN(%a1),%d1
+        beq.s   7f
+        lea     view_obj,%a1
+        move.l  (%a1,%d0.l),-(%sp)
+        move.l  %d1,%a1
+        jsr     (%a1)
+        addq.l  #4,%sp
+        tst.l   %d0
+        bne.s   7f
+        addq.l  #4,%d5                    | hidden: the next, wrapping
+        cmp.l   4(%a4),%d5
+        bne.s   2f
+        move.l  (%a4),%d5
+2:      subq.l  #1,%d4
+        bgt.s   1b
+        move.l  %d3,%d5                   | none shown: stay
+        cmp.l   4(%a4),%d5
+        bne.s   7f
+        move.l  (%a4),%d5
+7:      move.l  %d5,%a0
+        movem.l (%sp)+,%d3-%d5
+8:      move.l  (%a0),-(%sp)
+        move.l  %a2,-(%sp)
+        jsr     SET_VIEW
+        jmp     CYCLE_RET
+
+        .bss
+        .align  2
+view_n:
+        .space  4
+view_ent:
+        .space  VIEW_MAX * 4              | each core view's entry
+view_obj:
+        .space  VIEW_MAX * 4              | and its object

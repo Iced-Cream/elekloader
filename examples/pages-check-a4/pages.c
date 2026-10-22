@@ -6,6 +6,10 @@
  *     "00" to "7F", where stock shows its own text;
  *   - delta: counts each turn and passes it on, so the knob still turns;
  *   - get: passes.
+ * and a page of its own, CHECK (page 48), on a synth track behind the AMP
+ * key after stock's AMP page, through core_pages and core_view_pages. Its
+ * knob A is AMP PAN again, the rest are empty. The AMP key steps over it
+ * until PAN has been turned once.
  * Each step PAN turns (a value step, not an encoder count) also lengthens a
  * 2-pixel bar along the bottom of the screen (mod 128), so a turn that
  * reaches core shows even where stock draws no text. (The top rows are the
@@ -42,6 +46,16 @@ static int pc_text(struct core_text *t)
 }
 
 const struct core_param pc_params = {PAN, PAN, 0, pc_delta, pc_text};
+
+const struct core_page pc_page = {48, "CHECK", {PAN}};
+
+static int32_t pc_shown(void *view)
+{
+    (void)view;
+    return pc_turns != 0;
+}
+
+const struct core_view_page pc_view = {CORE_TRACK_SYNTH, CORE_KEY_AMP, 48, pc_shown};
 
 void pc_draw(void *bmp, void *ctrl)
 {

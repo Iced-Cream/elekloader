@@ -143,8 +143,20 @@ def test_core_a4_sites():
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
-    # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page sites
-    assert len(mod['sites']) == 40
+    # views (0.2): the hook after the main screen's last view and the page
+    # key's step, each resuming after its 8 bytes; and the current view's
+    # range, 0..28, widened in the setter and the loader
+    for k, t in (('VIEWS_RET', 'core_views'), ('CYCLE_RET', 'core_cycle')):
+        x = [x for x in mod['sites'] if x['target'] == t][0]
+        assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + 8, t
+    clamps = [x for x in mod['sites'] if x['op'] == 'bytes']
+    assert len(clamps) == 5
+    for x in clamps:
+        assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
+        assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
+    # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
+    # sites, 2 view sites and 5 range bytes
+    assert len(mod['sites']) == 47
     assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 28
 
 

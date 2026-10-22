@@ -188,7 +188,9 @@ The sites core owns (do not patch them):
 - Analog Four MKII 1.56: 0x40001180, 0x40098898, 0x40098900, 0x400999f8,
   0x40099a40, 0x400d05d2, 0x401013c6, 0x401040f6, and 28 more for mod
   storage (mods/core-a4/README.md lists them); from core-a4 0.2, 0x400f6212,
-  0x40023d54, 0x400232e2 and 0x4009ea68 (the page routines).
+  0x40023d54, 0x400232e2 and 0x4009ea68 (the page routines), 0x400c2370
+  and 0x400c4202 (the views), and the bytes at 0x400add22, 0x400add28,
+  0x4000a758, 0x4000a774 and 0x4000a790 (the current view's range).
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -906,17 +908,34 @@ What differs from the Rytm:
 - A page's entry has ten knobs, A..J: `struct core_page` is
   `{page, name, ids[10]}`. Stock's pages are 0..47, so a mod's own page id
   is 48 or more.
-- There is no `core_view_pages`. Each A4 page is a view of its own (29 of
-  them, made by the main screen's constructor), and a page key steps
-  through a list of views for each track type. core-a4 0.2 adds no views,
-  so a `core_pages` entry answers page_info for a view a mod makes itself;
-  `core_params` works on any page, stock's included. Adding views behind
-  the page keys is planned for a later core-a4.
+- `core_view_pages` is the A4's own. Each A4 page is a view of its own (29
+  of them, indices 0..28, made by the main screen's constructor), and a
+  page key steps through a list of views for each track type. An entry is
+  `{type, key, page, shown}`: core makes a view for the page (a mod's own
+  from `core_pages`, or a stock one), gives it the next index from 29, and
+  appends it to that key's list for that track type, after stock's views
+  and in `order`:
+
+  ```c
+  const struct core_view_page my_view_page = {CORE_TRACK_SYNTH, CORE_KEY_AMP, 50, 0};
+  ```
+
+  The types are `CORE_TRACK_ALL` (MIX, PERF, ARP and NOTE), `SYNTH`, `FX`
+  and `CV`; the keys `CORE_KEY_PERF`, `ARP`, `NOTE`, `OSC1`, `OSC2` (not on
+  the FX track), `FILTERS`, `AMP`, `ENV`, `LFO` and `MIX`. `shown` works as
+  on the Rytm. A build holds 16 such views.
+- The current view is saved with the project, one index for each track
+  type. Core widens the range stock accepts for it, 0..28, to 0..44, so a
+  mod's view comes back after a power cycle or a project load; a project
+  saved on a view the build lacks opens on stock's (stock alone opens it on
+  PERFORMANCE).
 - Stock already keeps each track type's page when its view is shown again,
-  so there is nothing to keep.
+  and shows each view's own title, so there is nothing to fix there.
+- A stock page's entry can be answered too (a `core_pages` entry with a
+  stock id), to retitle a page a mod's view follows.
 
 `examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
-hex digits through `core_params`.
+hex digits through `core_params`, and a CHECK page behind the AMP key.
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 

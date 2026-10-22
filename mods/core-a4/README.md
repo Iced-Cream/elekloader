@@ -65,21 +65,33 @@ Rytm 1.74 routine's counterpart, found by its code and its callers:
 The redraw after a turn a mod takes is VIEW_INVALIDATE, 0x40061a58 (the
 Rytm's 0x40078580, the same code). No page site overlaps one of 0.1's.
 
-core-ar2 0.4's page-key lists (`core_view_pages`), its page-key step and
-its FX view fix have no counterpart here. The A4's main screen makes one
-view per page, 29 in all (0x400c1366), and each page key steps through a
-list of views for each track type (every track, synth, FX, CV); stock
-already keeps each track type's page when it is shown again. Adding views
-needs a hook where the main screen builds them (0x400c2370) and a wider
-range for the current view's index (0..28, at 0x400add1c). Whether that
-index is saved with the project or the settings is not yet traced, which
-decides whether a mod's view can be selected at power-on, so 0.2 leaves
-views out. It is saved: each track type's view index is a signed byte of
-the project settings (storage +8..+0xA, written by 0x4000aabe on project
-save, SysEx and the power-off state), and the loader (0x4000a6d2) turns
-any index outside 0..28 into 0, PERFORMANCE. So a project saved with a
-mod's view opens on PERFORMANCE without the mod, and a core that adds
-views must widen the loader's range as well as the setter's.
+core-ar2 0.4's page-key lists become views here. The A4's main screen
+makes one view per page, 29 in all (0x400c1366, indices 0..28), and each
+page key steps through a list of view indices for each track type (every
+track, synth, FX, CV), kept in maps at +0x1a4 of the main screen. Core
+hooks where the constructor has made its last view and not yet indexed
+them (0x400c2370, resuming at 0x400c2378): for each `core_view_pages`
+entry it makes a parameter page view as stock makes view 28 (operator
+new(0x1c4), the view's constructor 0x4002522c(obj, page, key), the shared
+pointer 0x40171460, the views map's slot 0x40171da8 at +0x1bc, 0x401713e0,
+0x40144764) and appends its index to the key's list (0x40172bae, 0x40171b9e,
+then stock's push_back or 0x40171558). Stock's loop after the hook gives
+every listed view its key, place and length. The page key's step
+(0x400c4202, resuming at 0x400c420a) skips a core view whose `shown`
+answers 0, then selects as stock does (0x400bea38).
+
+The current view is kept for each track type and saved: a signed byte
+each in the project settings (storage +8..+0xA, written by 0x4000aabe on
+project save and SysEx, and kept over power-off). The setter (0x400add08)
+keeps it to 0..28 and the loader (0x4000a6d2) takes anything above 28 to 0,
+PERFORMANCE. Core widens both to 0..44 (the moveqs at 0x400add22,
+0x400add28, 0x4000a758, 0x4000a774, 0x4000a790); an index with no view in
+a build falls back as stock's do (0x400c0470), and stock alone opens such a
+project on PERFORMANCE. Nothing else in the OS bounds a view index.
+
+The FX track already keeps its page when it is shown again, and each view
+shows its own title, so core-ar2's FX fix and title push have no
+counterpart.
 
 In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
 screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
