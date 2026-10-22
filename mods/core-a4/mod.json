@@ -85,7 +85,7 @@
   {"addr": "0x400add22", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"},
   {"addr": "0x400add28", "stock": "741c", "op": "bytes", "new": "742c", "kind": "code"},
   {"addr": "0x4000a758", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"},
-  {"addr": "0x4000a774", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"},
+  {"addr": "0x4000a774", "stock": "741c", "op": "bytes", "new": "742c", "kind": "code"},
   {"addr": "0x4000a790", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"}
  ],
  "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4},

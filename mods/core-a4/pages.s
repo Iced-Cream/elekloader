@@ -186,7 +186,8 @@ core_param_text:
         .globl  core_views
 core_views:
         lea     12(%sp),%sp
-        movem.l %d2-%d7/%a2-%a5,-(%sp)
+        lea     -40(%sp),%sp
+        movem.l %d2-%d7/%a2-%a5,(%sp)
         lea     -20(%sp),%sp
         move.l  8(%fp),%a3
         lea     core_view_pages,%a4
@@ -250,7 +251,8 @@ core_views:
 9:      sub.l   #VIEW_FIRST,%d6
         move.l  %d6,view_n
         lea     20(%sp),%sp
-        movem.l (%sp)+,%d2-%d7/%a2-%a5
+        movem.l (%sp),%d2-%d7/%a2-%a5
+        lea     40(%sp),%sp
         move.l  8(%fp),%a0
         jmp     VIEWS_RET
 
@@ -264,7 +266,8 @@ core_views:
 core_cycle:
         tst.l   view_n
         beq.s   8f
-        movem.l %d3-%d5,-(%sp)
+        lea     -12(%sp),%sp
+        movem.l %d3-%d5,(%sp)
         move.l  %d0,%d3                   | the current entry
         move.l  %a0,%d5                   | the candidate
         move.l  4(%a4),%d4
@@ -299,7 +302,8 @@ core_cycle:
         bne.s   7f
         move.l  (%a4),%d5
 7:      move.l  %d5,%a0
-        movem.l (%sp)+,%d3-%d5
+        movem.l (%sp),%d3-%d5
+        lea     12(%sp),%sp
 8:      move.l  (%a0),-(%sp)
         move.l  %a2,-(%sp)
         jsr     SET_VIEW

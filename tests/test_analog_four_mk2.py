@@ -122,10 +122,10 @@ def test_core_a4_sites():
     # the boot, draw, key and encoder sites call the routines core calls on
     for t, k in (('boot', 'VBR_FN'), ('core_draw', 'DRAWALL'), ('core_key', 'KEYDISP'),
                  ('core_enc', 'ENCDISP')):
-        x = [x for x in mod['sites'] if x['target'] == t][0]
+        x = [x for x in mod['sites'] if x.get('target') == t][0]
         assert x['stock'] == '4eb9' + d[k][2:].lower().rjust(8, '0'), t
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
-    x = [x for x in mod['sites'] if x['target'] == 'core_settings'][0]
+    x = [x for x in mod['sites'] if x.get('target') == 'core_settings'][0]
     assert int(d['SETTINGS_RET'], 16) == int(x['addr'], 16) + 6
     # parameter pages (0.2): each page stub resumes after the 6 or 8 bytes
     # its site displaced; page_info's moveq is the last stock page (47), and
@@ -133,9 +133,9 @@ def test_core_a4_sites():
     # lea and moveml
     for k, t in (('PAGE_INFO_RET', 'core_page_info'), ('GET_RET', 'core_param_get'),
                  ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
-        x = [x for x in mod['sites'] if x['target'] == t][0]
+        x = [x for x in mod['sites'] if x.get('target') == t][0]
         assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, t
-    pages = {x['target']: x['stock'] for x in mod['sites'] if x['target'].startswith('core_pa')}
+    pages = {x['target']: x['stock'] for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
     assert pages['core_page_info'] == '722f202f0004'
     assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
     assert pages['core_param_text'] == '2f032f02242f0014'
@@ -147,7 +147,7 @@ def test_core_a4_sites():
     # key's step, each resuming after its 8 bytes; and the current view's
     # range, 0..28, widened in the setter and the loader
     for k, t in (('VIEWS_RET', 'core_views'), ('CYCLE_RET', 'core_cycle')):
-        x = [x for x in mod['sites'] if x['target'] == t][0]
+        x = [x for x in mod['sites'] if x.get('target') == t][0]
         assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + 8, t
     clamps = [x for x in mod['sites'] if x['op'] == 'bytes']
     assert len(clamps) == 5
@@ -157,7 +157,7 @@ def test_core_a4_sites():
     # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes
     assert len(mod['sites']) == 47
-    assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 28
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
 
 
 def test_core_a4_store_bodies():
