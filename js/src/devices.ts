@@ -167,6 +167,7 @@ export const ANALOG_RYTM_MK2: Device = {
   ddr: [0x47be0000, 0x47c00000],
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
+  slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0
 }
 
 export const ANALOG_FOUR_MK2: Device = {

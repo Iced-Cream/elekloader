@@ -501,6 +501,27 @@ def test_a_parameter_slot_claims_its_sound_slot():
     assert t.implied_names(b'') == []
 
 
+
+def test_a_machine_claims_its_slot():
+    """On the Analog Rytm MKII a mod that adds a machine (core-ar2 0.5's core_machines) claims
+    the machine slot its descriptor names at +0, as machine:<n>, so two mods that take one
+    slot never link together. Slots are 0..52."""
+    ar = [d for d in devices.devices() if d.key == 'analog-rytm-mk2'][0]
+    r = ar.releases['1.74']
+    image = bytes(r.main_len)
+
+    def mod(i, slot):
+        return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(ar, r),
+                          'sections': {'.run': {'align': 4, 'parts': [['hex', '%08x' % slot + '00' * 92]]}},
+                          'symbols': {'m': ['.run', 0]},
+                          'contribute': [{'to': 'core_machines', 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:m', 0]]}]}, i)
+    a, b = mod('a', 36), mod('b', 36)
+    assert a.implied_names(image) == ['machine:36']
+    assert 'a 1 and b 1 both claim machine:36' in link.check([a, b], image)
+    assert not [p for p in link.check([mod('c', 36), mod('d', 37)], image) if 'claim' in p]
+    assert mod('e', 53).implied_names(image) == []
+
 def test_parts_stay_in_the_image():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     ok = elemod.parse_parts([['hex', '00ff'], ['stock', '0x40000400', 8]], 't', d, r)
