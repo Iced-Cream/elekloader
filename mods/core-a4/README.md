@@ -109,6 +109,18 @@ view's page id only through page_info and to pick the parameter set
 (0x400a647c, which singles out pages 1, 3, 4, 5 and 47), so mod pages from
 48 are safe.
 
+On a unit (OS 1.56, 23 Oct 2026) [hw], PA56 (core 0.2 with pages-check-a4
+and analoghealth's remote keys) passed the same plan as in the emulator,
+every screen checked identical to the emulator's: every synth, FX and CV
+page as on stock; AMP staying on AMP until PAN turned; PAN in hex and the
+bar growing; CHECK with knob A as PAN and the others hatched; AMP, CHECK,
+AMP. A project saved on CHECK opened on CHECK after loading another
+project and loading it back, and after a power cycle (with the bar
+cleared, as it is not saved); stock 1.56 opened it on PERFORMANCE. On fast
+turns the bar grows once per accelerated turn update, not once per value
+step; on slow turns they match. The SysEx settings round trip and core
+alone (A402) were not run on the unit.
+
 ## Mod storage
 
 Mods declare fields in their mod.json (`storage`) and read and write them
@@ -230,7 +242,10 @@ synth tracks and the effects sounded the same by ear as before. With
 mods' area after the mods' data or in the two unused gaps, through a session
 of normal use (Overbridge included) and after a power cycle (21 Oct 2026).
 Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
-the unit back to stock 1.56 (21 Oct 2026).
+the unit back to stock 1.56 (21 Oct 2026). With core 0.2 and
+[pages-check-a4](../../examples/pages-check-a4) (PA56, 23 Oct 2026), the
+parameter routines and the views passed every check ("Parameter pages
+(0.2)" above).
 
 In an emulator (rytm-emu, with a local change that accepts modified A4
 images; 20 Oct 2026):

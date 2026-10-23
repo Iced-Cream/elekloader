@@ -935,7 +935,8 @@ What differs from the Rytm:
   stock id), to retitle a page a mod's view follows.
 
 `examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
-hex digits through `core_params`, and a CHECK page behind the AMP key.
+hex digits through `core_params`, and a CHECK page behind the AMP key. It
+was checked in rytm-emu's A4 build and on a unit (23 Oct 2026).
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 
