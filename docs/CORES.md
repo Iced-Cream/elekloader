@@ -37,7 +37,7 @@ There is one core file per device and OS:
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop; 1.74 only |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.5.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
-| Analog Four MKII | 1.56 | `core-a4-0.2.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Four MKII | 1.56 | `core-a4-0.3.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.4.elemod` | not released yet: the frame's end and MIDI out (`ev_frame_end`, `ev_midi_out`, `ev_midi_out_rt`) |
@@ -174,7 +174,8 @@ core.
   `core_params` entries, adds the views mods list in `core_view_pages`
   behind the page keys (each A4 page is a view of its own), and
   `core_audio_load` ("Parameter pages (core-a4 0.2, Analog Four MKII)" in
-  ADAPTING.md).
+  ADAPTING.md). From 0.3, core-ar2 0.6's `core_page_fns`, so a page's knobs
+  can follow the selected sound.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods

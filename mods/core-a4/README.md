@@ -48,7 +48,7 @@ What differs from the Rytm at these sites:
   digital path (effects and the inputs). Another vector 191 handler
   (0x401162a4) exists, as on the Rytm; core hooks only the main one.
 
-## Parameter pages (0.2)
+## Parameter pages (0.2, 0.3)
 
 From 0.2, `pages.s` is core-ar2 0.4's parameter routines at the A4's
 (docs/ADAPTING.md, "Parameter pages (core-a4 0.2, Analog Four MKII)"), and
@@ -92,6 +92,24 @@ project on PERFORMANCE. Nothing else in the OS bounds a view index.
 The FX track already keeps its page when it is shown again, and each view
 shows its own title, so core-ar2's FX fix and title push have no
 counterpart.
+
+From 0.3 page_info asks `core_page_fns` first, as core-ar2 0.6 does:
+`{page, info}`, where `info(page)` returns the `core_pages` entry to
+answer, or 0 to pass on to `core_pages` and stock. A page whose knobs
+change with the selected sound uses it. Every reader of a knob asks
+page_info afresh (traced in the 1.56 image): the view's knob lookup
+(0x400231be, slot 41 of the page view's vtable 0x4018d650) reads the id
+from page_info on each call, and the knobs' draw (0x40024ff6), a knob's
+touch key (0x400261da) and an encoder turn (0x4002598c) each call that
+lookup, so the knobs follow at the next redraw. The view's constructor
+(0x4002522c) copies only the page's name, once, when core makes the view
+at boot, so the name stays the first entry's. Additive: no new sites, and
+a build with no entries in it behaves as 0.2.
+
+pages-check-a4 0.2 (for core 0.3) answers CHECK through `core_page_fns`,
+with knob B (AMP PAN again) shown after an odd number of PAN's steps.
+Core 0.3 and pages-check-a4 0.2 are not yet checked in the emulator or on
+a unit.
 
 In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
 screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
@@ -297,8 +315,8 @@ images; 20 Oct 2026):
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.lint examples/store-check-a4/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.2.elemod
+    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.3.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.2.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.3.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```

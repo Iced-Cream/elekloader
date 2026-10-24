@@ -192,7 +192,7 @@ come after SYSTEM; the render events cover the audio interrupt's digital
 path (the effects and the inputs), since the voices are analog. core-a4
 exports no firmware locations either. From 0.2 it has core-ar2 0.4's
 parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
-Analog Four MKII)"). `examples/hello-marker-a4`, `hooks-check-a4`,
+Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4`,
 `store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
 
 The sites core owns (do not patch them):
@@ -1366,10 +1366,20 @@ What differs from the Rytm:
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a
   stock id), to retitle a page a mod's view follows.
+- From core-a4 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
+  knobs follow the sound", above): `struct core_page_fn` is `{page, info}`,
+  and `info(page)` returns the `core_pages` entry to answer, or 0 to pass.
+  The knobs' draw, a knob's touch and a turn each look the knob up through
+  page_info afresh, so the knobs follow at the next redraw. A page's view
+  reads the name once, when core makes it at boot, so every entry `info`
+  returns should carry the same name.
 
 `examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
-hex digits through `core_params`, and a CHECK page behind the AMP key. It
-was checked in rytm-emu's A4 build and on a unit (23 Oct 2026).
+hex digits through `core_params`, and a CHECK page behind the AMP key. Its
+0.1, for core-a4 0.2, was checked in rytm-emu's A4 build and on a unit (23
+Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
+its knob B, AMP PAN again, is shown after an odd number of PAN's steps and
+empty after an even number. Not yet checked in the emulator or on a unit.
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
