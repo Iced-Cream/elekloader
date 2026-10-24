@@ -1116,9 +1116,15 @@ the stock save of that sound or kit. Pattern-track and pattern fields go
 whenever stock saves any part of that pattern (from core-ar2 0.3: an edited
 track, the pattern's settings, its parameter locks; with 0.2, so on 1.73,
 only the whole pattern, at SAVE PROJECT or into a project file), and then the whole
-pattern's. A field a mod sets from its own page with no stock edit is
-kept by the next of those saves, as stock's own data is; until then a power
-cycle loses it, as it loses an unsaved stock edit.
+pattern's. From core-ar2 0.7 `core_store_set` also writes the field
+straight into the item's stored copy (the current kit and its sounds, the
+saved kits and theirs, the pool, the global slots, and the working
+pattern's and the 128 patterns' tracks and settings), as stock writes each
+parameter edit of the current kit: a field survives a power cycle without a
+save, and after SAVE PROJECT AS core copies what the save wrote of its own
+bytes into the stored project. With 0.6 and older a field a mod set from
+its own page with no stock edit waited for the next of those saves, and a
+power cycle before it lost the field.
 
 **The lockfile.** Where each field sits is decided once and then kept, in a
 JSON file: `elekloader.patch --lockfile FILE` (default:

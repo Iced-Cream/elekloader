@@ -5,7 +5,8 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`. On its own it changes nothing the unit does.
+with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, and from 0.7 with
+write-through storage (Write-through, below). On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -62,7 +63,7 @@ What differs from the Digitakt mk1 at these sites:
 - **No machines.** The Digitakt's SRC machine slots (`machines.s`) and its
   firmware exports (`fw.s`) are not ported.
 
-## Mod storage (0.2, 0.3)
+## Mod storage (0.2, 0.3, 0.7)
 
 Mods declare fields in their mod.json (`storage`) and read and write them
 with `core_store_get` and `core_store_set`, which mask interrupts while they
@@ -110,9 +111,41 @@ pattern was saved (SAVE PROJECT, a project file): a field a mod set was lost
 at a power cycle. From 0.3 each of those saves also writes the pattern's
 track and pattern fields into the store. No stock routine loads one of
 those parts by itself: a pattern comes back whole, through the pattern
-load. A field a mod sets from its own page reaches the stored project at
-the next stock save of that pattern's track, settings or locks, or the next
-whole save, as the stock data does.
+load. Up to 0.6 a field a mod set from its own page reached the stored
+project only at the next stock save of that pattern's track, settings or
+locks, or the next whole save.
+
+**Write-through (0.7).** Stock writes each parameter edit of the current
+kit both into the live kit and into the stored project's copy of it (the
+working kit, stored +0x19c9c5, the copy of the kit whose index is at
++0x19d3f7), which is what a power cycle brings back. Up to 0.6 a field set
+with `core_store_set` waited for a stock save of its part, and was lost at a
+power cycle before one. From 0.7 `core_store_set` writes the item's bytes
+straight into its stored copy, with the item's layout ID and generation
+where it carries its own:
+
+| item (live project 0x407c89cb +) | stored copy (stored project +) |
+|---|---|
+| the edited current kit (+0xa8cf18 + 2531 k), and its 12 sounds (+42 + 152 t) | the working kit (+0x19c9c5), its sounds at +46 + 162 t |
+| a saved kit (+0xadc098 + 2531 k), and its sounds | kit k of the 128 (+0x19d3fb + 2610 k) |
+| a pool sound (+0xb4b27c + 152 i) | pool sound i (+0x1f4397 + 162 i) |
+| a global slot | the stored slot (+0x1f9dee + 80 g, +0x4b) |
+| a track or the pattern of the working pattern (+24) or of pattern n (+85784 + 85760 n) | their slots in the tagged store (index 0, or n + 1) |
+
+An edited kit that is not the current one, and items outside the live
+project, reach the stored project by stock's saves, as their stock data
+does: a power cycle brings an edited kit back from its saved copy in
+stock too.
+
+**SAVE PROJECT AS (0.7).** SAVE PROJECT AS writes only the project's name
+into the stored project (the first of its two project saves, 0x400ae310,
+flags 0x40) and then the whole live project into the file's buffer
+(0x400b0870). After a save of the live project into another image, core
+copies its own bytes from that image into the stored project, by the parts
+the save wrote (flags 2 the global slots, 4 the kits and the working kit
+when the image's index is the stored project's, 8 the tagged store, 0x20
+the pool), so a power cycle straight after the save keeps the mods'
+fields. The buffer save at 0x40034d86 takes the same path.
 
 The 32 sites, by `jmp` unless marked, each with its displaced instructions
 in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
@@ -403,6 +436,15 @@ stock bytes, and that each covers whole instructions.
   power cycle and RELOAD. On the same build without the example (M5N4) that
   kit loaded with BD on DISABLE and the rest as saved.
 
+- **Write-through and SAVE PROJECT AS (0.7)**, in an emulator (OS 1.74,
+  24 Oct 2026), with store-check 1.1 on a fresh card: STORE CHECK, then a
+  power-off without a save and a cold boot: every column read back empty
+  (core 0.6 lost the pattern-track, pattern, kit-sound, pool-sound, kit and
+  global markers there). The SAVE PROJECT AS copy was checked by itself on
+  a build with the write-through call taken out: STORE CHECK, SAVE PROJECT
+  AS, a power-off and a cold boot read back empty, and the same build
+  powered off without the save lost those six columns. Not yet on a unit.
+
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
   for LP1 and HP1 and without FRQ and RES for TYP OFF, the empty knobs take
@@ -412,8 +454,8 @@ stock bytes, and that each covers whole instructions.
 
 ## Building
 
-Core 0.6 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.6.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.7 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.7.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -422,8 +464,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.6.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.7.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.6.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.7.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```
