@@ -49,6 +49,22 @@ The lockfile is JSON:
      "fields": [{"mod", "sym", "scope", "offset", "bits"}],
      "freed": [{"mod", "sym", "scope", "offset", "bits"}]}
 
+Lockable parameters (core-ar2 0.8). A sound-scope field declared with
+`"lock": true` also gets a lock code, 42..127, the number stock-style lock
+rows, the LFO destination list and NRPN MSB 4 know the parameter by. Codes
+follow the fields: a field keeps its code while it keeps its place; a freed
+field's code is kept for it (and comes back with it) until the never-used
+codes run out, and only then given to another field; at most 86 fields can
+be lockable. The lockfile keeps them in three more keys, written only once a
+build has a lockable field (a lockfile without them has the same layout ID
+as before):
+
+     "codes": [{"mod", "sym", "code"}], "freed_codes": [{"mod", "sym", "code"}],
+     "next_code": 42
+
+The core reads them from the table core_lock_codes: {field descriptor, code}
+for each lockable field.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -66,6 +82,9 @@ MAX_ANCESTORS = 15
 MAX_BITS = 32
 GEN_SYMS = ('__store_gen', '__store_gen2')
 IDS_TABLE = 'core_store_ids'
+CODES_TABLE = 'core_lock_codes'
+FIRST_CODE, LAST_CODE = 42, 127
+LOCK_SCOPES = ('sound',)
 
 # Per device: each scope's bits in its live home, and the tagged store.
 DEVICES = {
@@ -139,6 +158,12 @@ def _idval(s, what):
     return v
 
 
+def parse_locks(m):
+    """A mod document's "storage" -> the syms of its lockable fields, in order.
+    parse_decls checks the rest."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('lock') is True]
+
+
 def parse_decls(m):
     """A mod document's "storage" -> [(sym, scope, bits)]. Raises ModError."""
     out, seen = [], set()
@@ -146,8 +171,13 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits'}:
-            raise ModError('a storage field is {"sym", "scope", "bits"}')
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock'}:
+            raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
+        if 'lock' in f and not isinstance(f['lock'], bool):
+            raise ModError('storage field %r: "lock" is true or false' % (f.get('sym'),))
+        if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
+            raise ModError('storage field %r: only %s fields can be lockable'
+                           % (f.get('sym'), ' and '.join(LOCK_SCOPES)))
         sym, scope, bits = f.get('sym'), f.get('scope'), f.get('bits')
         if not isinstance(sym, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', sym):
             raise ModError('storage field %r: "sym" is a C name' % (sym,))
@@ -176,6 +206,9 @@ def layout_id(lock):
     for k in ('fields', 'freed'):
         what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']]
                      for f in sorted(lock[k], key=_field_key)])
+    if lock.get('codes') or lock.get('freed_codes'):   # a lockfile with no codes keeps its ID
+        what.append([lock['next_code']] + [[c['code'], c['mod'], c['sym']] for k in ('codes', 'freed_codes')
+                                           for c in sorted(lock[k], key=lambda c: c['code'])])
     return int(hashlib.sha256(json.dumps(what).encode('ascii')).hexdigest()[:8], 16) or 1
 
 
@@ -240,6 +273,24 @@ def check_lock(lock, dev_key):
             if k == 'fields' and not 0 <= f['offset'] <= lock['next'][f['scope']] - f['bits']:
                 raise ModError('lockfile: field %s of %s lies past its scope\'s used bits'
                                % (f['sym'], f['mod']))
+    if any(k in lock for k in ('codes', 'freed_codes', 'next_code')):
+        nc = lock.get('next_code')
+        if not _whole(nc) or not FIRST_CODE <= nc <= LAST_CODE + 1:
+            raise ModError('lockfile: "next_code" %r' % (nc,))
+        seen = set()
+        for k in ('codes', 'freed_codes'):
+            cs = lock.get(k)
+            if not isinstance(cs, list):
+                raise ModError('lockfile: "%s" is a list' % k)
+            for c in cs:
+                if not isinstance(c, dict) or set(c) != {'mod', 'sym', 'code'} \
+                        or not isinstance(c['mod'], str) or not isinstance(c['sym'], str) \
+                        or not _whole(c['code']) or not FIRST_CODE <= c['code'] < nc or c['code'] in seen:
+                    raise ModError('lockfile: a bad entry in "%s"' % k)
+                seen.add(c['code'])
+        placed = {(f['mod'], f['sym']) for f in lock['fields'] if f['scope'] in LOCK_SCOPES}
+        if any((c['mod'], c['sym']) not in placed for c in lock['codes']):
+            raise ModError('lockfile: a code for a field that is not a placed sound field')
 
 
 def _whole(v):
@@ -250,11 +301,11 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key, core=None):
+def allocate(lock, decls, dev_key, core=None, locks=()):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
     scope, bits)]; core: the build's core's version (None: the newest core's
-    room). -> (the new lockfile, [notes]). The lockfile given is not
-    changed."""
+    room); locks: [(mod id, sym)] of the lockable fields. -> (the new
+    lockfile, [notes]). The lockfile given is not changed."""
     notes = []
     if lock is None:
         lock = fresh(dev_key)
@@ -375,11 +426,13 @@ def allocate(lock, decls, dev_key, core=None):
             notes.append('%s %s: %d bits of %s storage at bit %d'
                          % (f['mod'], f['sym'], f['bits'], f['scope'], f['offset']))
     lock['fields'] = sorted(fields, key=lambda f: (SCOPE_NUM[f['scope']], f['offset']))
+    recoded = _codes(lock, set(locks), {(f['mod'], f['sym']) for f in kept},
+                     {(f['mod'], f['sym']) for f in added if (f['mod'], f['sym']) in back}, notes)
     if new:
         lock['id'] = _idstr(layout_id(lock))
         notes.insert(0, 'a new lockfile, layout ID %s: projects and sounds saved by builds with '
                         'other layouts load their mod data at defaults' % lock['id'])
-    elif gone or added or repacked:     # a repack alone (a field past an older core's room) moves fields too
+    elif gone or added or repacked or recoded:  # a repack alone (a field past an older core's room) moves fields too
         old = lock['id']
         lock['id'] = _idstr(layout_id(lock))
         seen, anc = {_idval(lock['id'], 'id')}, []
@@ -393,6 +446,53 @@ def allocate(lock, decls, dev_key, core=None):
     return lock, notes
 
 
+def _codes(lock, want, kept, back, notes):
+    """Give each lockable field (mod, sym) in want its lock code, in lock
+    (changed in place). kept: the fields that kept their place; back: freed
+    fields that came back to theirs. -> whether any code changed."""
+    had = lock.get('codes', []), lock.get('freed_codes', [])
+    if not want and not had[0] and not had[1]:
+        return False                    # a lockfile that never had a lockable field stays as it was
+    codes, freed = [], [dict(c) for c in had[1]]
+    nxt = lock.get('next_code', FIRST_CODE)
+    changed = False
+    for c in had[0]:
+        k = (c['mod'], c['sym'])
+        if k in want and k in kept:
+            codes.append(dict(c))
+        else:
+            freed.append(dict(c))
+            changed = True
+            notes.append('%s %s: lock code %d %s' % (c['mod'], c['sym'], c['code'],
+                         'kept for it while it is out of the build' if k not in want or k not in kept
+                         else 'freed'))
+    have = {(c['mod'], c['sym']) for c in codes}
+    for k in sorted(want - have):
+        same = [c for c in freed if (c['mod'], c['sym']) == k]
+        if same and k in back:          # back in its old place: its old code, with its rows
+            c = same[-1]
+            freed.remove(c)
+            notes.append('%s %s: back with lock code %d' % (k[0], k[1], c['code']))
+        elif nxt <= LAST_CODE:
+            c = {'mod': k[0], 'sym': k[1], 'code': nxt}
+            nxt += 1
+            notes.append('%s %s: lock code %d' % (k[0], k[1], c['code']))
+        elif freed:                     # the never-used codes are gone: the oldest freed one
+            old = freed.pop(0)
+            c = {'mod': k[0], 'sym': k[1], 'code': old['code']}
+            notes.append('%s %s: lock code %d (was %s %s\'s)' % (k[0], k[1], c['code'], old['mod'], old['sym']))
+        else:
+            raise ModError('the mods have more than %d lockable parameters' % (LAST_CODE - FIRST_CODE + 1))
+        for d in [d for d in freed if (d['mod'], d['sym']) == k]:
+            freed.remove(d)             # a field has one code
+        codes.append(c)
+        changed = True
+    lock['codes'] = sorted(codes, key=lambda c: c['code'])
+    lock['freed_codes'] = freed
+    lock['next_code'] = nxt
+    return changed
+
+
 def symbols(lock, dev_key):
     """-> ({name: value}, [table entries as bytes]) for the linker."""
     g, sp = lock['generation'], lock['split']
@@ -404,6 +504,15 @@ def symbols(lock, dev_key):
         out[f['sym']] = SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
     ids = [_idval(lock['id'], 'id')] + [_idval(a, 'ancestor') for a in lock['ancestors']]
     return out, [i.to_bytes(4, 'big') for i in ids]
+
+
+def code_entries(lock):
+    """-> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes
+    each, by code."""
+    desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
+            for f in lock['fields']}
+    return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big') + c['code'].to_bytes(4, 'big')
+            for c in lock.get('codes', [])]
 
 
 def dumps(lock):

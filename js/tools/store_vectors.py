@@ -81,6 +81,17 @@ LATE = {'core 0.3 then 0.2': ([F('a', 's', 'sound', 24), F('b', 's2', 'sound', 8
 # same mods built with core 0.2, so the repack alone changes the layout (and its ID)
 LATE_STEPS = {'core 0.3 then 0.2, a repack alone': ([[F('a', 's', 'sound', 24)], [F('b', 's2', 'sound', 8)]],
                                                     '0.2', [F('b', 's2', 'sound', 8)])}
+# runs with lockable fields (core-ar2 0.8): each step is (decls, [[mod, sym], ...] lockable)
+SL = [F('a', 'x', 'sound', 7), F('a', 'y', 'sound', 8), F('b', 'z', 'sound', 3)]
+LOCK_RUNS = {
+    'codes: give, keep, free, back': [(SL, [['a', 'x'], ['b', 'z']]), (SL, [['a', 'x'], ['b', 'z']]),
+                                      (SL[:1], [['a', 'x']]), (SL, [['a', 'x'], ['b', 'z']]),
+                                      (SL, [['a', 'x'], ['a', 'y'], ['b', 'z']]), (SL, [['b', 'z']])],
+    'codes: none keeps the ID': [([F('a', 'x', 'kit', 4)], []), ([F('a', 'x', 'kit', 4)], [])],
+    'codes: resized': [(SL, [['a', 'x']]), ([F('a', 'x', 'sound', 9)], [['a', 'x']])],
+    'codes: run out': [([F('m', 'f%02d' % i, 'sound', 1) for i in range(50)],
+                        [['m', 'f%02d' % i] for i in range(50)])],
+}
 LOCKS = {
     'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 2},
     'device': dict(store.fresh(DEV), device='digitakt-mk1'),
@@ -92,6 +103,11 @@ LOCKS = {
     'bad field': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0}]),
     'field past': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0,
                                                   'bits': 4}]),
+    'next_code': dict(store.fresh(DEV), codes=[], freed_codes=[], next_code=41),
+    'code past next': dict(store.fresh(DEV), codes=[], freed_codes=[{'mod': 'a', 'sym': 'x', 'code': 50}],
+                           next_code=43),
+    'code for no field': dict(store.fresh(DEV), codes=[{'mod': 'a', 'sym': 'x', 'code': 42}], freed_codes=[],
+                              next_code=43),
     # an older lockfile, with an ID not from a hash: kept while nothing changes
     'random id': dict(store.fresh(DEV), id='0x5a17c0de', ancestors=['0x00000007']),
 }
@@ -104,12 +120,15 @@ DECLS = {
     'scope': {'storage': [{'sym': 'a', 'scope': 'song', 'bits': 1}]},
     'bits': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 33}]},
     'bits bool': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': True}]},
+    'lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True}]},
+    'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True}]},
+    'lock type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': 1}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
 }
 
 
 def main():
-    out = {'runs': {}, 'locks': {}, 'decls': {}}
+    out = {'runs': {}, 'lock_runs': {}, 'locks': {}, 'decls': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -135,6 +154,16 @@ def main():
         for first in firsts:
             lock, _ = store.allocate(lock, [tuple(d) for d in first], DEV, '0.3')
         out['runs'][name] = {'start': lock, 'steps': [then], 'core': core, 'results': run(lock, [then], core)}
+    for name, steps in LOCK_RUNS.items():
+        lock, res = None, []
+        for decls, locks in steps:
+            try:
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, None, [tuple(k) for k in locks])
+                res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
+                            'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
+            except ModError as e:
+                res.append({'error': str(e)})
+        out['lock_runs'][name] = {'steps': [[d, k] for d, k in steps], 'results': res}
     for name, lock in LOCKS.items():
         try:
             same, _ = store.allocate(lock, [], DEV)
@@ -143,7 +172,7 @@ def main():
             out['locks'][name] = {'lock': lock, 'error': str(e)}
     for name, doc in DECLS.items():
         try:
-            out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc)}
+            out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

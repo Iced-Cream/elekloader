@@ -1329,6 +1329,70 @@ pages; rytm2_mods and the AE ports use 20 for a key's first added page and
 one value's text further in) still work: core resumes each routine where
 its own jump ends.
 
+### Lockable parameters (core-ar2 0.8, Analog Rytm MKII)
+
+The first part of core's lock service: a mod parameter kept in a sound
+field can be an LFO destination, and RANDOMIZE PAGE and RELOAD PAGE reach
+its page knob. (Parameter locks, scenes and MIDI build on the same codes
+later.)
+
+A sound-scope storage field declared with `"lock": true` gets a **lock
+code**, 42..127, from the build's lockfile, the number core knows the
+parameter by. Only sound fields can be lockable. Codes follow their fields
+as bits do: a field keeps its code while it keeps its place; a field that
+leaves the build keeps its code reserved and gets it back when it returns
+to its old place; a resized field gets a new code. Once the never-used
+codes run out (86 of them; the 56-bit sound scope runs out first), the
+oldest reserved code is given to a new field. The lockfile keeps them in
+`codes`, `freed_codes` and `next_code`, written only once a build has a
+lockable field: a lockfile without them keeps its layout ID. The linker
+writes `{field descriptor, code}` for each into core's table
+`core_lock_codes`, and refuses lockable fields when the core has no such
+table.
+
+The mod registers each one in `core_lock_params`
+(`analog-rytm-mk2/lock.h`):
+
+```c
+STORE_FIELD(my_depth);
+const struct core_lock_param my_depth_param =
+    {STORE(my_depth), 449, 0, 127, "DEP", "MY DEPTH"};
+```
+
+| member | |
+|---|---|
+| `field` | the lockable field |
+| `id` | the page knob's id (`core_params`), or 0 |
+| `min`, `max` | the values the field takes |
+| `short_name` | the DST value's text, up to 4 characters |
+| `name` | the destination menu's text, up to 32 |
+
+What core does with it:
+
+- **LFO destination.** Each sound's DST menu lists the mod parameters after
+  stock's, as `MOD:` and the name; the DST value shows the short name. The
+  LFO's DST byte holds the code. Stock's LFO block skips a slot above 41;
+  there core keeps the track's code and the offset stock would have added,
+  and `core_lfo_offset(track, field)` gives it to the mod: 8.8 steps of a
+  stock 0..127 knob (one step is 256), 0 when the LFO points elsewhere. The
+  mod scales it to its range and adds it where it uses the value. It is
+  updated in the audio interrupt, before `ev_render_out`. RANDOMIZE on DST,
+  its step and its validity check follow the list.
+- **RANDOMIZE PAGE** gives a knob whose id is a parameter's `id` a value in
+  `min..max`, written with `core_store_set` into the knob's sound.
+- **RELOAD PAGE** takes it back from the same sound in the current kit's
+  saved copy.
+
+Both leave the knob to stock when the id is the sound's own stock
+parameter (its slot is a stock one and it is common or the sound's
+machine's): a page knob borrowing another machine's id is core's only on
+the machines that reject it.
+
+Limits: every lockable parameter is listed for every sound, whatever its
+machine. The value a randomize or reload writes reaches the mod through
+the field, not through its `core_params` delta, so a mod that keeps a copy
+elsewhere reads the field again.
+
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 
 core-a4 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's

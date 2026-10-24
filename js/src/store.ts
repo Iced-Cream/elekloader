@@ -7,7 +7,9 @@
 // 28..31, its width in bits 22..27 and its bit offset in bits 0..21. The lockfile keeps every field where it was from
 // one build to the next; a freed field that comes back takes its old place, any other new or resized field takes bits
 // no field has used, a scope that runs out is repacked under a new generation, and any change gives the lockfile its
-// new layout's ID (a hash of the layout) with the old one kept as an ancestor. Nothing here is random.
+// new layout's ID (a hash of the layout) with the old one kept as an ancestor. A sound field declared with
+// "lock": true also gets a lock code, 42..127 (core-ar2 0.8), kept in "codes", "freed_codes" and "next_code", keys a
+// lockfile has only once a build had a lockable field. Nothing here is random.
 import { sha } from './bytes.ts'
 import { ModError, cmpVersions, int } from './elemod.ts'
 import { dumps as pyDumps, repr, str } from './py.ts'
@@ -20,13 +22,18 @@ const MAX_ANCESTORS = 15
 const MAX_BITS = 32
 export const GEN_SYMS = ['__store_gen', '__store_gen2']
 export const IDS_TABLE = 'core_store_ids'
+export const CODES_TABLE = 'core_lock_codes'
+const FIRST_CODE = 42, LAST_CODE = 127
+const LOCK_SCOPES = ['sound']
 
 export type Field = { mod: string; sym: string; scope: string; offset: number; bits: number }
 export type Lock = {
   elekloader_store: number; device: string; id: string; ancestors: string[]
   split: { track: number; pattern: number }; generation: Record<string, number>; next: Record<string, number>
   fields: Field[]; freed: Field[]
+  codes?: Code[]; freed_codes?: Code[]; next_code?: number
 }
+export type Code = { mod: string; sym: string; code: number }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
 
 type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number } }
@@ -90,6 +97,12 @@ function idVal(s: unknown, what: string): number {
   return v
 }
 
+/** A mod document's "storage" -> the syms of its lockable fields, in order. parseDecls checks the rest. */
+export function parseLocks(m: Record<string, any>): string[] {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return st.filter((f: unknown) => isDict(f) && f.lock === true).map((f: Record<string, any>) => f.sym)
+}
+
 /** A mod document's "storage" -> [sym, scope, bits][]. */
 export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const out: [string, string, number][] = []
@@ -97,8 +110,12 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const st = Object.hasOwn(m, 'storage') ? m.storage : []
   if (!Array.isArray(st)) throw new ModError('"storage" is a list of fields')
   for (const f of st) {
-    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits'].includes(k)))
-      throw new ModError('a storage field is {"sym", "scope", "bits"}')
+    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock'].includes(k)))
+      throw new ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
+    if (Object.hasOwn(f, 'lock') && typeof f.lock !== 'boolean')
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: "lock" is true or false`)
+    if (f.lock && !LOCK_SCOPES.includes(f.scope))
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only ${LOCK_SCOPES.join(' and ')} fields can be lockable`)
     const sym = Object.hasOwn(f, 'sym') ? f.sym : null
     const scope = Object.hasOwn(f, 'scope') ? f.scope : null
     const bits = Object.hasOwn(f, 'bits') ? f.bits : null
@@ -127,6 +144,9 @@ export function layoutId(lock: Lock): number {
     SCOPES.map(s => lock.generation[s]), SCOPES.map(s => lock.next[s])]
   for (const k of ['fields', 'freed'] as const)
     what.push([...lock[k]].sort(byField).map(f => [f.scope, f.offset, f.bits, f.mod, f.sym]))
+  if (lock.codes?.length || lock.freed_codes?.length)   // a lockfile with no codes keeps its ID
+    what.push([lock.next_code, ...(['codes', 'freed_codes'] as const).flatMap(k =>
+      [...lock[k]!].sort((a, b) => a.code - b.code).map(c => [c.code, c.mod, c.sym]))])
   return parseInt(sha(new TextEncoder().encode(pyDumps(what))).slice(0, 8), 16) || 1
 }
 
@@ -182,6 +202,25 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
         throw new ModError(`lockfile: field ${f.sym} of ${f.mod} lies past its scope's used bits`)
     }
   }
+  if (['codes', 'freed_codes', 'next_code'].some(k => Object.hasOwn(lock, k))) {
+    const nc = lock.next_code
+    if (!whole(nc) || !(nc >= FIRST_CODE && nc <= LAST_CODE + 1))
+      throw new ModError(`lockfile: "next_code" ${repr(Object.hasOwn(lock, 'next_code') ? nc : null)}`)
+    const seen = new Set<number>()
+    for (const k of ['codes', 'freed_codes']) {
+      const cs = lock[k]
+      if (!Array.isArray(cs)) throw new ModError(`lockfile: "${k}" is a list`)
+      for (const c of cs) {
+        if (!isDict(c) || !sameKeys(c, ['mod', 'sym', 'code']) || typeof c.mod !== 'string' || typeof c.sym !== 'string'
+          || !whole(c.code) || !(c.code >= FIRST_CODE && c.code < nc) || seen.has(c.code))
+          throw new ModError(`lockfile: a bad entry in "${k}"`)
+        seen.add(c.code)
+      }
+    }
+    const placed = new Set((lock.fields as Field[]).filter(f => LOCK_SCOPES.includes(f.scope)).map(f => f.mod + '\0' + f.sym))
+    if ((lock.codes as Code[]).some(c => !placed.has(c.mod + '\0' + c.sym)))
+      throw new ModError('lockfile: a code for a field that is not a placed sound field')
+  }
 }
 
 const bump = (g: number) => (g >= 255 ? 1 : g + 1)
@@ -189,9 +228,10 @@ const byModSym = (a: { mod: string; sym: string }, b: { mod: string; sym: string
   a.mod < b.mod ? -1 : a.mod > b.mod ? 1 : a.sym < b.sym ? -1 : a.sym > b.sym ? 1 : 0
 const ceilDiv = (a: number, b: number) => Math.floor((a + b - 1) / b)
 
-/** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]. -> [the new lockfile, notes]. The
- * lockfile given is not changed. store.allocate. */
-export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core: string | null = null): [Lock, string[]] {
+/** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]; locks: [mod id, sym] of the lockable
+ * fields. -> [the new lockfile, notes]. The lockfile given is not changed. store.allocate. */
+export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core: string | null = null,
+  locks: [string, string][] = []): [Lock, string[]] {
   const notes: string[] = []
   let lock: Lock
   let isNew: boolean
@@ -302,10 +342,12 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     else notes.push(`${f.mod} ${f.sym}: ${f.bits} bits of ${f.scope} storage at bit ${f.offset}`)
   }
   lock.fields = fields.sort((a, b) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset)
+  const recoded = setCodes(lock, new Set(locks.map(([m, sy]) => keyOf(m, sy))), new Set(kept.map(f => keyOf(f.mod, f.sym))),
+    new Set(added.filter(f => back.has(keyOf(f.mod, f.sym))).map(f => keyOf(f.mod, f.sym))), notes)
   if (isNew) {
     lock.id = idStr(layoutId(lock))
     notes.unshift(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by builds with other layouts load their mod data at defaults`)
-  } else if (gone.length || added.length || repacked.size) {   // a repack alone (a field past an older core's room) moves fields too
+  } else if (gone.length || added.length || repacked.size || recoded) {   // a repack alone (a field past an older core's room) moves fields too
     const old = lock.id
     lock.id = idStr(layoutId(lock))
     const seen = new Set([idVal(lock.id, 'id')]), anc: string[] = []
@@ -322,6 +364,53 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   return [lock, notes]
 }
 
+/** Give each lockable field (keys mod\0sym in want) its lock code, in lock (changed in place). kept: the fields that
+ * kept their place; back: freed fields that came back to theirs. -> whether any code changed. store._codes. */
+function setCodes(lock: Lock, want: Set<string>, kept: Set<string>, back: Set<string>, notes: string[]): boolean {
+  const had = lock.codes ?? [], hadFreed = lock.freed_codes ?? []
+  if (!want.size && !had.length && !hadFreed.length) return false   // a lockfile that never had a lockable field stays as it was
+  const key = (c: { mod: string; sym: string }) => c.mod + '\0' + c.sym
+  const codes: Code[] = [], freed: Code[] = hadFreed.map(c => ({ ...c }))
+  let nxt = lock.next_code ?? FIRST_CODE
+  let changed = false
+  for (const c of had) {
+    const k = key(c)
+    if (want.has(k) && kept.has(k)) codes.push({ ...c })
+    else {
+      freed.push({ ...c })
+      changed = true
+      notes.push(`${c.mod} ${c.sym}: lock code ${c.code} ${!want.has(k) || !kept.has(k) ? 'kept for it while it is out of the build' : 'freed'}`)
+    }
+  }
+  const have = new Set(codes.map(key))
+  const todo = [...want].filter(k => !have.has(k)).map(k => { const [mod, sym] = k.split('\0'); return { mod, sym } }).sort(byModSym)
+  for (const { mod, sym } of todo) {
+    const k = mod + '\0' + sym
+    const same = freed.filter(c => key(c) === k)
+    let c: Code
+    if (same.length && back.has(k)) {          // back in its old place: its old code, with its rows
+      c = same[same.length - 1]
+      freed.splice(freed.indexOf(c), 1)
+      notes.push(`${mod} ${sym}: back with lock code ${c.code}`)
+    } else if (nxt <= LAST_CODE) {
+      c = { mod, sym, code: nxt }
+      nxt += 1
+      notes.push(`${mod} ${sym}: lock code ${c.code}`)
+    } else if (freed.length) {                  // the never-used codes are gone: the oldest freed one
+      const old = freed.shift()!
+      c = { mod, sym, code: old.code }
+      notes.push(`${mod} ${sym}: lock code ${c.code} (was ${old.mod} ${old.sym}'s)`)
+    } else throw new ModError(`the mods have more than ${LAST_CODE - FIRST_CODE + 1} lockable parameters`)
+    for (const d of freed.filter(d => key(d) === k)) freed.splice(freed.indexOf(d), 1)   // a field has one code
+    codes.push(c)
+    changed = true
+  }
+  lock.codes = codes.sort((a, b) => a.code - b.code)
+  lock.freed_codes = freed
+  lock.next_code = nxt
+  return changed
+}
+
 /** -> [{name: value}, the IDs' table entries] for the linker. store.symbols. */
 export function symbols(lock: Lock): [Map<string, number>, Uint8Array[]] {
   const g = lock.generation, sp = lock.split
@@ -331,6 +420,17 @@ export function symbols(lock: Lock): [Map<string, number>, Uint8Array[]] {
   for (const f of lock.fields) out.set(f.sym, ((SCOPE_NUM[f.scope] << 28) | (f.bits << 22) | f.offset) >>> 0)
   const ids = [idVal(lock.id, 'id'), ...lock.ancestors.map(a => idVal(a, 'ancestor'))]
   return [out, ids.map(i => new Uint8Array([i >>> 24, (i >>> 16) & 255, (i >>> 8) & 255, i & 255]))]
+}
+
+/** -> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes each, by code. store.code_entries. */
+export function codeEntries(lock: Lock): Uint8Array[] {
+  const desc = new Map(lock.fields.map(f => [f.mod + '\0' + f.sym, ((SCOPE_NUM[f.scope] << 28) | (f.bits << 22) | f.offset) >>> 0]))
+  return (lock.codes ?? []).map(c => {
+    const out = new Uint8Array(8), dv = new DataView(out.buffer)
+    dv.setUint32(0, desc.get(c.mod + '\0' + c.sym)!)
+    dv.setUint32(4, c.code)
+    return out
+  })
 }
 
 export const dumps = (lock: Lock): string => pyDumps(lock, 1) + '\n'

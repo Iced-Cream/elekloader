@@ -1,0 +1,116 @@
+{
+ "id": "lock-check",
+ "version": "1.0",
+ "title": "Lock check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "The smallest user of core-ar2's lockable parameters (core 0.8): two lockable sound fields, LOCK CHECK A and B, which appear at the end of every sound's LFO destination list. A bar along the bottom of the screen shows the offset track 1's LFO gives the destination chosen there, from the middle. A LOCK CHECK page behind the LFO key shows A on knob A, for track 1's sound, so RANDOMIZE PAGE and RELOAD PAGE can be tried on it.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": [
+  "check.c"
+ ],
+ "cflags": [
+  "-DFILLRECT_AT=0x40070726"
+ ],
+ "storage": [
+  {
+   "sym": "lc_a",
+   "scope": "sound",
+   "bits": 7,
+   "lock": true
+  },
+  {
+   "sym": "lc_b",
+   "scope": "sound",
+   "bits": 4,
+   "lock": true
+  }
+ ],
+ "contribute": [
+  {
+   "to": "core_lock_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lc_param_a",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_lock_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lc_param_b",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lc_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lc_params",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lc_view_page",
+     0
+    ]
+   ]
+  }
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "lc_tick",
+   "order": 60
+  },
+  {
+   "event": "ev_draw",
+   "fn": "lc_draw",
+   "order": 60
+  }
+ ],
+ "resources": {
+  "core": "0.8"
+ },
+ "requires": [
+  "core"
+ ]
+}

@@ -30,7 +30,9 @@ mod.json:
      "resources": {"regions": [...], "names": [...]},
      "requires": ["core"], "conflicts": [...],
      "storage": [{"sym", "scope", "bits"}],          mod storage (core-ar2 0.2): fields the
-                                                     linker places from the lockfile
+                                                     linker places from the lockfile; "lock":
+                                                     true on a sound field gives it a lock
+                                                     code (core-ar2 0.8)
      "ports": {"1.54": {"defsym": {...}, "sites": [...]}}}   optional: other OS versions
 
 A port builds the same mod for another release of the device: for that OS,

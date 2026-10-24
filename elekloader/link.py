@@ -165,6 +165,7 @@ class Mod2:
                                     'data': data, 'relocs': rel, 'claims': claims, 'i': i})
         try:
             self.storage = store.parse_decls(doc)
+            self.locks = store.parse_locks(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
@@ -520,8 +521,16 @@ def link(mods, image, lock=None):
         if store.IDS_TABLE not in tables:
             raise ModError('%s imports %s but declares no table %s'
                            % (core.label(), store.GEN_SYMS[0], store.IDS_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version)
+        locks = [(m.id, sym) for m in order for sym in m.locks]
+        if locks and store.CODES_TABLE not in tables:
+            raise ModError('%s declare%s lockable parameters, which %s does not keep (no table %s)'
+                           % (', '.join(sorted({k[0] for k in locks})), 's' if len({k[0] for k in locks}) == 1
+                              else '', core.label(), store.CODES_TABLE))
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks)
         store_syms, ids = store.symbols(new_lock, dev.key)
+        if store.CODES_TABLE in tables:
+            for i, data in enumerate(store.code_entries(new_lock)):
+                entries[store.CODES_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
         taken = {nm for m in order for nm in m.exports}
         for nm in store_syms:
             if nm in taken or nm in LINKER_SYMS:

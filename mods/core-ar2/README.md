@@ -5,8 +5,9 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, and from 0.7 with
-write-through storage (Write-through, below). On its own it changes nothing the unit does.
+with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, from 0.7 with
+write-through storage (Write-through, below), and from 0.8 with lockable
+parameters in `lock.c` and `lock.s` (Lockable parameters, below). On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -313,6 +314,39 @@ as stock does for a machine its voice may not run (checked on a unit, below).
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
 
+## Lockable parameters (0.8)
+
+The first part of the lock service (docs/ADAPTING.md, "Lockable parameters
+(core-ar2 0.8, Analog Rytm MKII)"). A sound field declared `"lock": true`
+gets a lock code (42..127) from the lockfile; the linker writes `{field,
+code}` into `core_lock_codes`, and the mod adds `{field, id, min, max, short
+name, name}` to `core_lock_params`. Core gives each such parameter a
+**pseudo id**, 469 + code - 42, above stock's 469 records: the LFO
+destination list holds parameter ids and turns them back into a sound slot
+and names, and the code is the slot, so the LFO's DST byte holds it.
+
+| site | 1.74 | what |
+|---|---|---|
+| LFO apply | 0x4009eac0 (`jmp`, 10 B) | stock skips a slot above 41; core keeps the track's code and the offset stock would add (`core_lfo_offset`), and clears the code for a stock slot |
+| id to slot | 0x40006ea8 (`jmp`) | a pseudo id's slot is its code; the sound setter then rejects it (slot above 41), as for any stock id it can't set |
+| slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
+| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's) |
+| menu label | 0x4004a7e8 (`jmp`) | `MOD:` and the name, through stock's `%.16s:%.32s` |
+| DST value | 0x400ffab2 (`jmp`) | the short name |
+| randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
+| reload | 0x400af32c (`jmp`) | RELOAD PAGE's copy: after stock's, each parameter's knob takes its value from the track's sound in the current kit's saved copy (live kits +0x4f180) |
+
+The step, the validity check, page turns and RANDOMIZE on DST follow from
+the list, with no sites of their own. Flags need none: pseudo ids read
+record 0, as stock's ids above 468 do, and the list builder's mask check is
+skipped for them. Randomize and reload leave a knob to stock whenever stock's
+sound setter would take its id (a stock slot, and a common parameter or the
+sound's machine's).
+
+A call to a stock routine that returns a pointer is typed as returning a
+number: stock returns it in `%d0`, and gcc reads a returned pointer from
+`%a0`.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -445,6 +479,19 @@ stock bytes, and that each covers whole instructions.
   AS, a power-off and a cold boot read back empty, and the same build
   powered off without the save lost those six columns. Not yet on a unit.
 
+- **Lockable parameters (0.8)**, in an emulator (OS 1.74, 24 Oct 2026),
+  with [lock-check](../../examples/lock-check-ar2) (codes 42 and 43): DST
+  set to 42 over NRPN showed LCA on the LFO page, and turning DST opened the
+  menu with the cursor on MOD:LOCK CHECK A, after stock's AMP entries;
+  with DEP at its top, `core_lfo_offset` swung about +-30,000 (about
+  +-120 steps) while the code stayed 42; DST 43 moved the code to 43, and a
+  stock DST (5) cleared it and modulated the stock slot. On the LOCK CHECK
+  page four RANDOMIZE PAGEs set `lc_a` to 0, 92, 4 and 101, and RELOAD PAGE
+  took it back to the saved kit's 0. Not checked: scrolling through the
+  menu (the emulator's turns did not move its cursor), RANDOMIZE on DST
+  landing on a mod parameter, a reload from a saved kit with a value other
+  than 0, and anything on a unit.
+
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
   for LP1 and HP1 and without FRQ and RES for TYP OFF, the empty knobs take
@@ -454,8 +501,8 @@ stock bytes, and that each covers whole instructions.
 
 ## Building
 
-Core 0.7 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.7.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.8 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.8.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -464,8 +511,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.7.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.8.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.7.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```

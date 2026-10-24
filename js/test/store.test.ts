@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, dumps, fromImage, layoutId, parseDecls, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, codeEntries, dumps, fromImage, layoutId, parseDecls, parseLocks, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -34,6 +34,26 @@ test('a run of builds: the same lockfiles, notes, symbols and IDs', () => {
   }
 })
 
+test('lockable fields: the same lock codes, notes and table entries', () => {
+  for (const [name, run] of Object.entries<any>(V.lock_runs)) {
+    let lock: Lock | null = null
+    run.steps.forEach(([decls, locks]: [Decl[], [string, string][]], i: number) => {
+      const want = run.results[i]
+      if (want.error) {
+        assert.throws(() => allocate(lock, decls, DEV, null, locks), (e: Error) => e.message === want.error, `${name} step ${i}`)
+        return
+      }
+      const [l, notes] = allocate(lock, decls, DEV, null, locks)
+      lock = l
+      assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
+      assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
+      assert.deepEqual(codeEntries(l).map(hex), want.codes, `${name} step ${i}: codes`)
+      assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
+      assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
+    })
+  }
+})
+
 test('the lockfiles it refuses, with the same messages, and the ones it keeps as they are', () => {
   for (const [name, c] of Object.entries<any>(V.locks)) {
     if (c.error === null) assert.deepEqual(allocate(c.lock, [], DEV)[0], c.result, name)
@@ -44,7 +64,10 @@ test('the lockfiles it refuses, with the same messages, and the ones it keeps as
 test('a mod\'s "storage": what it reads, and what it refuses', () => {
   for (const [name, c] of Object.entries<any>(V.decls)) {
     if (c.error) assert.throws(() => parseDecls(c.doc), (e: Error) => e.message === c.error, `${name}: ${c.error}`)
-    else assert.deepEqual(parseDecls(c.doc), c.ok, name)
+    else {
+      assert.deepEqual(parseDecls(c.doc), c.ok, name)
+      assert.deepEqual(parseLocks(c.doc), c.locks, name)
+    }
   }
 })
 
