@@ -107,9 +107,23 @@ at boot, so the name stays the first entry's. Additive: no new sites, and
 a build with no entries in it behaves as 0.2.
 
 pages-check-a4 0.2 (for core 0.3) answers CHECK through `core_page_fns`,
-with knob B (AMP PAN again) shown after an odd number of PAN's steps.
-Core 0.3 and pages-check-a4 0.2 are not yet checked in the emulator or on
-a unit.
+with knob B (AMP PAN again) shown while its count of PAN's turns is odd.
+The count is one per delta call, that is per turn update (the bar's
+length), not per value step.
+
+In rytm-emu's A4 build (24 Oct 2026) [emu], core 0.3 alone (A403, with
+analoghealth's remote keys) drew every screen of Check 4's stock steps
+(a new project; track 1's OSC1, OSC2, FLTR, AMP, ENV and LFO pages, turned;
+the FX track's and the CV track's pages; AMP pressed three times) identical
+to stock's references, pixel for pixel. With pages-check-a4 0.2 (PF56,
+with the remote keys) the AMP key stayed on AMP until PAN turned, then
+stepped AMP, CHECK, AMP, CHECK, with CHECK's title CHECK each time; PAN
+read in hex (`7F` at the end stop) and the bar grew with each turn update.
+On CHECK, knob A turned PAN, and knob B was PAN at counts 13, 27 and 41 and
+empty at 14, 28 and 42, changing at the redraw after each turn; a turn of
+the shown B moved PAN (41 to 42) and hid B; turns of the empty B changed
+nothing on the screen and left the count as it was. Not yet run on a
+unit.
 
 In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
 screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
@@ -302,6 +316,10 @@ images; 20 Oct 2026):
   save, the load and a session of playback, song mode, chain, pattern keys
   and encoder edits saw no stock access to them other than core's own and a
   memcpy of a whole pool sound.
+- **Page functions** [emu] (core 0.3, 24 Oct 2026): core alone (A403) as
+  stock on every screen of Check 4's stock steps; with pages-check-a4 0.2
+  (PF56) CHECK's knob B followed `core_page_fns` at each redraw, and an
+  empty B took no turn ("Parameter pages (0.2, 0.3)" above).
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that
