@@ -1380,7 +1380,7 @@ hex digits through `core_params`, and a CHECK page behind the AMP key. Its
 Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
 its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
-(24 Oct 2026), not yet on a unit.
+and on a unit (24 Oct 2026).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 

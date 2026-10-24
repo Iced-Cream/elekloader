@@ -122,8 +122,18 @@ read in hex (`7F` at the end stop) and the bar grew with each turn update.
 On CHECK, knob A turned PAN, and knob B was PAN at counts 13, 27 and 41 and
 empty at 14, 28 and 42, changing at the redraw after each turn; a turn of
 the shown B moved PAN (41 to 42) and hid B; turns of the empty B changed
-nothing on the screen and left the count as it was. Not yet run on a
-unit.
+nothing on the screen and left the count as it was.
+
+On a unit (OS 1.56, 24 Oct 2026) [hw], the same two plans passed. A403H
+(core 0.3 alone, with analoghealth 1.2's remote keys) matched stock's
+references on every screen of Check 4's stock steps. On PF56H (core 0.3,
+pages-check-a4 0.2, analoghealth 1.2) the AMP key stayed on AMP until PAN
+turned, then stepped AMP, CHECK, AMP, CHECK with CHECK's title each time;
+PAN read in hex (`7F` at the end stop, `75` after a turn back) and the bar
+grew with each turn update. On CHECK, knob A turned PAN, and knob B was PAN
+at counts 19, 21 and 53 and empty at 36, 38 and 54; a turn of the shown B
+moved PAN (53 to 54) and hid B, and a turn of the empty B left the count
+at 54.
 
 In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
 screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
@@ -277,7 +287,10 @@ Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
 the unit back to stock 1.56 (21 Oct 2026). With core 0.2 and
 [pages-check-a4](../../examples/pages-check-a4) (PA56, 23 Oct 2026), the
 parameter routines and the views passed every check ("Parameter pages
-(0.2)" above).
+(0.2)" above). With core 0.3 (24 Oct 2026), core alone (A403H) drew Check
+4's stock screens as stock, and with pages-check-a4 0.2 (PF56H) CHECK's
+knob B followed `core_page_fns` at each redraw and an empty B took no turn
+("Parameter pages (0.2, 0.3)" above).
 
 In an emulator (rytm-emu, with a local change that accepts modified A4
 images; 20 Oct 2026):
