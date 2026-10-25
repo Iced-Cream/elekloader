@@ -32,4 +32,5 @@ python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
     --out rytm-lock.syx --version LK09
 ```
 
-The knob's text is stock's for id 1 (ERR): the example shows only the value.
+Core labels the knob with the parameter's short name, LCA, in place of stock's
+label for id 1 (ERR).

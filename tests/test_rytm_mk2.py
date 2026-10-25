@@ -187,16 +187,23 @@ def test_core_ar2_sites():
     o = 0x400cbd3e + 2 + 0x10 - DEV.main_load                # the branch skips setsel(view, 0)
     assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
-    # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 8 lock
+    # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 11 lock
     # sites (0.8) and the 8 lock row sites (0.8)
-    assert len(mod['sites']) == 73
+    assert len(mod['sites']) == 76
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
-                                   'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload')}
+                                   'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload',
+                                   'core_knob_label')}
     assert lock == {0x4009eac0: ('jmp', 'core_lfo_apply'), 0x40006ea8: ('jmp', 'core_id_slot'),
                     0x400aa31e: ('jmp', 'core_dst_list_end'), 0x4004a7e8: ('jmp', 'core_dst_label'),
                     0x400ffab2: ('jmp', 'core_dst_text'), 0x401dce70: ('ptr', 'core_dst_slot_id'),
-                    0x400aa32a: ('jmp', 'core_rand_param'), 0x400af32c: ('jmp', 'core_reload')}, lock
+                    0x400aa32a: ('jmp', 'core_rand_param'), 0x400af32c: ('jmp', 'core_reload'),
+                    0x40037c1a: ('jsr', 'core_knob_label'), 0x40037d42: ('jsr', 'core_knob_label'),
+                    0x400d37fa: ('jsr', 'core_knob_label')}, lock
+    for x in mod['sites']:                  # a knob label site calls stock's label
+        if x.get('target') == 'core_knob_label':
+            a = int(x['addr'], 16)
+            assert x['stock'] == '4eb9400a9000' and img[a - DEV.main_load:a + 6 - DEV.main_load].hex() == x['stock'], x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
     a = int(x['addr'], 16)                  # move #0x2700,sr then jsr to the drain wait
     assert x['op'] == 'jsr' and img[a - DEV.main_load:a + 10 - DEV.main_load].hex() == x['stock'], x

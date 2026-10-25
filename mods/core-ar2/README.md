@@ -385,11 +385,12 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | DST value | 0x400ffab2 (`jmp`) | the short name |
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
 | reload | 0x400af32c (`jmp`) | RELOAD PAGE's copy: after stock's, each parameter's knob takes its value from the track's sound in the current kit's saved copy (live kits +0x4f180) |
+| knob label | 0x40037c1a, 0x40037d42, 0x400d37fa (`jsr`) | the calls of 0x400a9000 (a record's label, +0x30) in the page's two knob draws and the knob's pop-up: a parameter's page knob shows its short name |
 
 The step, the validity check, page turns and RANDOMIZE on DST follow from
 the list, with no sites of their own. Flags need none: pseudo ids read
 record 0, as stock's ids above 468 do, and the list builder's mask check is
-skipped for them. Randomize and reload leave a knob to stock whenever stock's
+skipped for them. Randomize, reload and the label leave a knob to stock whenever stock's
 sound setter would take its id (a stock slot, and a common parameter or the
 sound's machine's).
 
@@ -596,7 +597,8 @@ stock bytes, and that each covers whole instructions.
   +-120 steps) while the code stayed 42; DST 43 moved the code to 43, and a
   stock DST (5) cleared it and modulated the stock slot. On the LOCK CHECK
   page four RANDOMIZE PAGEs set `lc_a` to 0, 92, 4 and 101, and RELOAD PAGE
-  took it back to the saved kit's 0. Not checked: scrolling through the
+  took it back to the saved kit's 0. On 25 Oct the page's knob A showed
+  LCA, its short name, and the SRC page kept stock's labels. Not checked: scrolling through the
   menu (the emulator's turns did not move its cursor), RANDOMIZE on DST
   landing on a mod parameter, a reload from a saved kit with a value other
   than 0, and anything on a unit.

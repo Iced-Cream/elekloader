@@ -1607,7 +1607,7 @@ const struct core_lock_param my_depth_param =
 | `field` | the lockable field |
 | `id` | the page knob's id (`core_params`), or 0 |
 | `min`, `max` | the values the field takes |
-| `short_name` | the DST value's text, up to 4 characters |
+| `short_name` | the DST value's text and the page knob's label, up to 4 characters |
 | `name` | the destination menu's text, up to 32 |
 
 What core does with it:
@@ -1625,8 +1625,10 @@ What core does with it:
   `min..max`, written with `core_store_set` into the knob's sound.
 - **RELOAD PAGE** takes it back from the same sound in the current kit's
   saved copy.
+- **The knob's label** is the short name, where stock would show the
+  borrowed id's own label (an Error record's is ERR).
 
-Both leave the knob to stock when the id is the sound's own stock
+All three leave the knob to stock when the id is the sound's own stock
 parameter (its slot is a stock one and it is common or the sound's
 machine's): a page knob borrowing another machine's id is core's only on
 the machines that reject it.

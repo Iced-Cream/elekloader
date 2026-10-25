@@ -17,7 +17,8 @@
  *   - the LFO's offset: where the audio interrupt's LFO block skips a slot
  *     above 41 (0x4009eac8), core keeps the track's code and the offset
  *     stock would have added (lock.s), and core_lfo_offset hands it on;
- *   - with a page id: RANDOMIZE PAGE and RELOAD PAGE on its knob (lock.s).
+ *   - with a page id: RANDOMIZE PAGE and RELOAD PAGE on its knob (lock.s),
+ *     and its short name as the knob's label.
  */
 
 #include <stdint.h>
@@ -242,4 +243,20 @@ int core_reload(void *view, int track, int **ids, int d)
         if ((p = by_id(*id)) != 0 && !core_lock_stock_takes(*id, s))
             core_store_set(p->field, s, 0, core_store_get(p->field, s + LIVE_KITS_SAVED, 0));
     return r;
+}
+
+/* 0x400a9000, a knob's label (set, id): the record's +0x30, called by the
+ * page's two knob draws (0x40037c1a, 0x40037d42) and the knob's pop-up
+ * (0x400d37fa). A mod parameter's knob shows its short name; where stock
+ * takes the id for the set's sound, the knob is stock's and so is its label.
+ * The callers read the string from %d0, so it is typed as a number. */
+#define KNOB_LABEL ((unsigned (*)(void *, int))0x400a9000)
+
+unsigned core_knob_label(void *set, int id)
+{
+    const struct core_lock_param *p = by_id(id);
+    unsigned char *s;
+    if (p && p->short_name && !((s = core_lock_sound(set)) && core_lock_stock_takes(id, s)))
+        return (unsigned)p->short_name;
+    return KNOB_LABEL(set, id);
 }
