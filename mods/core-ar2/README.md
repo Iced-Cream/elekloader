@@ -358,9 +358,10 @@ builds than from stock. With the emulator's panel link paced from its baud
 divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
 of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
 unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
-from two builds on this core (W07F to W07N, W07N to stock) restarted in
-15 s; with a race this rare that is no proof the hang is gone, only that
-the routine does no harm.
+from builds on this core (to other builds and to stock, five flashes)
+restarted in 15 s, and on an Analog Four MKII a flash from core-a4 0.4
+back to stock 1.56 restarted in 21 s; with a race this rare that is no
+proof the hang is gone, only that the routine does no harm.
 
 ## Checked so far
 
@@ -500,12 +501,19 @@ stock bytes, and that each covers whole instructions.
   markers (the project's stayed: they live in the stored project's tagged
   store), and STORE CHECK, SAVE PROJECT AS and a power cycle read back empty.
   A Total Recall take before the power cycle kept nothing (see SAVE PROJECT
-  AS above). CPU during STORE CHECK 69-73 %, idle 69-70 %. Before that, on
-  core 0.8 with store-check 1.2 (which carries this code unchanged), the
-  same power cycle read back empty. Not measured on a unit: the time
+  AS above). On core 0.7 a take carries every marker, since write-through
+  keeps the stored project current: a take restored onto the unit brought
+  them back, and they survived a power cycle with no save; a take restored
+  onto a build with another layout ID loaded with the mods' fields at their
+  defaults. Before that, on core 0.8 with store-check 1.2 (which carries
+  this code unchanged), the same power cycle read back empty.
+  Cost: three STORE CHECKs (about 5,400 sets each) under audio gave no
+  dropout, and raised the 1 s CPU average by 1 to 4 points, the same as on
+  the build without write-through. Not measured on a unit: the time
   core_store_set holds interrupts masked; in an emulator write-through adds
-  about 143 instructions to an average set, and the longest masked stretch,
-  about 1,130 instructions, is the field loop's, as on 0.6.
+  about 143 instructions to an average set (805 against 662), and the
+  longest masked stretch, about 1,130 instructions, is the field loop's, as
+  without write-through.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
