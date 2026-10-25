@@ -132,7 +132,7 @@ def test_core_ar2_sites():
         a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
         if s['op'] == 'ptr':            # data: the sound set's vtable entries, not code: +76
-            # (0.8, the slot id) and +60..+72 (0.9, the lock get, set, clear and turn)
+            # (0.8, the slot id) and +60..+72 (0.8, the lock get, set, clear and turn)
             ptrs = {76: 0x400a86dc, 60: 0x400a98b4, 64: 0x400a9926, 68: 0x400a99c2, 72: 0x400a8560}
             assert a - 0x401dce24 in ptrs and want == ptrs[a - 0x401dce24].to_bytes(4, 'big'), s
             continue
@@ -188,7 +188,7 @@ def test_core_ar2_sites():
     assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 8 lock
-    # sites (0.8) and the 8 lock row sites (0.9)
+    # sites (0.8) and the 8 lock row sites (0.8)
     assert len(mod['sites']) == 73
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
@@ -201,7 +201,7 @@ def test_core_ar2_sites():
     a = int(x['addr'], 16)                  # move #0x2700,sr then jsr to the drain wait
     assert x['op'] == 'jsr' and img[a - DEV.main_load:a + 10 - DEV.main_load].hex() == x['stock'], x
     assert x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
-    # the lock rows (0.9): four routines' entries, their first instructions as
+    # the lock rows (0.8): four routines' entries, their first instructions as
     # stock has them, and the sound set's lock get, set, clear and turn
     rows = {int(x['addr'], 16): (x['op'], x['target'], x['stock']) for x in mod['sites']
             if x.get('target') in ('core_memcpy', 'core_row_load', 'core_rebuild', 'core_trig_locks',

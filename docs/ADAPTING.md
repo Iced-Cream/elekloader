@@ -1634,7 +1634,7 @@ machine. The value a randomize or reload writes reaches the mod through
 the field, not through its `core_params` delta, so a mod that keeps a copy
 elsewhere reads the field again.
 
-### Mod p-locks (core-ar2 0.9, Analog Rytm MKII)
+### Mod p-locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter (above) is p-locked like a stock one: hold a trig and
 turn the parameter's page knob (the `id` it registered). The lock is a row
@@ -1657,7 +1657,7 @@ track (0..12), set with the trig's other locks before it sounds, or -1 when
 that trig has none. A set or a turn moves in whole steps of 0..127 from the
 sound's value, clamped to the parameter's `min..max`.
 
-Limits (0.9): a value above 127 can't be locked; track, page and trig
+Limits (0.8): a value above 127 can't be locked; track, page and trig
 operations (copy, clear, shift a track or a trig), scenes, performance and
 MIDI don't carry mod locks yet, and SysEx pattern dumps aren't guarded
 for them. Checked in the emulator only.

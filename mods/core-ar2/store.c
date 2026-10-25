@@ -514,7 +514,7 @@ int st_pat_init(unsigned char *pattern, int a)
     if (pattern) {
         for (j = 0; j < HOME_BYTES; j++)
             pattern[PATTERN_HOME + j] = 0;
-        core_rows_clear((unsigned)pattern);    /* its mod p-locks (rows.c, 0.9) */
+        core_rows_clear((unsigned)pattern);    /* its mod p-locks (rows.c, 0.8) */
     }
     return r;
 }

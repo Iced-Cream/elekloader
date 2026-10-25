@@ -7,8 +7,8 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
 with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, from 0.7 with
 write-through storage (Write-through, below) and `finish.s` (The OS upgrade's restart, below),
-from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below), and from
-0.9 with their p-locks in `rows.c` and `rows.s` (Mod p-locks, below). On its own it changes nothing
+and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
+their p-locks in `rows.c` and `rows.s` (Mod p-locks, below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -382,10 +382,10 @@ A call to a stock routine that returns a pointer is typed as returning a
 number: stock returns it in `%d0`, and gcc reads a returned pointer from
 `%a0`.
 
-## Mod p-locks (0.9)
+## Mod p-locks (0.8)
 
 The second part of the lock service (docs/ADAPTING.md, "Mod p-locks
-(core-ar2 0.9, Analog Rytm MKII)"): a lockable parameter is p-locked like a
+(core-ar2 0.8, Analog Rytm MKII)"): a lockable parameter is p-locked like a
 stock one, with a trig held and its page knob turned, and the mod reads the
 playing trig's value with `core_lock_value(track, field)`.
 

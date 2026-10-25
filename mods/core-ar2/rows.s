@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.9: the sites of the mod p-lock rows (rows.c). Each is a jmp
+| core-ar2 0.8: the sites of the mod p-lock rows (rows.c). Each is a jmp
 | site at a routine's entry: core runs the routine (its displaced
 | instructions, then a jump back into it), then its own part (OS 1.74).
         .text

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.9: mod p-locks as lock rows (README, "Mod p-locks"), the second
+/* core-ar2 0.8: mod p-locks as lock rows (README, "Mod p-locks"), the second
  * part of the lock service. Every address is OS 1.74's.
  *
  * A pattern keeps its p-locks in a pool of 72 rows of 66 bytes, [code]
