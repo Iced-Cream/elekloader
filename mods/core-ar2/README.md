@@ -146,10 +146,14 @@ copies its own bytes from that image into the stored project, by the parts
 the save wrote (flags 2 the global slots, 4 the kits and the working kit
 when the image's index is the stored project's, 8 the tagged store, 0x20
 the pool), so a power cycle straight after the save keeps the mods'
-fields. The SysEx dump of the working project (0x40034d86, in the SysEx
-dump request handler 0x4008680c, which serializes the live project into a
-buffer of its own) takes the same path, so a dump request also brings the
-stored project's mod bytes up to date. A Total Recall take runs no
+fields. The same save routine also has a SysEx dump of the working project
+(0x40034d86, in the dump request handler 0x4008680c), but OS 1.74 never
+reaches it: the SysEx router above that handler (0x40085e44, code the Rytm
+shares with the Analog Four) has no caller, and the ID table sends its
+message ID, 0x20, to a routine that does nothing (checked in an emulator,
+25 Oct 2026: the request was dropped over USB and DIN, and 0x40034d86 never
+ran). Core hooks the site anyway, so the save routine behaves the same
+wherever it runs. A Total Recall take runs no
 serializer: it sends the stored project as it is (Overbridge command 0x20,
 type 0x1b), so it carries whatever mod fields the stored project holds, and
 saves nothing on the unit (checked on a unit, 25 Oct 2026: with
@@ -170,7 +174,7 @@ in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
 | sound init | 0x400122b6 | 0x400122b6 | the same |
 | project init | 0x40011d38 | 0x40011d38 | CREATE NEW and the project reset: a fresh store |
 | project load | 0x4000cd2e | 0x4000cd2e | after any load: drop scopes another layout wrote, write this build's header |
-| SysEx dump of the working project (`keep2`) | 0x40034d86 | 0x40034d86 | which image is being saved |
+| SysEx dump of the working project (`keep2`) | 0x40034d86 | 0x40034d86 | which image is being saved; 1.74 never reaches it (above) |
 | file save (`keep2`) | 0x400b0870 | 0x400b0804 | the same, for a project file |
 | file load (`keep2`) | 0x40035000 | 0x40035000 | which image is being loaded |
 | SysEx song copy, write, swap (`keep2`) | 0x4018b8b8, 0x4018c266, 0x4018c488 | 0x4018b6ec, 0x4018c09a, 0x4018c2bc | copy whole stored songs but leave the target's store bytes |
