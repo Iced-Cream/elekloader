@@ -43,22 +43,23 @@ void lc_draw(void *bmp, void *ctrl)
     int a = core_lfo_offset(0, STORE(lc_a)), b = core_lfo_offset(0, STORE(lc_b));
     int v = (a ? a : b) / 256;
     (void)ctrl;
-    FILLRECT(bmp, 0, 60, 127, 63, 0);
+    /* y counts from the bottom row: 0..3 is the bottom edge */
+    FILLRECT(bmp, 0, 0, 127, 3, 0);
     if (v > 60)
         v = 60;
     if (v < -60)
         v = -60;
     if (v > 0)
-        FILLRECT(bmp, 64, 62, 64 + v, 63, 1);
+        FILLRECT(bmp, 64, 0, 64 + v, 1, 1);
     else if (v < 0)
-        FILLRECT(bmp, 64 + v, 62, 64, 63, 1);
+        FILLRECT(bmp, 64 + v, 0, 64, 1, 1);
     if (a)
-        FILLRECT(bmp, 0, 60, 2, 61, 1);
+        FILLRECT(bmp, 0, 2, 2, 3, 1);
     if (b)
-        FILLRECT(bmp, 0, 62, 2, 63, 1);
-    FILLRECT(bmp, 0, 57, 127, 58, 0);
+        FILLRECT(bmp, 0, 0, 2, 1, 1);
+    FILLRECT(bmp, 0, 5, 127, 6, 0);
     if ((v = core_lock_value(0, STORE(lc_a))) >= 0)
-        FILLRECT(bmp, 0, 57, v / 2, 58, 1);
+        FILLRECT(bmp, 0, 5, v / 2, 6, 1);
 }
 
 /* track 1's sound of the current kit: the live kits as edited, the stored

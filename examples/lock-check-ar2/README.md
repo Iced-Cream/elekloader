@@ -20,6 +20,10 @@ above the first shows the lock of the trig track 1 plays
 (`core_lock_value`), half a pixel per step from the left, and is empty
 when that trig has no lock of `lc_a`.
 
+The screen's y counts from the bottom row (y 0 is the bottom edge). 1.0
+drew its bars at y 57..63, which is the top edge, over the stock header's
+top rows; 1.0.1 and 1.1 draw them at y 0..6.
+
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/lock-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
