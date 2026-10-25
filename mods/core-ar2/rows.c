@@ -5,36 +5,46 @@
  * A pattern keeps its p-locks in a pool of 72 rows of 66 bytes, [code]
  * [track][64 step bytes] (a step byte with bit 7 set has no lock); stock's
  * codes are 0..41, a mod parameter's is its lock code (42..127, lock.c). The
- * rows are only the stored form: stock edits and plays the live lock store
- * and rebuilds the rows from it (0x40009216), which drops every row it does
- * not know. So core keeps each pattern object's mod rows itself (a shadow,
- * in the same row form, on the heap) and follows stock with it:
+ * rows are only the stored form: stock edits and plays the live lock store,
+ * an 88-byte record per step (42 lock words and a count), and rebuilds the
+ * rows from it (0x40009216), which drops every row it does not know. A step
+ * record has no room for more, so core keeps the mod locks itself, in a
+ * ledger: {the step record's address, code, value}, sorted by address. Stock
+ * moves step records with memcpy and clears them with a few routines, so
+ * the ledger follows them by address, wherever they go:
  *
- *   - row load (0x40008f98): the object's shadow is the rows with codes
- *     42..127 (stock skips them);
- *   - rebuild (0x40009216): after stock's rows, the shadow's, in code order
- *     then track order, each where one still fits under stock's 71 (stock
- *     skips a pair that does not fit and carries on, and so does core), so
- *     stock's locks always win;
- *   - a copy of a whole pattern object (memcpy of 85,760 bytes: pattern
- *     switch, SAVE and RELOAD PATTERN, copy, paste, undo, transfers) copies
- *     the source's shadow to the target; pattern init clears it;
+ *   - memcpy (0x40098bc0) of 88 bytes or more: the locks of the step records
+ *     copied go with them, and those the copy overwrote go; whole patterns,
+ *     tracks, pages and trigs, to and from the clipboards, the undo buffers
+ *     and a trig shift's swap alike;
+ *   - memset (0x40098c08), operator new (0x40082a40, 0x40082a46: memory
+ *     given out afresh), a track's clear (0x4001197c), a step's (0x400ac86e)
+ *     and pattern init (st_pat_init): the locks there go;
+ *   - row load (0x40008f98): the rows with codes 42..127 (stock skips them)
+ *     become the locks of the live lock store loaded;
+ *   - rebuild (0x40009216): after stock's rows, the lock store's mod locks as
+ *     rows, in code order then track order, each where one still fits under
+ *     stock's 71 (stock skips a pair that does not fit and carries on, and so
+ *     does core), so stock's locks always win;
+ *   - trig copy and Euclid's convert (0x400c4d62, 0x400c3eb0) list a step's
+ *     locks as {value, code, fine} for a later paste: core adds the step's
+ *     mod locks to the list, and the paste's lock set (0x400c058c), given a
+ *     code above 41, sets a mod lock;
  *   - the sound parameter set's lock calls (vtable +60 get, +64 set, +68
  *     clear, +72 turn) take a mod parameter's knob (its page id, lock.c)
- *     with a trig held: the lock goes into the shadow and, as stock writes
- *     its own lock edits, into the stored pattern's rows;
+ *     with a trig held;
  *   - playback (0x4009a954, a trig's locks): core notes the trig's mod
  *     locks per track, which mods read with core_lock_value.
  *
- * The objects are the 129 live patterns and, for anything else a pattern is
- * copied into (clipboard and undo buffers, transfer buffers), a few entries
- * keyed by address. Not yet followed (core-ar2 README): track, page and
- * trig operations, the SysEx dump guard, a mod parameter above 127.
+ * After a change to a live pattern's locks, core writes its mod rows into
+ * the stored pattern, as stock's rebuild would (stock does not rebuild for a
+ * change it does not see). Not yet followed (core-ar2 README): the SysEx
+ * dump guard, a mod parameter above 127.
  */
 
 #include <stdint.h>
 
-#define NEW ((unsigned (*)(unsigned))0x40082a40)         /* operator new; d0 */
+#define NEW ((unsigned (*)(unsigned))0x400827c4)         /* operator new's body; d0 */
 #define DELETE ((void (*)(void *))0x40082a4c)
 #define APP ((unsigned (*)(void))0x4017fa0a)
 #define APP_TRACKS ((unsigned (*)(unsigned))0x400ae492)
@@ -42,6 +52,7 @@
 #define CURRENT_PATTERN ((unsigned (*)(unsigned))0x400af0ac)
 #define TRACK_REC ((unsigned (*)(unsigned, int))0x400ab29e)
 #define TRACK_LENGTH ((int (*)(unsigned))0x400c0524)
+#define LIST_PUSH ((void (*)(void *, void *))0x401a034a)   /* (vector, &{value, code, fine}) */
 #define STOCK_LOCK_GET ((int (*)(void *, int, int))0x400a98b4)
 #define STOCK_LOCK_SET ((int (*)(void *, int, int, int))0x400a9926)
 #define STOCK_LOCK_CLEAR ((int (*)(void *, int, int))0x400a99c2)
@@ -52,6 +63,8 @@
 #define LIVE_LOCKS 0x2e91                       /* the live lock store in an object */
 #define TRACK_LOCKS 5674
 #define STEP_LOCKS 88
+#define STEPS_LOCKS (64 * STEP_LOCKS)           /* a track's step records */
+#define STORE_LOCKS (13 * TRACK_LOCKS)
 #define STORED_PATTERNS (0x405c8f20u + 0x18)     /* the stored project's 129 slots */
 #define STORED_PATTERN 13101
 #define STORED_ROWS 0x2091
@@ -61,11 +74,19 @@
 #define FIRST_CODE 42
 #define LAST_CODE 127
 #define CODES (LAST_CODE - FIRST_CODE + 1)
-#define BUFS 8
+#define DEAD 0xff
+#define MOST 16384                              /* the ledger's entries at most */
 
-struct shadow {
+struct ent {
+    unsigned addr;              /* the step record */
+    unsigned char code;         /* 42..127, DEAD once gone */
+    unsigned char value;        /* 0..127 */
+    unsigned short pad;
+};
+
+struct ledger {
     int n;
-    unsigned char row[][ROW];
+    struct ent e[];
 };
 
 struct core_lock_param;
@@ -78,12 +99,8 @@ int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
 
-static struct shadow *live_sh[129];
-static struct {
-    unsigned obj;
-    struct shadow *sh;
-} bufs[BUFS];
-static unsigned buf_next;
+static struct ledger *volatile led;
+static volatile unsigned gen;   /* every change, to the array or in place */
 
 /* the playing trig's mod locks, per track (0xff: none) */
 volatile unsigned char core_lock_now[13][CODES];
@@ -100,73 +117,129 @@ static void irq_restore(unsigned short sr)
     __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
 }
 
-/* where an object's shadow is kept; a new entry for another address when
- * make (the oldest one's shadow goes) */
-static struct shadow **slot(unsigned obj, int make)
+static void copy_bytes(void *d, const void *s, unsigned n)
 {
-    unsigned i;
-    if (obj >= LIVE_PATTERNS && obj < LIVE_PATTERNS + 129 * PATTERN_SIZE) {
-        if ((obj - LIVE_PATTERNS) % PATTERN_SIZE)
-            return 0;
-        return &live_sh[(obj - LIVE_PATTERNS) / PATTERN_SIZE];
-    }
-    for (i = 0; i < BUFS; i++)
-        if (bufs[i].obj == obj)
-            return &bufs[i].sh;
-    if (!make)
-        return 0;
-    i = buf_next++ % BUFS;
-    if (bufs[i].sh) {
-        DELETE(bufs[i].sh);
-        bufs[i].sh = 0;
-    }
-    bufs[i].obj = obj;
-    return &bufs[i].sh;
-}
-
-static void put(struct shadow **at, struct shadow *sh)
-{
-    struct shadow *old;
-    unsigned short sr = irq_mask();
-    old = *at;
-    *at = sh;
-    irq_restore(sr);
-    if (old)
-        DELETE(old);
-}
-
-static struct shadow *make(int n)
-{
-    struct shadow *sh = n ? (struct shadow *)NEW(4 + ROW * n) : 0;
-    if (sh)
-        sh->n = n;
-    return sh;
-}
-
-static void copy_bytes(unsigned char *d, const unsigned char *s, unsigned n)
-{
+    unsigned char *a = d;
+    const unsigned char *b = s;
     while (n--)
-        *d++ = *s++;
+        *a++ = *b++;
 }
 
-/* a whole pattern object copied (the memcpy site, lock.s) */
-void core_rows_copy(unsigned dst, unsigned src)
+/* the first entry at or above addr */
+static int lower(const struct ledger *l, unsigned addr)
 {
-    struct shadow **from = slot(src, 0), *sh = 0, **to;
-    if (from && *from && (sh = make((*from)->n)) != 0)
-        copy_bytes(&sh->row[0][0], &(*from)->row[0][0], ROW * sh->n);
-    if ((to = slot(dst, sh != 0)) != 0)
-        put(to, sh);
-    else if (sh)
-        DELETE(sh);
+    int lo = 0, hi = l->n, m;
+    while (lo < hi) {
+        m = (lo + hi) / 2;
+        if (l->e[m].addr < addr)
+            lo = m + 1;
+        else
+            hi = m;
+    }
+    return lo;
 }
 
-/* pattern init (st_pat_init) */
-void core_rows_clear(unsigned obj)
+static int any_in(const struct ledger *l, unsigned a, unsigned b)
 {
-    struct shadow **at = slot(obj, 0);
-    if (at)
-        put(at, 0);
+    int i;
+    for (i = lower(l, a); i < l->n && l->e[i].addr < b; i++)
+        if (l->e[i].code != DEAD)
+            return 1;
+    return 0;
+}
+
+/* the locks in [a, b) go, in place (no memory taken: also from operator new
+ * and from interrupts) */
+static void drop(unsigned a, unsigned b)
+{
+    struct ledger *l = led;
+    int i;
+    if (!l)
+        return;
+    for (i = lower(l, a); i < l->n && l->e[i].addr < b; i++)
+        if (l->e[i].code != DEAD) {
+            l->e[i].code = DEAD;
+            gen++;
+        }
+}
+
+/* the ledger with [a, b) holding only add[0..k) (sorted, each in [a, b));
+ * 0 when it could not be made */
+static int replace(unsigned a, unsigned b, const struct ent *add, int k)
+{
+    struct ledger *l, *n;
+    unsigned g;
+    unsigned short sr;
+    int i, j, live;
+    for (;;) {
+        l = led;
+        g = gen;
+        live = k;
+        for (i = 0; l && i < l->n; i++)
+            if (l->e[i].code != DEAD && (l->e[i].addr < a || l->e[i].addr >= b))
+                live++;
+        if (live > MOST)
+            return 0;
+        n = live ? (struct ledger *)NEW(4 + sizeof(struct ent) * live) : 0;
+        if (live && !n)
+            return 0;
+        j = 0;
+        for (i = 0; l && i < l->n && l->e[i].addr < a; i++)
+            if (l->e[i].code != DEAD)
+                n->e[j++] = l->e[i];
+        copy_bytes(&n->e[j], add, sizeof(struct ent) * k);
+        j += k;
+        for (; l && i < l->n; i++)
+            if (l->e[i].code != DEAD && l->e[i].addr >= b)
+                n->e[j++] = l->e[i];
+        if (n)
+            n->n = j;
+        sr = irq_mask();
+        if (led == l && gen == g) {
+            led = n;
+            gen++;
+            irq_restore(sr);
+            if (l)
+                DELETE(l);
+            return 1;
+        }
+        irq_restore(sr);
+        if (n)
+            DELETE(n);
+    }
+}
+
+/* a step record's mod locks, into out[] by code; their count */
+static int step_locks(unsigned addr, struct ent *out)
+{
+    struct ledger *l = led;
+    int i, k = 0;
+    for (i = l ? lower(l, addr) : 0; l && i < l->n && l->e[i].addr == addr && k < CODES; i++)
+        if (l->e[i].code != DEAD)
+            out[k++] = l->e[i];
+    return k;
+}
+
+/* ---- live patterns and their stored rows ---- */
+
+/* the live pattern whose lock store holds addr, or -1 */
+static int live_of(unsigned addr)
+{
+    unsigned o = addr - LIVE_PATTERNS - LIVE_LOCKS;
+    if (addr < LIVE_PATTERNS + LIVE_LOCKS || o / PATTERN_SIZE >= 129 ||
+        o % PATTERN_SIZE >= STORE_LOCKS)
+        return -1;
+    return o / PATTERN_SIZE;
+}
+
+static unsigned store_of(int k)
+{
+    return LIVE_PATTERNS + PATTERN_SIZE * k + LIVE_LOCKS;
+}
+
+static unsigned char *stored_rows(int k)
+{
+    return (unsigned char *)STORED_PATTERNS + STORED_PATTERN * k + STORED_ROWS;
 }
 
 static int mod_code(signed char c)
@@ -174,85 +247,264 @@ static int mod_code(signed char c)
     return c >= FIRST_CODE && c <= LAST_CODE;
 }
 
-/* row load (0x40008f98: live lock store, rows), after stock */
-void core_rows_load(unsigned char *locks, const unsigned char *rows)
+static int empty(const unsigned char *r)
 {
-    unsigned obj = (unsigned)locks - LIVE_LOCKS;
-    int i, n = 0;
-    struct shadow *sh, **at;
-    if (!locks || !rows)
-        return;
-    for (i = 0; i < ROWS; i++)
-        if (mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13)
-            n++;
-    if (!(at = slot(obj, n != 0)))
-        return;
-    sh = make(n);
-    if (n && !sh)
-        return;
-    for (i = n = 0; i < ROWS; i++)
-        if (mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13)
-            copy_bytes(sh->row[n++], rows + ROW * i, ROW);
-    put(at, sh);
+    return r[0] == 0xff && r[1] == 0xff;
 }
 
 static int used(const unsigned char *rows)
 {
     int i, u = 0;
     for (i = 0; i < ROWS; i++)
-        if (rows[ROW * i] != 0xff || rows[ROW * i + 1] != 0xff)
+        if (!empty(rows + ROW * i))
             u++;
     return u;
 }
 
-/* rebuild (0x40009216: rows, live lock store), after stock: the shadow's
- * rows in code order, then track order, where they fit */
-void core_rows_save(unsigned char *rows, unsigned char *locks)
+/* a lock store's mod locks as rows after the ones in rows, in code order
+ * then track order, where they fit under stock's 71 */
+static void append(unsigned char *rows, unsigned store)
 {
-    struct shadow **at, *sh;
-    int u, code, t, i, k = 0;
-    if (!rows || !locks || !(at = slot((unsigned)locks - LIVE_LOCKS, 0)) || !(sh = *at))
+    struct ledger *l = led;
+    unsigned char at[CODES][13], *r;
+    unsigned o;
+    int u, code, t, s, i, k = 0, first, last;
+    if (!l)
         return;
-    u = used(rows);
-    for (code = FIRST_CODE; code <= LAST_CODE; code++)
+    first = lower(l, store);
+    last = lower(l, store + STORE_LOCKS);
+    for (code = 0; code < CODES; code++)
         for (t = 0; t < 13; t++)
-            for (i = 0; i < sh->n; i++)
-                if (sh->row[i][0] == code && sh->row[i][1] == t) {
-                    if (u >= MAX_USED)
-                        continue;
-                    while (k < ROWS && (rows[ROW * k] != 0xff || rows[ROW * k + 1] != 0xff))
-                        k++;
-                    if (k == ROWS)
-                        return;
-                    copy_bytes(rows + ROW * k, sh->row[i], ROW);
-                    u++;
-                }
+            at[code][t] = 0xff;
+    for (i = first; i < last; i++)
+        if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS)
+            at[l->e[i].code - FIRST_CODE][o / TRACK_LOCKS] = 0xfe;
+    u = used(rows);
+    for (code = 0; code < CODES; code++)
+        for (t = 0; t < 13; t++) {
+            if (at[code][t] == 0xff)
+                continue;
+            at[code][t] = 0xff;
+            if (u >= MAX_USED)
+                continue;
+            while (k < ROWS && !empty(rows + ROW * k))
+                k++;
+            if (k == ROWS)
+                goto fill;
+            r = rows + ROW * k;
+            r[0] = FIRST_CODE + code;
+            r[1] = t;
+            for (s = 0; s < 64; s++)
+                r[2 + s] = 0xff;
+            at[code][t] = k;
+            u++;
+        }
+fill:
+    for (i = first; i < last; i++)
+        if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS &&
+            (k = at[l->e[i].code - FIRST_CODE][o / TRACK_LOCKS]) < ROWS)
+            rows[ROW * k + 2 + o % TRACK_LOCKS / STEP_LOCKS] = l->e[i].value;
+}
+
+/* the mod rows go */
+static void unappend(unsigned char *rows)
+{
+    int i, j;
+    for (i = 0; i < ROWS; i++)
+        if (mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13)
+            for (j = 0; j < ROW; j++)
+                rows[ROW * i + j] = j < 2 ? 0xff : 0;
+}
+
+/* the stored pattern of live pattern k takes its mod rows afresh */
+static void sync(int k)
+{
+    unsigned char *rows = stored_rows(k);
+    unappend(rows);
+    append(rows, store_of(k));
+}
+
+/* the live patterns whose lock stores [a, b) touches take theirs */
+static void changed(unsigned a, unsigned b)
+{
+    int k;
+    for (k = 0; k < 129; k++)
+        if (store_of(k) < b && store_of(k) + STORE_LOCKS > a)
+            sync(k);
+}
+
+/* ---- the sites ---- */
+
+/* memcpy (dst, src, n), after the copy (rows.s): n >= 88 */
+void core_rows_memcpy(unsigned dst, unsigned src, unsigned n)
+{
+    struct ledger *l = led;
+    struct ent *add;
+    int i, k, first;
+    if (!l || !l->n || dst == src || (!any_in(l, dst, dst + n) && !any_in(l, src, src + n)))
+        return;
+    first = lower(l, src);
+    for (k = 0, i = first; i < l->n && l->e[i].addr < src + n; i++)
+        if (l->e[i].code != DEAD && l->e[i].addr + STEP_LOCKS <= src + n)
+            k++;
+    if (!k) {
+        drop(dst, dst + n);
+    } else if ((add = (struct ent *)NEW(sizeof(struct ent) * k)) != 0) {
+        for (k = 0, i = first; i < l->n && l->e[i].addr < src + n; i++)
+            if (l->e[i].code != DEAD && l->e[i].addr + STEP_LOCKS <= src + n) {
+                add[k] = l->e[i];
+                add[k++].addr += dst - src;
+            }
+        if (!replace(dst, dst + n, add, k))
+            drop(dst, dst + n);
+        DELETE(add);
+    } else {
+        drop(dst, dst + n);
+    }
+    changed(dst, dst + n);
+}
+
+/* memset (dst, c, n) and operator new's block (rows.s), track clear
+ * (data, locks: rows.s): the locks there go */
+void core_rows_drop(unsigned a, unsigned n)
+{
+    struct ledger *l = led;
+    if (!l || !l->n || !any_in(l, a, a + n))
+        return;
+    drop(a, a + n);
+    changed(a, a + n);
+}
+
+/* pattern init (st_pat_init) */
+void core_rows_clear(unsigned obj)
+{
+    core_rows_drop(obj + LIVE_LOCKS, STORE_LOCKS);
+}
+
+/* 0x400ac86e, a step's clear (pattern, track, step), after stock (rows.s) */
+void core_rows_step_clear(unsigned pat, int track, int step)
+{
+    unsigned locks;
+    if (!pat || (unsigned)track > 12 || (unsigned)step > 63)
+        return;
+    locks = (*(unsigned (**)(unsigned))(*(unsigned *)pat + 40))(pat);
+    if (locks)
+        core_rows_drop(locks + TRACK_LOCKS * track + STEP_LOCKS * step, STEP_LOCKS);
+}
+
+/* row load (0x40008f98: live lock store, rows), after stock */
+void core_rows_load(unsigned store, const unsigned char *rows)
+{
+    unsigned char ord[ROWS];
+    const unsigned char *r;
+    struct ent *add;
+    int i, j, k, t, s, x;
+    if (!store || !rows)
+        return;
+    for (i = k = 0; i < ROWS; i++)
+        if (mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13)
+            ord[k++] = i;
+    for (i = 1; i < k; i++)             /* by track, then code */
+        for (j = i; j > 0; j--) {
+            const unsigned char *a = rows + ROW * ord[j - 1], *b = rows + ROW * ord[j];
+            if (a[1] < b[1] || (a[1] == b[1] && a[0] <= b[0]))
+                break;
+            x = ord[j];
+            ord[j] = ord[j - 1];
+            ord[j - 1] = x;
+        }
+    for (i = x = 0; i < k; i++)
+        for (s = 0; s < 64; s++)
+            x += !(rows[ROW * ord[i] + 2 + s] & 0x80);
+    if (!x) {
+        drop(store, store + STORE_LOCKS);
+        return;
+    }
+    if (!(add = (struct ent *)NEW(sizeof(struct ent) * x)))
+        return;
+    for (t = x = 0; t < 13; t++)
+        for (s = 0; s < 64; s++)
+            for (i = 0; i < k; i++) {
+                r = rows + ROW * ord[i];
+                if (r[1] != t || (r[2 + s] & 0x80))
+                    continue;
+                add[x].addr = store + TRACK_LOCKS * t + STEP_LOCKS * s;
+                add[x].code = r[0];
+                add[x].value = r[2 + s];
+                add[x++].pad = 0;
+            }
+    if (!replace(store, store + STORE_LOCKS, add, x))
+        drop(store, store + STORE_LOCKS);
+    DELETE(add);
+}
+
+/* rebuild (0x40009216: rows, live lock store), after stock */
+void core_rows_save(unsigned char *rows, unsigned store)
+{
+    if (rows && store) {
+        unappend(rows);
+        append(rows, store);
+    }
+}
+
+/* ---- trig copy and paste ---- */
+
+struct listed {
+    int value;                  /* 8.8, as stock's lock words */
+    int code;
+    int fine;
+};
+
+static unsigned step_addr(unsigned rec, int step)
+{
+    unsigned pat = *(unsigned *)(rec + 44), locks;
+    int track = *(int *)(rec + 64);
+    if (!pat || (unsigned)track > 12 || (unsigned)step > 63)
+        return 0;
+    locks = (*(unsigned (**)(unsigned))(*(unsigned *)pat + 40))(pat);
+    return locks ? locks + TRACK_LOCKS * track + STEP_LOCKS * step : 0;
+}
+
+/* 0x400c4d62, 0x400c3eb0 (rows.s): the step's mod locks join its list */
+void core_rows_list(unsigned rec, int step, void *list, struct listed *e)
+{
+    struct ent at[CODES];
+    unsigned a = step_addr(rec, step);
+    int i, k = a ? step_locks(a, at) : 0;
+    for (i = 0; i < k; i++) {
+        e->value = at[i].value << 8;
+        e->code = at[i].code;
+        e->fine = 0;
+        LIST_PUSH(list, e);
+    }
+}
+
+static int put(unsigned addr, int code, int v);
+
+/* 0x400c058c (rows.s): (track record, step, code, value 8.8, fine) for a
+ * code above 41; 1 when it was set */
+int core_rows_paste(unsigned rec, int step, int code, int value)
+{
+    unsigned a;
+    if (code < FIRST_CODE || code > LAST_CODE || TRACK_LENGTH(rec) < step || !(a = step_addr(rec, step)))
+        return 0;
+    value >>= 8;
+    return put(a, code, value < 0 ? 0 : value > 127 ? 127 : value);
 }
 
 /* ---- playback: the trig's locks (0x4009a954: track, out, the step's
  * locks, ...) ---- */
-void core_rows_trig(int track, const unsigned char *step)
+void core_rows_trig(int track, unsigned step)
 {
-    unsigned off, obj, t, s, i;
-    struct shadow *sh;
+    struct ledger *l = led;
+    int i;
     if ((unsigned)track >= 13)
         return;
     for (i = 0; i < CODES; i++)
         core_lock_now[track][i] = 0xff;
-    off = (unsigned)step - LIVE_PATTERNS;
-    if ((unsigned)step < LIVE_PATTERNS || off >= 129 * PATTERN_SIZE)
-        return;
-    obj = off / PATTERN_SIZE;
-    off = off % PATTERN_SIZE - LIVE_LOCKS;
-    if (off >= 13 * TRACK_LOCKS || off % TRACK_LOCKS >= 64 * STEP_LOCKS)
-        return;
-    t = off / TRACK_LOCKS;
-    s = off % TRACK_LOCKS / STEP_LOCKS;
-    if (!(sh = live_sh[obj]))
-        return;
-    for (i = 0; i < (unsigned)sh->n; i++)
-        if (sh->row[i][1] == t && !(sh->row[i][2 + s] & 0x80))
-            core_lock_now[track][sh->row[i][0] - FIRST_CODE] = sh->row[i][2 + s];
+    for (i = l ? lower(l, step) : 0; l && i < l->n && l->e[i].addr == step; i++)
+        if (l->e[i].code != DEAD)
+            core_lock_now[track][l->e[i].code - FIRST_CODE] = l->e[i].value;
 }
 
 int core_lock_value(int track, unsigned field)
@@ -266,103 +518,66 @@ int core_lock_value(int track, unsigned field)
 
 /* ---- editing: a mod parameter's knob with a trig held ---- */
 
-/* the live pattern and track a lock call works on, found as stock's
- * (0x400a9926 -> 0x400c058c -> 0x400ac6dc): the current pattern's track
- * record, whose +44 answers the lock store (vtable +40) and +64 is the
- * track; the step within the track's length */
-static int where(int step, unsigned *obj, int *track)
+/* the step record a lock call works on, found as stock's (0x400a9926 ->
+ * 0x400c058c -> 0x400ac6dc): the current pattern's track record, the step
+ * within the track's length */
+static unsigned where(int step)
 {
-    unsigned app = APP(), rec, pat, locks;
+    unsigned app = APP(), rec;
     rec = TRACK_REC(CURRENT_PATTERN(app), CURRENT_TRACK(APP_TRACKS(app)));
-    pat = *(unsigned *)(rec + 44);
-    *track = *(int *)(rec + 64);
-    if ((unsigned)step >= 64 || !pat || (unsigned)*track >= 13 || TRACK_LENGTH(rec) < step)
+    if ((unsigned)step >= 64 || TRACK_LENGTH(rec) < step)
         return 0;
-    locks = (*(unsigned (**)(unsigned))(*(unsigned *)pat + 40))(pat);
-    *obj = locks - LIVE_LOCKS;
-    return *obj >= LIVE_PATTERNS && *obj < LIVE_PATTERNS + 129 * PATTERN_SIZE &&
-           !((*obj - LIVE_PATTERNS) % PATTERN_SIZE);
+    return step_addr(rec, step);
 }
 
-static int find(const struct shadow *sh, int code, int track)
+static int get(unsigned addr, int code)
 {
-    int i;
-    for (i = 0; sh && i < sh->n; i++)
-        if (sh->row[i][0] == code && sh->row[i][1] == track)
-            return i;
+    struct ent at[CODES];
+    int i, k = step_locks(addr, at);
+    for (i = 0; i < k; i++)
+        if (at[i].code == code)
+            return at[i].value;
     return -1;
 }
 
-static int lock_get(unsigned obj, int track, int step, int code)
+/* does the lock store hold a lock of code on addr's track? */
+static int has_row(unsigned addr, int code)
 {
-    struct shadow *sh = live_sh[(obj - LIVE_PATTERNS) / PATTERN_SIZE];
-    int i = find(sh, code, track);
-    return i < 0 || (sh->row[i][2 + step] & 0x80) ? -1 : sh->row[i][2 + step];
-}
-
-/* the stored pattern's row for (code, track): an empty one when make and
- * stock's 71 leave room */
-static unsigned char *stored_row(unsigned obj, int code, int track, int make)
-{
-    unsigned char *rows = (unsigned char *)STORED_PATTERNS +
-                          STORED_PATTERN * ((obj - LIVE_PATTERNS) / PATTERN_SIZE) + STORED_ROWS;
-    int i;
-    for (i = 0; i < ROWS; i++)
-        if (rows[ROW * i] == code && rows[ROW * i + 1] == track)
-            return rows + ROW * i;
-    if (!make || used(rows) >= MAX_USED)
+    struct ledger *l = led;
+    unsigned track;
+    int k = live_of(addr), i;
+    if (!l || k < 0)
         return 0;
-    for (i = 0; i < ROWS; i++)
-        if (rows[ROW * i] == 0xff && rows[ROW * i + 1] == 0xff) {
-            rows[ROW * i] = code;
-            rows[ROW * i + 1] = track;
-            for (code = 0; code < 64; code++)
-                rows[ROW * i + 2 + code] = 0xff;
-            return rows + ROW * i;
-        }
+    track = addr - (addr - store_of(k)) % TRACK_LOCKS;
+    for (i = lower(l, track); i < l->n && l->e[i].addr < track + STEPS_LOCKS; i++)
+        if (l->e[i].code == code)
+            return 1;
     return 0;
 }
 
 /* v: 0..127, or -1 to clear; 0 when there was no room */
-static int lock_put(unsigned obj, int track, int step, int code, int v)
+static int put(unsigned addr, int code, int v)
 {
-    struct shadow **at = &live_sh[(obj - LIVE_PATTERNS) / PATTERN_SIZE], *sh = *at, *nsh;
-    unsigned char *row;
-    int i = find(sh, code, track), j, any;
-    if (i < 0) {
-        if (v < 0)
-            return 1;
-        if (!(row = stored_row(obj, code, track, 1)))
-            return 0;           /* stock's budget is full: no lock, as stock */
-        if (!(nsh = make((sh ? sh->n : 0) + 1)))
+    struct ent at[CODES + 1];
+    int k = step_locks(addr, at), i, j, live = live_of(addr);
+    for (i = j = 0; i < k; i++)
+        if (at[i].code != code)
+            at[j++] = at[i];
+    if (v >= 0) {
+        /* a new row in a live pattern: stock's 71 must leave room */
+        if (live >= 0 && !has_row(addr, code) && used(stored_rows(live)) >= MAX_USED)
             return 0;
-        if (sh)
-            copy_bytes(&nsh->row[0][0], &sh->row[0][0], ROW * sh->n);
-        i = nsh->n - 1;
-        nsh->row[i][0] = code;
-        nsh->row[i][1] = track;
-        for (j = 0; j < 64; j++)
-            nsh->row[i][2 + j] = 0xff;
-        put(at, nsh);
-        sh = nsh;
+        for (i = j; i > 0 && at[i - 1].code > code; i--)
+            at[i] = at[i - 1];
+        at[i].addr = addr;
+        at[i].code = code;
+        at[i].value = v;
+        at[i].pad = 0;
+        j++;
     }
-    sh->row[i][2 + step] = v < 0 ? 0xff : v;
-    if ((row = stored_row(obj, code, track, 0)) != 0)
-        row[2 + step] = sh->row[i][2 + step];
-    for (any = j = 0; j < 64; j++)
-        any |= !(sh->row[i][2 + j] & 0x80);
-    if (!any) {                 /* the row's last lock: the row goes */
-        if (row)
-            for (j = 0; j < ROW; j++)
-                row[j] = j < 2 ? 0xff : 0;
-        nsh = make(sh->n - 1);
-        if (sh->n > 1 && !nsh)
-            return 1;
-        for (j = any = 0; j < sh->n; j++)
-            if (j != i)
-                copy_bytes(nsh->row[any++], sh->row[j], ROW);
-        put(at, nsh);
-    }
+    if (!replace(addr, addr + 1, at, j))
+        return 0;
+    changed(addr, addr + 1);
     return 1;
 }
 
@@ -387,13 +602,12 @@ static int clamp(const struct core_lock_param *p, int v)
 /* sound set vtable +60: (set, id, step) -> the lock (8.8) or -1 */
 int core_lock_get_vt(void *set, int id, int step)
 {
-    unsigned code, obj;
-    int track;
+    unsigned code, a;
     if (!ours(set, id, &code))
         return STOCK_LOCK_GET(set, id, step);
-    if (!where(step, &obj, &track))
+    if (!(a = where(step)))
         return -1;
-    step = lock_get(obj, track, step, code);
+    step = get(a, code);
     return step < 0 ? -1 : step << 8;
 }
 
@@ -401,25 +615,23 @@ int core_lock_get_vt(void *set, int id, int step)
 int core_lock_set_vt(void *set, int id, int value, int step)
 {
     const struct core_lock_param *p;
-    unsigned code, obj;
-    int track;
+    unsigned code, a;
     if (!(p = ours(set, id, &code)))
         return STOCK_LOCK_SET(set, id, value, step);
-    if (!where(step, &obj, &track))
+    if (!(a = where(step)))
         return 0;
-    return lock_put(obj, track, step, code, clamp(p, value >> 8));
+    return put(a, code, clamp(p, value >> 8));
 }
 
 /* +68: (set, id, step) */
 int core_lock_clear_vt(void *set, int id, int step)
 {
-    unsigned code, obj;
-    int track;
+    unsigned code, a;
     if (!ours(set, id, &code))
         return STOCK_LOCK_CLEAR(set, id, step);
-    if (!where(step, &obj, &track))
+    if (!(a = where(step)))
         return 0;
-    return lock_put(obj, track, step, code, -1);
+    return put(a, code, -1);
 }
 
 /* +72: (set, id, delta 8.8, step) -> the new lock (8.8): a whole step at
@@ -427,15 +639,15 @@ int core_lock_clear_vt(void *set, int id, int step)
 int core_lock_turn_vt(void *set, int id, int delta, int step)
 {
     const struct core_lock_param *p;
-    unsigned code, obj;
-    int track, v;
+    unsigned code, a;
+    int v;
     if (!(p = ours(set, id, &code)))
         return STOCK_LOCK_TURN(set, id, delta, step);
-    if (!where(step, &obj, &track))
+    if (!(a = where(step)))
         return -1;
-    if ((v = lock_get(obj, track, step, code)) < 0)
+    if ((v = get(a, code)) < 0)
         v = core_store_get(core_lock_field(p), core_lock_sound(set), 0);
     v = clamp(p, v + (delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0));
-    lock_put(obj, track, step, code, v);
+    put(a, code, v);
     return v << 8;
 }

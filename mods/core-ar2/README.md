@@ -408,34 +408,49 @@ playing trig's value with `core_lock_value(track, field)`.
 A pattern keeps its p-locks in a pool of 72 rows of 66 bytes, `[code]
 [track][64 step bytes]`; stock's codes are 0..41, a mod parameter's row
 carries its lock code (42..127). Stock only stores the rows: it edits and
-plays a live lock store and rebuilds the rows from it, dropping codes it
-doesn't know. So core keeps each pattern object's mod rows itself (a
-shadow on the heap, in row form) and follows stock with it.
+plays a live lock store, an 88-byte record per step (42 lock words and a
+count, no room for more), and rebuilds the rows from it, dropping codes it
+doesn't know. So core keeps the mod locks itself, in a ledger on the heap:
+`{step record's address, code, value}`, sorted by address. Stock moves step
+records with memcpy and clears them with a few routines, so the ledger
+follows them by address, wherever they go: a whole pattern, a track, a
+page or a trig, to and from the clipboards and the undo buffers, and a
+trig shift's swap. After a change to a live pattern's mod locks, core
+writes them into the stored pattern as rows, as stock's rebuild would.
 
 | site | 1.74 | what |
 |---|---|---|
-| memcpy | 0x40098bc0 (`jmp`) | a copy of a whole pattern object (85,760 bytes: pattern switch, SAVE and RELOAD PATTERN, copy, paste, undo) also copies the source's shadow |
-| row load | 0x40008f98 (`jmp`) | after stock, the rows with codes 42..127 and a track below 13 become the object's shadow |
-| rebuild | 0x40009216 (`jmp`) | after stock's rows, the shadow's, in code then track order, while fewer than 71 rows are used, so stock's locks always fit first |
+| memcpy | 0x40098bc0 (`jmp`) | a copy of 88 bytes or more: the mod locks of the step records copied go with them, and those it overwrote go (pattern switch, SAVE and RELOAD PATTERN and TRACK, copy, paste and undo of a pattern, track or page, trig shift) |
+| memset, operator new | 0x40098c08, 0x40082a40, 0x40082a46 (`jmp`) | the mod locks in the block go (none are left in memory given out afresh) |
+| track clear | 0x4001197c (`jmp`) | the track's 64 step records' mod locks go |
+| step clear | 0x400ac86e (`jmp`) | after stock, the step's mod locks go (trig lock clear, page clear, a paste's target) |
+| trig copy, Euclid convert | 0x400c4d62, 0x400c3eb0 (`jmp`) | after stock lists a step's locks as `{value, code, fine}` for a paste, core lists its mod locks |
+| lock set | 0x400c058c (`jmp`) | a listed lock with a code above 41, as a paste sets it, is a mod lock |
+| row load | 0x40008f98 (`jmp`) | after stock, the rows with codes 42..127 and a track below 13 become the lock store's mod locks |
+| rebuild | 0x40009216 (`jmp`) | after stock's rows, the lock store's mod locks as rows, in code then track order, while fewer than 71 rows are used, so stock's locks always fit first |
 | trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`) |
-| lock get, set, clear, turn | sound set vtable +60..+72, 0x401dce60..0x401dce6c (`ptr`) | a mod parameter's knob (its page id) with a trig held: the lock goes into the shadow and, as stock writes its own lock edits, into the stored pattern's rows; any other id goes to stock's routine |
+| lock get, set, clear, turn | sound set vtable +60..+72, 0x401dce60..0x401dce6c (`ptr`) | a mod parameter's knob (its page id) with a trig held: the lock goes into the ledger; any other id goes to stock's routine |
 
-Pattern init (`st_pat_init`, Mod storage) also clears the object's shadow.
-A set or turn takes whole steps of 0..127, starting a turn from the sound's
-value; values are clamped to the parameter's `min..max` and to 127.
+Pattern init (`st_pat_init`, Mod storage) also clears the pattern's mod
+locks. A set or turn takes whole steps of 0..127, starting a turn from the
+sound's value; values are clamped to the parameter's `min..max` and to 127.
+A new row is refused, as stock refuses one, when 71 rows are in use. The
+ledger holds 16,384 locks at most (all patterns, clipboards and undo
+buffers together); a copy that would pass that drops the locks it copies.
 
-Checked in the emulator (dtboot, OS 1.74, `examples/lock-check-ar2` 1.1): a
-trig held and the knob turned makes a row with the parameter's code in the
-stored pattern; the trig plays the value; SAVE and RELOAD PATTERN keep it;
-it survives a power cycle with no save, and the reloaded pattern plays it;
-a copy of A01 pasted into A03 carries the row (A03's object gets its shadow).
-Not checked yet: A03 playing it after the paste (in the emulator stock's
-screen stops updating after a paste, on stock too) and a pattern clear. Not
-on a unit.
+Checked in the emulator (dtboot, OS 1.74, `examples/lock-check-ar2` 1.1,
+25 Oct 2026), with locks on steps 1 and 6 of track 1 in A01: a hold and a
+knob turn makes the row; the trig plays its value; trig copy and paste
+(step 1 to 9) carries the lock, and the trig's lock clear removes it; page
+clear removes both and its undo brings them back; so do track clear and
+its undo, and a track copy, clear and paste; trig shift right twice moves
+them to steps 3 and 8, left once to 16 and 5 (wrapping); pattern clear and
+its undo; a pattern copy into A03 gives A03's stored pattern the row; after
+a power cycle with no save the pattern plays the lock. Not checked: Euclid's
+convert. Not on a unit.
 
-Not followed yet: track, page and trig operations (copy, clear, shift,
-paste of a track or a trig), track init, the SysEx dump guard, scenes and performance,
-MIDI, and fine values (a value above 127 can't be locked).
+Not followed yet: the SysEx dump guard, scenes and performance, MIDI, and
+fine values (a value above 127 can't be locked).
 
 ## Checked so far
 

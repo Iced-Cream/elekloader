@@ -1661,8 +1661,10 @@ track (0..12), set with the trig's other locks before it sounds, or -1 when
 that trig has none. A set or a turn moves in whole steps of 0..127 from the
 sound's value, clamped to the parameter's `min..max`.
 
-Limits (0.8): a value above 127 can't be locked; track, page and trig
-operations (copy, clear, shift a track or a trig), scenes, performance and
+Mod locks follow the trigs they belong to through copy, paste, clear and
+undo of a trig, page, track or pattern, and through a trig shift.
+
+Limits (0.8): a value above 127 can't be locked; scenes, performance and
 MIDI don't carry mod locks yet, and SysEx pattern dumps aren't guarded
 for them. Checked in the emulator only.
 

@@ -46,7 +46,7 @@ int core_lock_code(unsigned field);
  * ev_render_out; the mod scales it to its own range. */
 int core_lfo_offset(int track, unsigned field);
 
-/* core-ar2 0.9: the field's p-lock on the trig track (0..12) last played,
+/* core-ar2 0.8: the field's p-lock on the trig track (0..12) last played,
  * 0..127, or -1 when that trig has none. Set with the trig's other locks,
  * before it sounds; the mod uses it in place of the sound's value for that
  * trig. A p-lock is set like a stock one: a trig held, the parameter's knob
