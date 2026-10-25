@@ -146,7 +146,15 @@ copies its own bytes from that image into the stored project, by the parts
 the save wrote (flags 2 the global slots, 4 the kits and the working kit
 when the image's index is the stored project's, 8 the tagged store, 0x20
 the pool), so a power cycle straight after the save keeps the mods'
-fields. The buffer save at 0x40034d86 takes the same path.
+fields. The SysEx dump of the working project (0x40034d86, in the SysEx
+dump request handler 0x4008680c, which serializes the live project into a
+buffer of its own) takes the same path, so a dump request also brings the
+stored project's mod bytes up to date. A Total Recall take runs no
+serializer: it sends the stored project as it is (Overbridge command 0x20,
+type 0x1b), so it carries whatever mod fields the stored project holds, and
+saves nothing on the unit (checked on a unit, 25 Oct 2026: with
+write-through off, a take and a power cycle lost the same fields as no save
+at all; the take's image held exactly the stored project's bytes).
 
 The 32 sites, by `jmp` unless marked, each with its displaced instructions
 in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
@@ -162,7 +170,7 @@ in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
 | sound init | 0x400122b6 | 0x400122b6 | the same |
 | project init | 0x40011d38 | 0x40011d38 | CREATE NEW and the project reset: a fresh store |
 | project load | 0x4000cd2e | 0x4000cd2e | after any load: drop scopes another layout wrote, write this build's header |
-| buffer save (`keep2`) | 0x40034d86 | 0x40034d86 | which image is being saved |
+| SysEx dump of the working project (`keep2`) | 0x40034d86 | 0x40034d86 | which image is being saved |
 | file save (`keep2`) | 0x400b0870 | 0x400b0804 | the same, for a project file |
 | file load (`keep2`) | 0x40035000 | 0x40035000 | which image is being loaded |
 | SysEx song copy, write, swap (`keep2`) | 0x4018b8b8, 0x4018c266, 0x4018c488 | 0x4018b6ec, 0x4018c09a, 0x4018c2bc | copy whole stored songs but leave the target's store bytes |
@@ -345,7 +353,10 @@ A source built on core 0.4 hung 0 of 15, so the race is rarer from core
 builds than from stock. With the emulator's panel link paced from its baud
 divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
 of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
-unit the race is likely rare. Not yet checked on a unit.
+unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
+from two builds on this core (W07F to W07N, W07N to stock) restarted in
+15 s; with a race this rare that is no proof the hang is gone, only that
+the routine does no harm.
 
 ## Checked so far
 
@@ -477,7 +488,20 @@ stock bytes, and that each covers whole instructions.
   global markers there). The SAVE PROJECT AS copy was checked by itself on
   a build with the write-through call taken out: STORE CHECK, SAVE PROJECT
   AS, a power-off and a cold boot read back empty, and the same build
-  powered off without the save lost those six columns. Not yet on a unit.
+  powered off without the save lost those six columns.
+  On a unit (25 Oct 2026), with store-check 1.2.1 and analoghealth 1.2: on
+  core 0.7 (W07F) STORE CHECK then a power cycle with no save read back
+  empty. On a test build with the write-through call taken out (W07N) the
+  same lost the pattern-track, pattern, kit-sound, pool-sound, kit and global
+  markers (the project's stayed: they live in the stored project's tagged
+  store), and STORE CHECK, SAVE PROJECT AS and a power cycle read back empty.
+  A Total Recall take before the power cycle kept nothing (see SAVE PROJECT
+  AS above). CPU during STORE CHECK 69-73 %, idle 69-70 %. Before that, on
+  core 0.8 with store-check 1.2 (which carries this code unchanged), the
+  same power cycle read back empty. Not measured on a unit: the time
+  core_store_set holds interrupts masked; in an emulator write-through adds
+  about 143 instructions to an average set, and the longest masked stretch,
+  about 1,130 instructions, is the field loop's, as on 0.6.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES

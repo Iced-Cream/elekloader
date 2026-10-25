@@ -1349,7 +1349,9 @@ so `track` is limited to 16 bits a track). P growing moves the patterns'
 and the project's regions, so their data in older projects loads as zeros;
 the pattern tracks come first and keep theirs. The stock OS does not keep these
 bytes in a project file, so core also hooks the file save and load
-(Transfer's `.arprj` and the card) and Total Recall's buffer.
+(Transfer's `.arprj` and the card) and the SysEx dump of the working project.
+A Total Recall take sends the stored project as it is, so it carries what
+the stored project holds.
 
 **When a field reaches the project.** A live item's fields go into the
 stored project when stock saves that item there. A sound's or kit's go with
@@ -1412,7 +1414,7 @@ save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c a
 and 0x4000863e (kits), 0x40007a5c and 0x4000763c (global slots), 0x40011ab8
 and 0x400118e8 (pattern and track init), 0x400122b6 (sound init),
 0x40011d38 (CREATE NEW and the project reset), 0x4000cd2e (every project
-load), 0x40034d86 (Total Recall's buffer save), the file save, and
+load), 0x40034d86 (the SysEx dump of the working project), the file save, and
 0x40035000 (the file load), and the three calls through which the SysEx
 project commands copy, write and swap whole stored songs (0x4018b6ec,
 0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)
