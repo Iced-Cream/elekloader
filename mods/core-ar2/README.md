@@ -5,7 +5,9 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`. On its own it changes nothing the unit does.
+with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, from 0.7 with
+`finish.s` (The OS upgrade's restart, below). On its own it changes nothing the unit does, apart
+from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -280,6 +282,39 @@ as stock does for a machine its voice may not run (checked on a unit, below).
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
 
+## The OS upgrade's restart (0.7)
+
+When the unit has written a new OS (from Transfer, or any host's OS upgrade),
+stock 1.74 shows SUCCESS! REBOOTING, waits 3 s, masks every interrupt
+(`move #0x2700,sr` at 0x4009f4ec) and calls 0x40001bce, which waits for its
+serial output to drain: while bytes are pending behind the panel link's DMA
+(0x413da6bc), then while the UART queue holds bytes (0x413da6cc), then for
+the UART to be empty. Only the DMA's and the UART's interrupts move those
+counts on. If the panel task queued bytes while a panel DMA was still running,
+just before the mask, they are never sent and the unit stays on SUCCESS!
+REBOOTING until it is switched off. The new OS is already written, so it
+boots then. Nothing the host does or stops doing changes this: it happens
+with no traffic at all after the upgrade's last message.
+
+`finish.s` takes that site: `core_finish_drain` masks interrupts only once
+nothing is pending, unmasking again to let the interrupts send what was
+queued, then calls 0x40001bce as stock does, with interrupts masked. It runs
+only when a build on this core is the OS being replaced, so it protects the
+upgrade away from a custom build (to stock, or to another build), not one
+away from stock. The addresses come from `mod.json` (`FINISH_PANEL`,
+`FINISH_UART`, `FINISH_DRAIN`); core-a4 0.4 uses the same file with the
+A4's.
+
+Checked in analog-emu (25 Oct 2026; each flash a fresh headless emulator
+booted on the source OS, then `elkflash upgrade --no-confirm --wait` of a
+custom 1.74 build). From stock with only this routine patched in, 0 of 15
+hung; from the same build without it, 5 of 15 (one-sided Fisher p = 0.02).
+A source built on core 0.4 hung 0 of 15, so the race is rarer from core
+builds than from stock. With the emulator's panel link paced from its baud
+divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
+of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
+unit the race is likely rare. Not yet checked on a unit.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -412,8 +447,8 @@ stock bytes, and that each covers whole instructions.
 
 ## Building
 
-Core 0.6 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.6.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.7 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.7.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -422,8 +457,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.6.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.7.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.6.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.7.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```
