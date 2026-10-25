@@ -69,6 +69,73 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
+| `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
+
+### Digitone II SHARC mod
+
+On the Digitone II 1.12 a format-2 mod may also carry code for the DSP, an
+ADSP-21569 SHARC+, in a top-level `sharc` object. This is experimental. The
+[callback contract](SHARC-DN2-ABI.md) says what the code must do, and
+[SHARC-DN2.md](SHARC-DN2.md) what has been checked.
+
+**In mod.json**, `"sharc": {"artifact": "sine.sharc.json"}` names a file in
+the mod's folder; the SDK refuses a path outside it. The SDK copies the file
+into the `.elemod` as `sharc` and records its hash in
+`build.sharc_artifact_sha256`. The artifact is already compiled and linked,
+so no SHARC compiler runs during build, lint or patch. Any compiler or
+assembler can make one; the [sine example](../examples/sharc-sine/README.md)
+makes one from C or assembly.
+
+**The object** has exactly these fields:
+
+| field | value |
+|---|---|
+| `abi` | `"dn2-master-mono32-l2-v1"`. Core's bridge uses `"dn2-master-mono32-v1"`, which a mod may not |
+| `segments` | `[{"offset_bytes", "kind", "hex"}]`: `kind` is `"code"` or `"data"`, `hex` is the bytes in loader order. At least one is code |
+| `zero` | `[{"offset_bytes", "size_bytes"}]`: ranges the DSP's loader fills with zeros |
+| `entries` | `{"init_offset_bytes", "render_offset_bytes"}`: the two callbacks. `null` makes an inert mod, which nothing calls |
+| `stack_bytes` | the stack the callbacks use, as the author declares it. 0 for an inert mod |
+
+Offsets count bytes from the start of the mod's 32 KiB area, loader
+`[0x20090000,0x20098000)`. Link the code for that address: nothing
+relocates it. The C example's callbacks are at 320 and 382, the assembly
+example's at 176 and 238; both declare 128 bytes of stack.
+
+**The checks.** elekloader refuses the mod when it loads it, unless:
+- the segments and zero ranges are 4-byte aligned, do not overlap, and
+  together cover all 32 KiB, with no gap;
+- each entry is 2-byte aligned and inside a code segment;
+- in a mod with entries, each code segment ends in 64 bytes of NOPs (`0100`
+  repeated), with no entry inside them, because the DSP fetches instructions
+  ahead.
+
+When it links the mods, it also refuses unless:
+- only one mod in the build has `sharc`;
+- a mod with entries has a core whose bridge is the one the device profile
+  pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
+  set `"resources": {"core": "0.2"}` so the loader picks it;
+- the declared stacks fit: the bridge declares 116 bytes and the two
+  together may not pass 544, so a mod has at most 428.
+
+**What the linker does.** It checks the stock DSP section (section 7) by
+its hash. Then it adds the mod's segments and zero ranges as new load and
+fill records, before the stream's FINAL record. For a mod with entries it
+also adds:
+- core's 1 KiB bridge, with the two callback addresses in its first 12
+  bytes. The linker writes those; a mod cannot;
+- the bridge's 48-byte pitch table, and zeros over the rest of its 1 KiB;
+- one patch: the six-byte stock instruction at the master output
+  (`0x2838489a`) is replaced so that the bridge runs.
+
+The writer packs section 7 again. The verifier checks that it depacks to the
+linked stream and fits its limits, that the seal and the update size are
+right, and that every other section is stock. Without a SHARC mod, section 7
+stays stock, with core 0.2 too.
+
+A mod's code, data and callback offsets may change from build to build with
+no change to elekloader: only the bridge is pinned. These checks cover the
+packaging. They cannot prove what the instructions do, how much stack they
+really use, or that they finish in time, so test each program on its own.
 
 ### The linker
 
@@ -270,7 +337,8 @@ events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 (`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
 `core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
 0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
-0x400c4202), its view entries the A4's own.
+0x400c4202), its view entries the A4's own; from 0.3 `core_page_fns`
+as well (core-ar2 0.6's), asked from the same page_info site.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.
@@ -315,6 +383,16 @@ same conventions (docs/ADAPTING.md, "The hook bus on the Octatrack"):
 | `ev_trig_apply` (0.7) | 0x4000c59e, where the builder's lock restore and apply paths join | `void f(trk, flags)` |
 | `ev_dsp_trig` (0.7) | 0x40004c72, in the voice record writer 0x40004bd4 | `int f(trk, flags)`; nonzero: no per-trig flag bits |
 | `ev_dsp_record` (0.7) | 0x40004d40, the same writer | `void f(trk, rec)` |
+| `ev_clip` (0.8) | 0x40026eb0, 0x40026ef0, 0x4002b9b0, 0x40029754 and 0x4002b654: the pattern's and the track's copy, snapshot and store | `int f(pre, clip)`; nonzero before a PASTE or an UNDO refuses it |
+| `ev_part_saving` (0.8) | 0x4004a908, Part Save's entry | `void f(part, 0)` |
+| `ev_part_reload` (0.8) | 0x4004aab4, Part Reload | `void f(how, part)` |
+| `ev_part_select` (0.8) | 0x400621da and 0x40062216, the sys task's Part change | `void f(phase, select)` |
+| `ev_part_init` (0.8) | 0x40005638 and 0x40005a38, the Part initialiser's entry and end | `void f(pre, part)` |
+| `ev_project_init` (0.8) | 0x400909d8, the empty project's RAM | `void f(job, 0)` |
+| `ev_voice_reset` (0.8) | 0x40006820, the voice reset's entry | `int f(trk)`; nonzero: the reset is not made |
+| `ev_boot_early` (0.8) | 0x40000512, the boot's SRAM init | `void f(void)` |
+| `ev_track_icon`, `ev_track_icon_draw` (0.8) | 0x4004bee2 and 0x4004c00c, the track icons' renderer | `unsigned f(trk, state)`; `int f(trk, state, x, y)`, nonzero: drawn |
+| `ev_setup_dial` (0.8) | 0x4003786a, 0x40037c06 and 0x4003690c: the FX2, FX1 and AMP SETUP knobs | `void f(dial)` |
 
 An optional mod, the DSP bus (`mods/dspbus-ot`, dspbus 0.1), adds an event on
 DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):
@@ -322,3 +400,10 @@ DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):
 | event | site | handler |
 |---|---|---|
 | `ev_dsp_rx` | payload A's P:0x88 (0x400ef758), the head of every audio frame | DSP code from `jsr`, ending in `rts`; it may change `a`, `x1`, `r0`, `r1` |
+
+The USB companion (`mods/usb-ot`, usb 0.3) adds one on the ColdFire, beside
+the DSP (docs/ADAPTING.md, "USB functions on the Octatrack"):
+
+| event | site | handler |
+|---|---|---|
+| `ev_dsp_feed` | 0x40004bc0, state 7 of the frame interrupt's transfer chain (eDMA channel 0's interrupt, level 6) | `void f(void)`; may call `ot_dsp_feed(block, words)` once: one more block to DSP core 0, at the frame's bank + $320 |
