@@ -10,7 +10,9 @@
  * slots and the project. Seven columns at the bottom left of the screen, left
  * to right: pattern tracks, patterns, kit sounds, pool sounds, kits, globals,
  * project; each grows a pixel for every marker core_store_get no longer
- * reads back, up to 16. A 3x3 square at the right end of the same edge blinks while it runs.
+ * reads back, up to 16, counted one column every fourth UI tick (from 1.2).
+ * A 3x3 square at the right end of the same edge changes each time all seven
+ * have been counted (about every 1.4 s) while it runs.
  *
  * It also hears ev_project: to the right of the columns, a bar as long as the
  * number of project events so far (mod 16, two pixels each), and beside it a
@@ -52,10 +54,40 @@ void sc_project(int how, unsigned dropped)
     sc_proj_n++;
 }
 
+static int walk(int col, int mode);
+
+/* the columns' counts, from the last walk of each: the draw only shows them,
+ * so a frame costs no more than stock's (walking every column each frame
+ * kept the CPU busy enough to stall an OS upgrade) */
+static volatile unsigned char sc_bad[7];
+static volatile unsigned sc_rounds;
+
 void sc_tick(void *ctrl)
 {
-    if ((++sc_ticks & 7) == 0)
+    static int col, redraw;
+    int bad;
+    if ((++sc_ticks & 3) != 0)
+        return;
+    /* a column every fourth tick: all seven in 1.4 s */
+    bad = walk(col, 1);
+    if (bad > 16)
+        bad = 16;
+    if (sc_bad[col] != bad) {
+        sc_bad[col] = bad;
+        redraw = 1;
+    }
+    if (col == 6) {
+        sc_rounds++;
+        redraw = 1;
+    }
+    col = col == 6 ? 0 : col + 1;
+    /* the screen is redrawn only when something it shows has changed: every
+     * forced redraw sends the panel bytes, and stock's reset after an OS
+     * upgrade waits for those with interrupts masked */
+    if (redraw) {
         *((volatile unsigned char *)ctrl + 0x20) = 1;
+        redraw = 0;
+    }
 }
 
 /* a marker for item n of a field, cut to the field's width, never 0 */
@@ -150,9 +182,7 @@ void sc_draw(void *bmp, void *ctrl)
     (void)ctrl;
     FILLRECT(bmp, 0, 47, 60, 63, 0);
     for (col = 0; col < 7; col++) {
-        bad = walk(col, 1);
-        if (bad > 16)
-            bad = 16;
+        bad = sc_bad[col];
         if (bad)
             FILLRECT(bmp, 8 * col, 64 - bad, 8 * col + 5, 63, 1);
     }
@@ -164,5 +194,5 @@ void sc_draw(void *bmp, void *ctrl)
     for (col = 0; col < 4; col++)
         if (sc_proj_dropped & STORE_DROPPED(col ? STORE_TRACK + col - 1 : STORE_GLOBAL))
             FILLRECT(bmp, 68 + 4 * col, 58, 69 + 4 * col, 59, 1);
-    FILLRECT(bmp, 125, 61, 127, 63, (sc_ticks >> 4) & 1);
+    FILLRECT(bmp, 125, 61, 127, 63, sc_rounds & 1);
 }

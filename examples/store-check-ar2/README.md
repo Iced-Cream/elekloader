@@ -26,10 +26,18 @@ longer reads back, left to right: pattern tracks, patterns, kit sounds, pool
 sounds, kits, globals, project. Each grows a pixel per bad marker, up to 16;
 globals have only 8 markers (4 slots x 2 fields) and the project 2, so those
 two columns are full at 8 and 2 pixels.
+From 1.2 the columns are counted in the background, one column every fourth
+UI tick (all seven in about 1.4 s), and the screen only shows the last
+counts, redrawing the screen only when a count changes or a round of all
+seven ends. 1.1 walked every column on every frame and forced a redraw every
+eighth tick, which kept the CPU so busy that an OS upgrade sent to a unit
+running it could stall.
 Empty columns after a save, a power cycle or loading the project back mean
 everything survived; full columns after loading another project, or with a
 build whose layout can't read this one, mean the data was dropped to zeros
-as it should be. A 3x3 square at the right end of the same edge blinks while the mod runs.
+as it should be. A 3x3 square at the right end of the same edge changes each
+time all seven columns have been counted (about every 1.4 s) while the mod
+runs.
 
 It also counts `ev_project`: right of the columns, a bar two pixels longer
 for each project event (it wraps at 16), and beside it a dot when the last
