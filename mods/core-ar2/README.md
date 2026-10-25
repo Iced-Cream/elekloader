@@ -152,9 +152,10 @@ fields. The same save routine also has a SysEx dump of the working project
 (0x40034d86, in the dump request handler 0x4008680c), but OS 1.74 never
 reaches it: the SysEx router above that handler (0x40085e44, code the Rytm
 shares with the Analog Four) has no caller, and the ID table sends its
-message ID, 0x20, to a routine that does nothing (checked in an emulator,
-25 Oct 2026: the request was dropped over USB and DIN, and 0x40034d86 never
-ran). Core hooks the site anyway, so the save routine behaves the same
+message ID, 0x20, to a routine that does nothing (checked 25 Oct 2026: in
+an emulator the request was dropped over USB and DIN and 0x40034d86 never
+ran; on a unit it got no reply over USB or DIN while a kit request was
+answered on both). Core hooks the site anyway, so the save routine behaves the same
 wherever it runs. A Total Recall take runs no
 serializer: it sends the stored project as it is (Overbridge command 0x20,
 type 0x1b), so it carries whatever mod fields the stored project holds, and
