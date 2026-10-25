@@ -44,14 +44,19 @@ monolithic build; section 4 says how to go from A to B.
   `mods/core-ar2` for the Analog Rytm MKII. The
   Octatrack's core, `mods/core-ot`, has a hook bus of its own from 0.2, with the Octatrack's events ("The hook bus on the
   Octatrack" below).
+- For a SHARC mod on the Digitone II: its compiled code, or the tools the
+  sine example uses to make it ("SHARC mods (core-dn2 0.2, Digitone II)"
+  below).
 
 ## 2. The rules
 
 The loader checks all of these before it builds anything; each rule says
 what you see when it is broken (section 5 has the fixes).
 
-1. **Only the main OS changes.** A mod has no way to touch the bootloader
-   or any other section, so the stock OS file always recovers the device.
+1. **Only the main OS changes**, and on the Digitone II 1.12 the DSP's
+   section 7 for a SHARC mod ("SHARC mods" below). The bootloader and the
+   other sections stay stock, so the stock OS file always recovers the
+   device.
    Some main OS bytes stay stock too: the Octatrack's copy of its
    bootloader, and 16 zero bytes after a table that its stock DELAY reads
    (docs/DEVICES.md, `protected` and `keep`). *"protected on the ..."*,
@@ -134,7 +139,7 @@ renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_enc` there, since a key can come before that tick (`ev_draw` cannot:
 the tick site runs first).
 
-The Digitone II's core (mods/core-dn2 0.1) has the same six UI events as the
+The Digitone II's core (mods/core-dn2, from 0.1) has the same six UI events as the
 Digitakt II's, at the Digitone II's sites, and no render events (its audio
 renders on the DSP). It has no `.fast`: SRAM is not qualified there, so a
 mod with `.fast` code is refused. Its tick rate has not been measured.
@@ -192,7 +197,7 @@ come after SYSTEM; the render events cover the audio interrupt's digital
 path (the effects and the inputs), since the voices are analog. core-a4
 exports no firmware locations either. From 0.2 it has core-ar2 0.4's
 parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
-Analog Four MKII)"). `examples/hello-marker-a4`, `hooks-check-a4`,
+Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4`,
 `store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
 
 The sites core owns (do not patch them):
@@ -230,6 +235,56 @@ A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
 `.elemod` per device and OS (a mod's `device` and `os`, or one of its
 `ports`, pick the stock file: 3.10).
+
+### SHARC mods (core-dn2 0.2, Digitone II)
+
+Experimental. On the Digitone II 1.12 a mod can run code on the DSP, at the
+master output. Core-dn2 0.2's bridge calls it once a block with 32 mono
+samples at 48 kHz, which it may replace or change, and then copies them to
+both channels. A build has at most one such mod. It is not a machine you
+pick for a sound, an effect on a track or a polyphonic voice. The
+[callback contract](SHARC-DN2-ABI.md) says what its code must do: the
+registers it keeps, the NOP guard, the pitch and the gate, and its stack (at
+most 428 bytes declared; more code or data adds none).
+
+**Start from the [sine example](../examples/sharc-sine/README.md).** After a
+one-time setup of the tools and your stock file, `mise run build-c` or
+`mise run build-asm`, in `examples/sharc-sine`, compiles the current source,
+makes the artifact, builds core and the mod, lints them and writes verified
+firmware. Both use the 32 KiB layout, so you choose no addresses, and
+neither uses the maintainers' reference scripts or the checked-in artifact.
+Set `"resources": {"core": "0.2"}` in your mod.json, as the examples do, so
+the loader picks a core with the bridge.
+
+**Any compiler will do.** elekloader takes the compiled code as an artifact
+([FORMAT.md](FORMAT.md#digitone-ii-sharc-mod)); its SDK only packages it.
+Link the code for the mod's area, loader `[0x20090000,0x20098000)`, and give
+offsets from its start: changing the `abi` string does not move code linked
+for another address. Your code, data and callback offsets may change from
+build to build with nothing added to elekloader; only core's bridge is
+pinned. With an artifact in hand you need no SHARC compiler:
+
+```sh
+python -m elekloader.sdk.build examples/sharc-sine --stock "$DN2_STOCK"
+python -m elekloader.lint examples/sharc-sine/out/sharc-sine-0.1.elemod --stock "$DN2_STOCK" --with "$DN2_CORE" --json
+python -m elekloader.patch --stock "$DN2_STOCK" --mod "$DN2_CORE" --mod examples/sharc-sine/out/sharc-sine-0.1.elemod --out sine.syx --version SK02
+```
+
+The build prints `BUILT`, lint reports `"ok": true`, and patch prints
+`verified: sections 2, 4, 5, 8, byte for byte`. These package the
+checked-in artifact; they do not compile an edited source. As for every
+format-2 mod, you need a matching core `.elemod`, and building it from
+source needs the ColdFire tools. The
+[assembly example](../examples/sharc-sine-asm/README.md) shares the core, the
+note range and the gain ramp; pick one of the two per build. The
+`rebuild.py` scripts rebuild the reference artifacts exactly, for
+elekloader's own development.
+
+The checks cover the packaging: the guard, the 32 KiB covered in full, the
+stack and the firmware's size limits. They cannot prove what the
+instructions do, what they write, or that they meet the audio deadline.
+[SHARC-DN2.md](SHARC-DN2.md) has what the emulator and a unit showed for
+the sine variants, and the limits that remain.
 
 ### The hook bus on the Octatrack (core-ot 0.2)
 
@@ -270,6 +325,17 @@ declares"*).
 | `ev_trig_apply` (0.7) | a trig's locks reached the track's lane | `void f(unsigned trk, unsigned flags)` | frame interrupt |
 | `ev_dsp_trig` (0.7) | a track's per-trig flag bits are about to be built into its DSP word | `int f(unsigned trk, unsigned flags)` | frame interrupt; nonzero builds the word as for a frame with no trig |
 | `ev_dsp_record` (0.7) | a track's 64-byte record for the DSP has its FX ids | `void f(unsigned trk, uint16_t *rec)` | frame interrupt, 8 times a frame; a store here lands last |
+| `ev_clip` (0.8) | a pattern or an audio track goes between the bank and the clipboard or the undo buffer: COPY, SNAPSHOT, PASTE, UNDO | `int f(unsigned pre, const struct ot_clip *c)` | sys task; 1 before, 0 after. Before a PASTE or an UNDO that stock asked for, nonzero refuses it (below) |
+| `ev_part_saving` (0.8) | Part Save is about to copy a Part to its saved copy | `void f(unsigned part, unsigned unused)` | sys task; `ev_part_saved` follows |
+| `ev_part_reload` (0.8) | Part Reload (RELOAD, FUNC+CUE) | `void f(unsigned how, unsigned part)` | sys task; `how` 1 before; after, 0 when it reloaded, 2 when the Part had no saved copy |
+| `ev_part_select` (0.8) | the panel's Part change | `void f(unsigned phase, const struct ot_part_select *s)` | sys task, when the Part does change: `OT_PSEL_BEGIN`, `_APPLIED`, `_DONE` |
+| `ev_part_init` (0.8) | a Part is set to its defaults (the bank init, Part Clear) | `void f(unsigned pre, unsigned part)` | `part` a pointer to it, in any bank's RAM; 1 before, 0 after |
+| `ev_project_init` (0.8) | every bank is about to be emptied: the start of LOAD PROJECT and of a new project | `void f(unsigned job, unsigned unused)` | engine task; `job` is the stock job (4 LOAD PROJECT; 9, 10, 13 a new project; 12) |
+| `ev_voice_reset` (0.8) | a track's voice is about to be reset (the routine `ev_voice_kill` fires in, at its entry) | `int f(unsigned trk)` | a task or the frame interrupt, interrupts not yet masked; nonzero keeps the voice, and no `ev_voice_kill` follows |
+| `ev_boot_early` (0.8) | once, at boot, before the OS | `void f(void)` | core's code and data are in place and the on-chip SRAM has its stock values; no task, interrupt or OS call yet |
+| `ev_track_icon` (0.8) | an audio track's box on the screen | `unsigned f(unsigned trk, unsigned state)` | returns the state the box shows (chained). Stock's: bit 0 the track plays, bits 1-2 its recorder |
+| `ev_track_icon_draw` (0.8) | a box in a state stock has no glyph for (above 3) | `int f(unsigned trk, unsigned state, int x, int y)` | draw it (`ot_blit`) and return nonzero; 0 leaves the box empty |
+| `ev_setup_dial` (0.8) | a page-2 knob of AMP, FX1 or FX2 SETUP is about to be drawn | `void f(struct ot_dial *d)` | change the value, the widget's flags or the widget (chained) |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
 arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
@@ -279,8 +345,13 @@ arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
 0x4008485e) and the routines its jobs call (0x40090504, 0x400905d4,
 0x400917c8, 0x400918aa, 0x4008ee74, 0x4008f180, 0x4000faf0, 0x40025808,
 0x4004a9c4, 0x4004a9d0); from 0.7 the voice (0x4000c63c, 0x4000b4f6,
-0x40006862, 0x4000f4dc, 0x4000f82c, 0x4000c59e, 0x40004c72, 0x40004d40); and
-its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the
+0x40006862, 0x4000f4dc, 0x4000f82c, 0x4000c59e, 0x40004c72, 0x40004d40); from
+0.8 the clipboard's and the undo buffer's routines (0x40026eb0, 0x40026ef0,
+0x4002b9b0, 0x40029754, 0x4002b654), the Parts (0x4004a908, 0x4004aab4,
+0x400621da, 0x40062216, 0x40005638, 0x40005a38), the empty project
+(0x400909d8), the voice reset's entry (0x40006820), the boot (0x40000512),
+the track icons (0x4004bee2, 0x4004c00c) and the SETUP knobs (0x4003786a,
+0x40037c06, 0x4003690c); and its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the
 converted octabam modules (4b) patch.
 
 The transport events are the sequencer's own start, resume and STOP routines
@@ -471,20 +542,129 @@ Which octabam module needs what:
 | TEMPO SYNC | the FX id store | `ev_dsp_record` |
 | RECORDER LOOP FIX | the counter (FLEX SEEKBIND), with its same-sample test (0x4000f8cc) | `ev_voice_seek`; the same-sample test is still its own |
 
-**Not here: `ev_machine_set(trk, machine, slot)`.** The three places where a
-track's machine or slot is committed (0x400795ba, 0x40079816, 0x4005a848)
-belong to machines-ot, which owns the chooser's and SRC SETUP's commits right
-after them. It decides there whether a commit happens and what the final byte
-is, and reads a track's machine from the Part's signature. An event at the
-stock writes would run before that decision, with a byte machines-ot may
-still refuse. In machines-ot 0.2 it fires after the commit with the old and
-new machine and the slot.
+**Not here: `ev_machine_set`.** The three places where a track's machine or
+slot is committed (0x400795ba, 0x40079816, 0x4005a848) belong to machines-ot,
+which owns the chooser's and SRC SETUP's commits right after them and, from
+0.2, the slot assigner's (0x40079520). It decides there whether a commit
+happens and what the final byte is, and reads a track's machine from the
+Part's signature. An event at the stock writes would run before that
+decision, with a byte machines-ot may still refuse. machines-ot 0.2 fires
+`ev_machine_set(part, track, from, to)` after the commit (below).
 
 **The sites are not octabam's.** SYNTH (octabam2elemod v1.0) detours 0x4000c634,
 0x4000b51a, 0x4000685c, 0x400795ba, 0x40079816 and 0x4005a848, and FLEX
 SEEKBIND 0x4000f834. Each event is on the instruction beside the one they
 take, so those files link with core-ot 0.7 and a build with both runs both
 (SYNTH's `jmp` back into the builder ends at an event's stub).
+
+#### Edits, Parts and the screen on the Octatrack (core-ot 0.8)
+
+A mod that keeps data of its own beside a pattern, a track or a Part has to
+follow what the firmware does to them: a copy, a paste, an undo, a Part
+saved, reloaded, changed or reset. Octabam's KITS, PLOCKS P2, VARISPEED, CX
+OSC, MIDI SCENES and BATCH BUGFIXES each detour those routines, and only one
+module can take a place. Core-ot 0.8 gives each place an event, and does the
+same for four more places several modules want: the voice reset's entry, the
+boot before the OS, the track icons and the SETUP windows' knobs. The
+structures are in `octatrack/core.h`.
+
+A mod that keeps a byte per pattern, and follows the clipboard:
+
+```c
+#include "octatrack/core.h"
+
+static uint8_t mine[16][16];            /* [bank][pattern] */
+static uint8_t on_clip, on_undo;        /* what the clipboard and the undo buffer hold of it */
+
+int my_clip(unsigned pre, const struct ot_clip *c)
+{
+    if (pre || c->what != OT_CLIP_PATTERN)
+        return 0;
+    uint8_t *b = &mine[c->bank][c->pattern];
+    switch (c->how) {
+    case OT_CLIP_COPY:     on_clip = *b; break;
+    case OT_CLIP_SNAPSHOT: on_undo = *b; break;
+    case OT_CLIP_PASTE:    *b = on_clip; break;
+    case OT_CLIP_UNDO:     *b = on_undo; break;
+    }
+    return 0;
+}
+```
+
+```json
+"subscribe": [{"event": "ev_clip", "fn": "my_clip", "order": 50}],
+"resources": {"core": "0.8"}
+```
+
+- **The clipboard.** `ev_clip` comes for the five routines that move a whole
+  pattern or audio track: the copy (FUNC+REC), the snapshot a paste or a
+  clear takes first, and the two stores that paste and undo. `op` says why a
+  snapshot was taken (the number stock keeps with its undo buffer: 0x11 a
+  pattern paste, 0x12 a pattern clear, 7 a track paste). MIDI tracks and the
+  other clipboard kinds (trigs, Parts, slots) do not come here.
+- **Refusing a paste.** Before a PASTE or an UNDO, a handler may return
+  nonzero: the bank is left as it was, no later handler is asked, no "after"
+  call comes, and stock goes on as when there is nothing to paste or undo
+  (an undo that finds nothing pastes the clipboard instead, and that paste
+  comes here too). Only stock's own paste and undo can be refused: a refusal
+  of a call another mod made is ignored. A handler must not call the copy
+  and store routines itself.
+- **The Parts.** `ev_part_saving` comes before Part Save (SAVE, SAVE ALL,
+  and the end of Part Clear) and `ev_part_saved` (0.6) after it.
+  `ev_part_reload` says whether the Part had a saved copy. `ev_part_select`
+  comes in three steps, only when the Part changes: BEGIN before anything
+  moves; APPLIED when every track has gone to the new Part, with the old
+  Part's machine bytes; DONE after the screen and the machine page.
+  `ev_part_init` comes for each Part set to its defaults (264 of them in a
+  power-up's load), with a pointer to it.
+- **The project's start.** `ev_project_init` comes in the engine task before
+  every bank is emptied, at the start of LOAD PROJECT and of a new project:
+  the place to drop what a mod holds of the old project. `ev_project` (0.6)
+  comes when the job has ended.
+- **The voice reset.** `ev_voice_reset` comes at the entry of the routine
+  `ev_voice_kill` fires in, before it masks the interrupts: a handler may keep
+  the voice (MUTE MODES keeps a muted track's). The call that resets every
+  track comes once for each.
+- **The boot.** `ev_boot_early` comes once, after the on-chip SRAM's init and
+  before stock clears its RAM above 0x46025de0: no task, interrupt or OS call
+  exists yet. Core's reserve is below that RAM, so a mod's own data set here
+  stays.
+- **The track icons.** `ev_track_icon` may change the state an audio track's
+  box shows; stock draws it again when it changes. For a state above 3
+  `ev_track_icon_draw` draws it: `ot_blit(&bitmap, OT_SCREEN_PLANE, x, y)`
+  with a `struct ot_bitmap` (a long a column, the top pixel at bit 31).
+  REC THRESHOLD blinks an armed track's box and REC TRIG MUTE shows a muted
+  one with its own glyph: as two handlers they no longer exclude each other.
+- **The SETUP knobs.** `ev_setup_dial` comes for each page-2 knob AMP, FX1 and
+  FX2 SETUP draw (the knob's enable bit set). A handler may show another
+  value (a signed byte: SCENES P2 shows a held scene's lock, PLOCKS P2 a held
+  step's), mark it with the widget's flags, or draw it with another widget
+  (VARISPEED's quantised dial).
+
+Which octabam module needs what:
+
+| module | its detours | the events |
+|---|---|---|
+| KITS | the pattern copy, snapshot and store | `ev_clip`; its FUNC+PART and FUNC+CUE handlers replace stock's and stay its own |
+| PLOCKS P2 | 21 memcpy calls, told apart by their length | `ev_clip` for patterns and audio tracks; `ev_setup_dial` for its mark |
+| VARISPEED | the track store, Part Reload, three SETUP knobs | `ev_clip`, `ev_part_reload`, `ev_setup_dial` |
+| CX OSC | its guard before a track paste or undo | `ev_clip`'s refusal |
+| BATCH BUGFIXES | the Part change's start and its tail | `ev_part_select`: BEGIN and APPLIED |
+| MIDI SCENES | after the Part change (the newest); SAVE, SAVE ALL and RELOAD's calls (octabam2elemod v1.0's) | `ev_part_select` DONE; `ev_part_saving`, `ev_part_reload` |
+| MIDI PART STATE | the Part initialiser, the boot after core's | `ev_part_init`, `ev_boot_early` |
+| BRAIN, BUFFER SAVER, STORE | the Part initialiser's end; LOAD PROJECT's call of the empty project's RAM; the routine itself | `ev_part_init`, `ev_project_init` |
+| MUTE MODES | the voice reset's entry | `ev_voice_reset` |
+| BOOT TRACE | the boot after core's | `ev_boot_early` |
+| REC THRESHOLD, REC TRIG MUTE | the track icons | `ev_track_icon`, `ev_track_icon_draw` |
+| SCENES P2 | the FX SETUP knobs' Part byte | `ev_setup_dial` |
+
+**Not in 0.8.** The ATTRIBUTES page and the playback rate (REPITCH in
+octabam2elemod v1.0 patches those bytes), the TEMPO window's opener (TUNER),
+the pattern switch (DIRECT JUMP) and the MIDI step builder's end (MIDI SCENES
+v1.0) are places where a shop file holds the bytes, so core leaves them. The
+OS's entry (REMIX SWITCH's chainloader), the scheduler (BRAIN), MIDI injected
+as input (MIDI LOOPBACK) and the bank pointer's stores (MIDI SCENES v1.0) are
+one module's each.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
@@ -497,6 +677,13 @@ mods' DSP code, and takes SPATIALIZER off both FX menus to do it
 | event | when | handler | notes |
 |---|---|---|---|
 | `ev_dsp_rx` | DSP core 0, the head of every audio frame (2,756 a second), before anything reads the current RX block | DSP code, reached by `jsr`, ending in `rts` | the RX block is at `x:>$202`: 16 samples x 4 slots (2 input A, 3 input B, 0 and 1 C and D). Use `a`, `x1`, `r0`, `r1` and the condition codes; keep every other register. Subscribe with `subscribe_dsp` |
+
+DSP code that wants data from the ColdFire every frame gets it through
+usb-ot's DSP feed (usb 0.3, "USB functions on the Octatrack" below): a
+block of up to 160 words that lands at `r6 + $320` in the frame's bank.
+`mods/usb-audio-in-ot` is the example: its `ev_dsp_feed` handler sends the
+host's samples, its `ev_dsp_rx` handler (`inject.asm`) writes them over the
+inputs.
 
 ### Intercepts on the Octatrack (intercepts 0.1)
 
@@ -525,7 +712,7 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
-### Machines on the Octatrack (machines 0.1)
+### Machines on the Octatrack (machines 0.2)
 
 `mods/machines-ot` (id `machines`) is a companion beside core-ot 0.3.1 for
 source machines: a machine mod adds a row to the track's machine chooser
@@ -577,7 +764,33 @@ Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
 plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
 converts onto the companion with `sdk.octabam --machines` (section 4b).
 
-### USB functions on the Octatrack (usb 0.2)
+From machines 0.2:
+- **`ui_tick`** runs in the UI task's tick body (0x4005221e), before the
+  screen's builders read the page table, where octabam's machines publish
+  their page. A machine with `track_page` has the current track's page
+  published there too, so SRC SETUP and the parameter names follow a page
+  that differs by track.
+- **`OT_MACHINE_LIST_FIRST`** (elekloader's flag, not Modwerk's): the machine
+  window opens on the machine list for the machine's tracks, not on the
+  sample-slot list, for a machine that does not play a slot's sample.
+- **A sample slot picked in a list** that changes the track's machine (a
+  STATIC slot on a machine's track) goes through the companion too: the
+  machine's `leave` runs before stock resets the track.
+- **`ev_machine_set`**: a track's machine changed, after the commit (the
+  machine byte and its battery copy hold the new one), from the chooser,
+  SRC SETUP or a slot pick. `from` and `to` are rows: 0-4 stock's, 5 on a
+  machine's.
+
+```c
+void my_machine_set(volatile uint8_t *part, unsigned track, unsigned from, unsigned to);
+```
+
+```json
+"subscribe": [{"event": "ev_machine_set", "fn": "my_machine_set", "order": 50}],
+"requires": ["core", "machines"]
+```
+
+### USB functions on the Octatrack (usb 0.3)
 
 `mods/usb-ot` is a companion beside core-ot 0.3.1 that owns the stock USB
 device stack's places once. A USB function (USB MIDI, USB audio, ...) is a
@@ -607,7 +820,7 @@ The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
 | `set_interface(rel, alt)`, `get_interface(rel)` | its interface `rel` (0 = its first); a negative return STALLs. Without them alt 0 is the only one |
 | `setup(pkt)` | a class or vendor request for it (by interface or endpoint, or any for the device): return >0 once it sent or ACKed |
 | `irq(complete)` | its endpoints' completions, from the USB interrupt; clear the bits it takes in `OT_USB_ENDPTCOMPLETE` |
-| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs |
+| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs. usb-ot reads `interfaces` and `endpoints` after it, so a function whose interfaces follow a setting sets them here (its record is then not `const`); they are the same at both speeds |
 
 usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
 (a bounded flush, then the completions cleared), `ot_usb_ack`,
@@ -623,8 +836,36 @@ requests through `setup`, and EP3 IN fed from core-ot 0.4's
 TRACKS+MAIN+CUE, or OFF) is an early card setting, `enabled()` reads it at
 the controller's init, and with OFF it adds no interfaces.
 
-The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
-so the linker refuses usb-ot beside them.
+`mods/usb-audio-in-ot` (usb-audio-in) adds a stream from the host to
+usb-audio's function, into the inputs: a USB streaming input terminal, a
+third interface with EP3 OUT, and EP3 IN marked as its implicit feedback.
+It is an add-on rather than part of usb-audio because its DSP side needs the
+DSP bus, which takes SPATIALIZER off the FX menus: without it usb-audio is
+what it was. usb-audio imports its record `usba_in` weakly
+(`"weak": ["usba_in"]`, `elekloader/sdk/include/octatrack/usbaudio.h`), and
+asks it at `enabled()` how many channels the host sends (0, 2 or 4, its
+early setting USB AUDIO / IN), then describes the stream and passes the IN
+interface's alternate setting and the vendor request 0xC0/0x56 to it. The
+add-on runs EP3 OUT from the DSP feed, below, and writes the samples over
+the inputs on the DSP bus's `ev_dsp_rx`.
+
+**The DSP feed (usb 0.3).** Each frame interrupt starts a chain of eDMA
+transfers to the DSP; its last state, state 7 (0x40004bc0, eDMA channel 0's
+interrupt, level 6), unmasks the frame interrupt. usb-ot holds that place
+and runs the event `ev_dsp_feed` there (`void f(void)`, `"subscribe"`),
+once a frame after the frame's stock transfers. A handler may call
+`ot_dsp_feed(block, words)` once: one more transfer of `words` 16-bit words
+(32, 64, ... 160) to DSP core 0, which lands in the frame's bank at + $320,
+where an `ev_dsp_rx` handler finds it at `r6 + $320`. The unmask waits for
+it. Write the block through `OT_USB_UNCACHED`; the DSP reads each word with a
+stale top byte. A block stays in its bank until the next lands there, and
+the banks alternate: a feeder that stops sends its "nothing" block to both.
+One mod feeds: claim `dsp:feed`. The handlers run above the frame interrupt
+and may interrupt it: no EMAC, few instructions. The feed is not USB's; USB
+audio in is its first user.
+
+The USB files of irpina/octabam2elemod v1.0 patch these places themselves
+(the USB IO ones state 7 too), so the linker refuses usb-ot beside them.
 
 ### SRC machines (core 2.1, Digitakt mk1)
 
@@ -1436,10 +1677,21 @@ What differs from the Rytm:
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a
   stock id), to retitle a page a mod's view follows.
+- From core-a4 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
+  knobs follow the sound", above): `struct core_page_fn` is `{page, info}`,
+  and `info(page)` returns the `core_pages` entry to answer, or 0 to pass.
+  The knobs' draw, a knob's touch and a turn each look the knob up through
+  page_info afresh, so the knobs follow at the next redraw. A page's view
+  reads the name once, when core makes it at boot, so every entry `info`
+  returns should carry the same name.
 
 `examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
-hex digits through `core_params`, and a CHECK page behind the AMP key. It
-was checked in rytm-emu's A4 build and on a unit (23 Oct 2026).
+hex digits through `core_params`, and a CHECK page behind the AMP key. Its
+0.1, for core-a4 0.2, was checked in rytm-emu's A4 build and on a unit (23
+Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
+its knob B, AMP PAN again, is shown while the count of PAN's turn updates
+(the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
+and on a unit (24 Oct 2026).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
@@ -2434,7 +2686,9 @@ refused.
   origin holds an address in your code, so it becomes a relocation, and the
   linker writes the address where the code lands. A short or packed address
   (one that is not a whole word) cannot be moved, and the build refuses it.
-  Branches (`bra`, `bsr`, `bcc`) are relative and need nothing.
+  Branches (`bra`, `bsr`, `bcc`) are relative and need nothing. dsp_asm
+  assembles `jsr` only with a short address, which the linker cannot move:
+  call a routine of your own with `bsr`. `jclr` and `do` take whole words.
 - `subscribe_dsp` adds `jsr >fn` (plus `addend` words) to a DSP table, in
   `order`. A DSP table is declared as `{"entry": 6, "space": "dsp.A",
   "head": hex, "end": hex}` under `collections`: its words are the head,
@@ -2937,6 +3191,13 @@ Some differences from an octabam build, by design:
 | `is a DSP reference to a ColdFire address` (or the reverse) | a `dsp24` relocation names a ColdFire symbol, or a ColdFire one a DSP label | name the right symbol; DSP labels are word addresses on the DSP |
 | `dsp_asm is not installed` | the SDK needs octabam's DSP assembler | build octabam's `vendor/dsp56300` and set `ELEKLOADER_DSP_ASM` |
 | `the label N is part of a longer word here` (SDK) | dsp_asm would put N's address inside that word | rename the label |
+| `SHARC ABI does not match the device profile` | a SHARC mod's `abi` is not `dn2-master-mono32-l2-v1` | set it; the other ABI is core's bridge's |
+| `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's 32 KiB exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
+| `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |
+| `SHARC entry is in the instruction read-ahead guard` / `SHARC entry is not in owned code` | a callback offset is in the guard, outside the code, or odd | link the callbacks inside a code segment, before its guard |
+| `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
+| `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
+| `only one SHARC mod may own the DN2 reservation` | two SHARC mods in one build | pick one |
 
 ## 6. Definition of done
 

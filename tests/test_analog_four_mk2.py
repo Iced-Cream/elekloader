@@ -139,6 +139,8 @@ def test_core_a4_sites():
     assert pages['core_page_info'] == '722f202f0004'
     assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
     assert pages['core_param_text'] == '2f032f02242f0014'
+    # pages whose entry a function answers (core-a4 0.3, core-ar2 0.6's), asked before core_pages
+    assert mod['collections'].get('core_page_fns') == 4 and mod['collections'].get('core_pages') == 4
     # the audio load (0.2): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
@@ -155,8 +157,10 @@ def test_core_a4_sites():
         assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
         assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
     # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
-    # sites, 2 view sites and 5 range bytes
-    assert len(mod['sites']) == 47
+    # sites, 2 view sites and 5 range bytes, and 0.4's OS upgrade restart
+    assert len(mod['sites']) == 48
+    x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
+    assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
 
 
