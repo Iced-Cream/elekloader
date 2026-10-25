@@ -188,8 +188,8 @@ def test_core_ar2_sites():
     assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 11 lock
-    # sites (0.8) and the 18 lock row sites (0.8)
-    assert len(mod['sites']) == 86
+    # sites (0.8), the 18 lock row sites (0.8) and the 7 scene and performance sites (0.8)
+    assert len(mod['sites']) == 93
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
                                    'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload',
@@ -237,6 +237,22 @@ def test_core_ar2_sites():
                     0x401dce68: ('ptr', 'core_lock_clear_vt', '400a99c2'),
                     0x401dce6c: ('ptr', 'core_lock_turn_vt', '400a8560')}, rows
     for a, (_op, _t, b) in rows.items():
+        assert img[a - DEV.main_load:a - DEV.main_load + len(b) // 2] == bytes.fromhex(b), hex(a)
+    # scenes and performances (0.8): a knob's turn and push on a parameter
+    # view, the audio side's two list builds (an entry's code read where
+    # stock reads it), the kit file's code translations both ways and the
+    # kit's SysEx dump
+    scenes = {int(x['addr'], 16): (x['op'], x['target'], x['stock']) for x in mod['sites']
+              if x.get('target') in ('core_scene_turn_site', 'core_scene_push_site', 'core_perf_entry',
+                                     'core_scene_entry', 'core_code_id', 'core_id_code', 'core_kit_dump_out')}
+    assert scenes == {0x400385f8: ('jmp', 'core_scene_turn_site', '4fefffd048d70cfc'),
+                      0x400387ba: ('jmp', 'core_scene_push_site', '4fefffd048d71c3c'),
+                      0x4011f744: ('jsr', 'core_perf_entry', '12290003760c'),
+                      0x4011f844: ('jsr', 'core_scene_entry', '7528000410280002'),
+                      0x40007602: ('jmp', 'core_code_id', '2f02740c222f0008'),
+                      0x400075c8: ('jmp', 'core_id_code', '2f02740c222f0008'),
+                      0x4000f2a2: ('jsr', 'core_kit_dump_out', '4eb9400088d6')}, scenes
+    for a, (_op, _t, b) in scenes.items():
         assert img[a - DEV.main_load:a - DEV.main_load + len(b) // 2] == bytes.fromhex(b), hex(a)
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}

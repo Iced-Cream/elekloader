@@ -380,7 +380,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | LFO apply | 0x4009eac0 (`jmp`, 10 B) | stock skips a slot above 41; core keeps the track's code and the offset stock would add (`core_lfo_offset`), and clears the code for a stock slot |
 | id to slot | 0x40006ea8 (`jmp`) | a pseudo id's slot is its code; the sound setter then rejects it (slot above 41), as for any stock id it can't set |
 | slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
-| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's) |
+| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter |
 | menu label | 0x4004a7e8 (`jmp`) | `MOD:` and the name, through stock's `%.16s:%.32s` |
 | DST value | 0x400ffab2 (`jmp`) | the short name |
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
@@ -456,8 +456,54 @@ carries the mod row and the marker; sent back into A03 it keeps the row
 A03 gets no mod row. Not checked: Euclid's convert, a foreign project's
 load. Not on a unit.
 
-Not followed yet: scenes and performance, MIDI, and fine values (a value
-above 127 can't be locked).
+## Mod scene and performance locks (0.8)
+
+The third part of the lock service (docs/ADAPTING.md, "Mod scene and
+performance locks (core-ar2 0.8, Analog Rytm MKII)"). A kit keeps its scene
+locks and its performance locks in two lists of 48 entries, `{value (8.8),
+track, code, scene or performance}` (the kit +2190 and +1950), edited
+through an object per list (vtables 0x401df974 and 0x401ddfe8: +20 set, +24
+get, +28 has, +32 relative). A mod parameter's lock is an entry with its
+lock code, so it shares the 48 with stock's, and copy, paste, clear and the
+kit's copies take it as they take stock's. Mods read it with
+`core_scene_value(track, field)` and `core_perf_offset(track, field)`.
+
+| site | 1.74 | what |
+|---|---|---|
+| knob turn, push | 0x400385f8, 0x400387ba (`jmp`) | a parameter view's turn and push: with a scene's or a performance's pad held, a mod parameter's knob (its page id, where stock doesn't take the id for the track's sound) sets its entry: a scene's from the sound's value, a performance's depth from 0, whole steps, clamped to `min..max` and 127 (a depth to ±127); stock refuses the id there |
+| performance build, scene build | 0x4011f744, 0x4011f844 (`jsr`) | the audio side's lists index a parameter table by track × 42 + 26 + code, so an entry with a code above 41 would write another track's parameter: core gives it track 0xff, and stock takes it as an empty entry (the dummy index 25) |
+| code to file, file to code | 0x40007602, 0x400075c8 (`jmp`) | a kit file stores each entry's code as a parameter number (0..41 both ways, a permutation); a drum track's 42..127 stays itself, so a saved kit keeps its mod entries |
+| kit dump | 0x4000f2a2 (`jsr`) | stock's kit save into a SysEx dump's buffer, then an empty entry (`00 ff 00 00`) in place of each mod entry |
+
+A kit loaded from an image whose layout ID this build doesn't read
+(`st_kit_load`, Mod storage; a received kit dump goes through it too)
+loses its mod entries, emptied as stock empties one. `core_scene_value` reads the kit the
+audio side plays (SRAM 0x800067b8) and its active scene (+2430);
+`core_perf_offset` adds each matching performance's depth times its pad's
+pressure (SRAM 0x8000f774 + 2 × the performance, 0..0x7f00), a fraction of
+0x8000, as stock's frame adds a performance's to a stock parameter, and is 0
+while stock skips the performances (SRAM 0x8000ed74).
+
+Checked in the emulator (dtboot, OS 1.74, `examples/lock-check-ar2` 1.2,
+25 Oct 2026), on knob A of the LOCK CHECK page, track 1: scene mode, BD
+pad, SCNE held into scene edit, the pad held and the knob turned 20 steps
+gives a scene entry (code 42, value 20), and the third bar shows 20 with
+the scene active; the entry is still there after a power cycle with no
+save; the SRAM scene table holds the dummy index for it where stock would
+write index 68 (track 2's first parameter). A kit saved (YES + PLAY MODE)
+and dumped (kit request, ID 0x62) carries an empty entry in its place. In
+performance edit on the SD pad the knob sets a depth (18) on performance
+2; the performance table holds the dummy index for it; with the pad's
+pressure at full (CC 36 on the PERF channel, as the emulator's pads send no
+pressure) the bar shows 17. The LFO destination list ends with the two
+lock-check parameters (ids 469, 470), read from memory after the list
+build. Not checked: the velocity and aftertouch lists without them (the
+emulator didn't open their parameter choice; the list kind, 0x200, is read
+from the code), a project saved to and loaded from a file, a received kit
+dump. Not on a unit.
+
+Not followed yet: MIDI, and fine values (a value above 127 can't be
+locked).
 
 ## Checked so far
 

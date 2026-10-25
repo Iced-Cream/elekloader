@@ -1576,8 +1576,8 @@ its own jump ends.
 
 The first part of core's lock service: a mod parameter kept in a sound
 field can be an LFO destination, and RANDOMIZE PAGE and RELOAD PAGE reach
-its page knob. (Parameter locks, scenes and MIDI build on the same codes
-later.)
+its page knob. (P-locks, scenes and performances build on the same codes,
+below; MIDI later.)
 
 A sound-scope storage field declared with `"lock": true` gets a **lock
 code**, 42..127, from the build's lockfile, the number core knows the
@@ -1620,7 +1620,8 @@ What core does with it:
   stock 0..127 knob (one step is 256), 0 when the LFO points elsewhere. The
   mod scales it to its range and adds it where it uses the value. It is
   updated in the audio interrupt, before `ev_render_out`. RANDOMIZE on DST,
-  its step and its validity check follow the list.
+  its step and its validity check follow the list. The velocity and
+  aftertouch modulation lists don't list them.
 - **RANDOMIZE PAGE** gives a knob whose id is a parameter's `id` a value in
   `min..max`, written with `core_store_set` into the knob's sound.
 - **RELOAD PAGE** takes it back from the same sound in the current kit's
@@ -1670,8 +1671,41 @@ receiving build's own; a project of a layout the build doesn't read loads
 without them. Lock codes are a build's own, so a mod lock never lands on
 another build's parameter.
 
-Limits (0.8): a value above 127 can't be locked; scenes, performance and
-MIDI don't carry mod locks yet. Checked in the emulator only.
+Limits (0.8): a value above 127 can't be locked; MIDI doesn't carry mod
+locks yet. Checked in the emulator only.
+
+### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
+
+A lockable parameter is locked to a scene, or given a performance depth,
+like a stock one: in scene (or performance) edit, hold the pad and turn the
+parameter's page knob. The lock is an entry in the kit's 48 scene (or
+performance) locks with the field's lock code, so it is saved with the kit
+and copied, pasted and cleared with the scene, and it shares the 48 with
+stock's.
+
+The mod reads both while the kit plays:
+
+```c
+#include "analog-rytm-mk2/lock.h"
+
+int v = core_lock_value(track, STORE(my_depth));          /* the trig's lock */
+if (v < 0)
+    v = core_scene_value(track, STORE(my_depth));         /* the active scene's */
+if (v < 0)
+    v = core_store_get(STORE(my_depth), sound, 0);
+v += (core_perf_offset(track, STORE(my_depth)) + core_lfo_offset(track, STORE(my_depth))) / 256;
+```
+
+`core_scene_value(track, field)` is the active scene's lock (0..127) on a
+drum track (0..11), or -1 when the scene has none or no scene is active.
+`core_perf_offset(track, field)` is what the performances add now, in 8.8
+steps like `core_lfo_offset`: each depth times its pad's pressure, as stock
+adds a performance's to a stock parameter. Which of the trig's lock and the
+scene's wins is the mod's choice; the order above is one.
+
+A kit's SysEx dump leaves the mod entries out, and a kit of a layout the
+build doesn't read loads without them: lock codes are a build's own.
+Checked in the emulator only.
 
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 

@@ -55,4 +55,20 @@ int core_lfo_offset(int track, unsigned field);
  * most, stock's first); a value above 127 can't be locked yet. */
 int core_lock_value(int track, unsigned field);
 
+/* core-ar2 0.8: the field's lock in the active scene of the kit track
+ * (0..11) plays, 0..127, or -1 when the scene has none (or no scene is
+ * active). A scene lock is set like a stock one: the scene's pad held in
+ * scene edit, the parameter's knob turned. It is an entry with the field's
+ * lock code in the kit's 48 scene locks, shared with stock's. The mod uses it
+ * in place of the sound's value while the scene is active. */
+int core_scene_value(int track, unsigned field);
+
+/* core-ar2 0.8: the offset the performances give the field on track (0..11)
+ * now, in 8.8 steps (one step is 256): each performance's depth for it times
+ * its pad's pressure, as stock adds a performance's to a stock parameter.
+ * The depth is set like a stock one, the performance's pad held in its edit
+ * and the knob turned; it is an entry in the kit's 48 performance locks. The
+ * mod adds it to the value it uses, as it adds core_lfo_offset. */
+int core_perf_offset(int track, unsigned field);
+
 #endif

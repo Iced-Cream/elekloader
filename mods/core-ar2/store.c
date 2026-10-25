@@ -469,6 +469,8 @@ int st_kit_save(unsigned char *dst, unsigned char *live, int a)
     return r;
 }
 
+void core_kit_forget(unsigned char *kit);
+
 int st_kit_load(unsigned char *live, unsigned char *src)
 {
     int r = st_kit_load_body(live, src), j;
@@ -477,6 +479,10 @@ int st_kit_load(unsigned char *live, unsigned char *src)
                  src[KIT_SPARE + 12] == gen(SC_KIT);
         for (j = 0; j < 8; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
+        /* its scenes' and performances' mod entries are its layout's codes
+         * (scenes.c, 0.8) */
+        if (!ok)
+            core_kit_forget(live);
     }
     return r;
 }

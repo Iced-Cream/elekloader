@@ -16,6 +16,10 @@
  * held, knob A sets that trig's p-lock of A instead, and a second
  * bar above the first shows the lock of the trig track 1 plays, half a pixel
  * a step from the left (core_lock_value), none when it has no lock of A.
+ * With a scene's or a performance's pad held, knob A sets the scene's lock or
+ * the performance's depth of A, and a third bar above shows A as the active
+ * scene and the performances leave it (core_scene_value, core_perf_offset),
+ * none while neither touches it.
  */
 #include "analog-rytm-mk2/store.h"
 #include "analog-rytm-mk2/lock.h"
@@ -30,6 +34,15 @@ STORE_FIELD(lc_b);
 const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "LOCK CHECK A"};
 const struct core_lock_param lc_param_b = {STORE(lc_b), 0, 0, 15, "LCB", "LOCK CHECK B"};
 
+/* track 1's sound of the current kit: the live kits as edited, the stored
+ * project's working kit index */
+static void *sound1(void)
+{
+    const volatile unsigned char *ix = (const unsigned char *)0x405c8f20 + 0x19d3f7;
+    unsigned k = (unsigned)ix[0] << 24 | (unsigned)ix[1] << 16 | (unsigned)ix[2] << 8 | ix[3];
+    return k < 128 ? (void *)(0x407c89cb + 0xa8cf18 + 2531 * k + 42) : 0;
+}
+
 static volatile unsigned lc_ticks;
 
 void lc_tick(void *ctrl)
@@ -41,7 +54,8 @@ void lc_tick(void *ctrl)
 void lc_draw(void *bmp, void *ctrl)
 {
     int a = core_lfo_offset(0, STORE(lc_a)), b = core_lfo_offset(0, STORE(lc_b));
-    int v = (a ? a : b) / 256;
+    int v = (a ? a : b) / 256, p;
+    void *s;
     (void)ctrl;
     /* y counts from the bottom row: 0..3 is the bottom edge */
     FILLRECT(bmp, 0, 0, 127, 3, 0);
@@ -60,15 +74,17 @@ void lc_draw(void *bmp, void *ctrl)
     FILLRECT(bmp, 0, 5, 127, 6, 0);
     if ((v = core_lock_value(0, STORE(lc_a))) >= 0)
         FILLRECT(bmp, 0, 5, v / 2, 6, 1);
-}
-
-/* track 1's sound of the current kit: the live kits as edited, the stored
- * project's working kit index */
-static void *sound1(void)
-{
-    const volatile unsigned char *ix = (const unsigned char *)0x405c8f20 + 0x19d3f7;
-    unsigned k = (unsigned)ix[0] << 24 | (unsigned)ix[1] << 16 | (unsigned)ix[2] << 8 | ix[3];
-    return k < 128 ? (void *)(0x407c89cb + 0xa8cf18 + 2531 * k + 42) : 0;
+    /* the scene's lock of A, else the sound's, plus the performances' */
+    FILLRECT(bmp, 0, 8, 127, 9, 0);
+    v = core_scene_value(0, STORE(lc_a));
+    p = core_perf_offset(0, STORE(lc_a));
+    if (v >= 0 || p) {
+        if (v < 0)
+            v = (s = sound1()) ? (int)core_store_get(STORE(lc_a), s, 0) : 0;
+        v += p / 256;
+        v = v < 0 ? 0 : v > 127 ? 127 : v;
+        FILLRECT(bmp, 0, 8, v / 2, 9, 1);
+    }
 }
 
 const struct core_page lc_page = {14, "LOCK CHECK", {1, 0, 0, 0, 0, 0, 0, 0}};
