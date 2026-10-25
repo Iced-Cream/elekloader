@@ -16,11 +16,15 @@ LOCK CHECK page shows `lc_a` of track 1's sound in the current kit on knob A
 (borrowing the dead record id 1), so RANDOMIZE PAGE ([LFO]+[YES]) and
 RELOAD PAGE ([LFO]+[NO]) can be tried on it.
 
+The screen's y counts from the bottom row (y 0 is the bottom edge). 1.0
+drew its bar at y 60..63, which is the top edge, over the stock header's
+top rows; 1.0.1 draws it at y 0..3.
+
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/lock-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/lock-check-ar2/out/lock-check-1.0.elemod \
+    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/lock-check-ar2/out/lock-check-1.0.1.elemod \
     --out rytm-lock.syx --version LK08
 ```
 
