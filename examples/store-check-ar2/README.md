@@ -32,8 +32,12 @@ counts, redrawing the screen only when a count changes or a round of all
 seven ends. 1.1 walked every column on every frame and forced a redraw every
 eighth tick, which kept the CPU so busy that an OS upgrade sent to a unit
 running it could stall.
-Empty columns after a save, a power cycle or loading the project back mean
-everything survived; full columns after loading another project, or with a
+The screen's y counts from the bottom row (y 0 is the bottom edge). Up to
+1.2 the columns, the bar and the square were drawn at y 47..63, which is the
+top of the screen, over the stock header; 1.2.1 draws them at y 0..16.
+Empty columns after a save, a power cycle, or loading the project back after
+a save mean everything survived (loading it back without a save brings back
+the slot's saved copy, from before STORE CHECK, as it does for stock edits); full columns after loading another project, or with a
 build whose layout can't read this one, mean the data was dropped to zeros
 as it should be. A 3x3 square at the right end of the same edge changes each
 time all seven columns have been counted (about every 1.4 s) while the mod
@@ -57,7 +61,7 @@ core-ar2's README. 1.1 adds `sc_sound_b` and needs core 0.3.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/store-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.3.elemod --mod examples/store-check-ar2/out/store-check-1.1.elemod \
+    --mod mods/core-ar2/out/core-0.3.elemod --mod examples/store-check-ar2/out/store-check-1.2.1.elemod \
     --out rytm-store.syx --version SC01 --lockfile rytm-store.lock.json
 ```
 

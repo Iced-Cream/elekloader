@@ -180,19 +180,20 @@ void sc_draw(void *bmp, void *ctrl)
 {
     int col, bad;
     (void)ctrl;
-    FILLRECT(bmp, 0, 47, 60, 63, 0);
+    /* y counts from the bottom row: 0..16 is the bottom edge */
+    FILLRECT(bmp, 0, 0, 60, 16, 0);
     for (col = 0; col < 7; col++) {
         bad = sc_bad[col];
         if (bad)
-            FILLRECT(bmp, 8 * col, 64 - bad, 8 * col + 5, 63, 1);
+            FILLRECT(bmp, 8 * col, 0, 8 * col + 5, bad - 1, 1);
     }
-    FILLRECT(bmp, 64, 47, 100, 63, 0);
+    FILLRECT(bmp, 64, 0, 100, 16, 0);
     if (sc_proj_n & 15)
-        FILLRECT(bmp, 64, 62, 64 + 2 * (sc_proj_n & 15) - 1, 63, 1);
+        FILLRECT(bmp, 64, 0, 64 + 2 * (sc_proj_n & 15) - 1, 1, 1);
     if (sc_proj_how == CORE_PROJECT_LOADED)
-        FILLRECT(bmp, 64, 58, 65, 59, 1);
+        FILLRECT(bmp, 64, 4, 65, 5, 1);
     for (col = 0; col < 4; col++)
         if (sc_proj_dropped & STORE_DROPPED(col ? STORE_TRACK + col - 1 : STORE_GLOBAL))
-            FILLRECT(bmp, 68 + 4 * col, 58, 69 + 4 * col, 59, 1);
-    FILLRECT(bmp, 125, 61, 127, 63, sc_rounds & 1);
+            FILLRECT(bmp, 68 + 4 * col, 4, 69 + 4 * col, 5, 1);
+    FILLRECT(bmp, 125, 0, 127, 2, sc_rounds & 1);
 }
