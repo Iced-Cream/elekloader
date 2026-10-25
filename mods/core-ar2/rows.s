@@ -5,7 +5,7 @@
         .text
         .globl  core_memcpy, core_row_load, core_rebuild, core_trig_locks
         .globl  core_memset, core_new, core_new_array, core_track_clear, core_step_clear
-        .globl  core_trig_list, core_euclid_list, core_lock_paste
+        .globl  core_trig_list, core_euclid_list, core_lock_paste, core_dump_check
         .align  2
 
 | 0x40098bc0, memcpy (dst, src, n): `movea.l 4(%sp),%a1; movea.l 8(%sp),%a0`.
@@ -207,3 +207,15 @@ trig_locks_body:
         clr.w   %d0
         lea     -32(%sp),%sp
         jmp     0x4009a95a
+
+| 0x4000d79c in a received pattern's load, once stock's check has passed
+| (the live pattern %d3, the buffer %d2): `move.l %d2,16(%sp); move.l
+| %d3,12(%sp)`, then stock's tail call of the load. The buffer's mod rows
+| stay only with this build's marker.
+core_dump_check:
+        move.l  %d2,-(%sp)
+        jsr     core_dump_in
+        addq.l  #4,%sp
+        move.l  %d2,16(%sp)
+        move.l  %d3,12(%sp)
+        jmp     0x4000d7a4

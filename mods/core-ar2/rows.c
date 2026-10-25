@@ -38,8 +38,17 @@
  *
  * After a change to a live pattern's locks, core writes its mod rows into
  * the stored pattern, as stock's rebuild would (stock does not rebuild for a
- * change it does not see). Not yet followed (core-ar2 README): the SysEx
- * dump guard, a mod parameter above 127.
+ * change it does not see).
+ *
+ * Codes are a build's (its lockfile's), so mod rows leave the unit in a
+ * pattern's SysEx dump only with a marker row, code 127 and track 0xfe, then
+ * the sender's layout ID: core adds it to the dump's buffer after stock's
+ * pattern save (0x4000eff2), or, with no free row for it, leaves the mod
+ * rows out. A received pattern (0x4000d79c, once stock has checked it)
+ * keeps its mod rows only with a marker holding this build's own layout ID;
+ * the marker never stays. A project of a layout this build does not read
+ * (st_proj_load) loses its mod rows. Not yet followed (core-ar2 README): a
+ * mod parameter above 127.
  */
 
 #include <stdint.h>
@@ -98,6 +107,7 @@ unsigned core_lock_field(const struct core_lock_param *p);
 int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
+extern const unsigned core_store_ids[];         /* this build's layout ID first */
 
 static struct ledger *volatile led;
 static volatile unsigned gen;   /* every change, to the array or in place */
@@ -444,6 +454,75 @@ void core_rows_save(unsigned char *rows, unsigned store)
     if (rows && store) {
         unappend(rows);
         append(rows, store);
+    }
+}
+
+/* ---- SysEx pattern dumps and foreign projects ---- */
+
+#define PATTERN_SAVE ((int (*)(unsigned char *, void *, int))0x4000937c)
+#define MARK_CODE 127
+#define MARK_TRACK 0xfe
+
+static int marker(const unsigned char *r)
+{
+    return r[0] == MARK_CODE && r[1] == MARK_TRACK;
+}
+
+/* 0x4000eff2 (rows.s): stock's pattern save into a dump's buffer (13,101
+ * bytes, a stored pattern's form), then the marker for its mod rows */
+int core_dump_out(unsigned char *buf, void *live, int a)
+{
+    int r = PATTERN_SAVE(buf, live, a), i, any = 0, free = -1;
+    unsigned char *rows = buf + STORED_ROWS, *m;
+    for (i = 0; i < ROWS; i++) {
+        any |= mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13;
+        if (free < 0 && empty(rows + ROW * i))
+            free = i;
+    }
+    if (!any)
+        return r;
+    if (free < 0) {
+        unappend(rows);
+        return r;
+    }
+    m = rows + ROW * free;
+    for (i = 0; i < ROW; i++)
+        m[i] = 0xff;
+    m[0] = MARK_CODE;
+    m[1] = MARK_TRACK;
+    m[2] = core_store_ids[0] >> 24;
+    m[3] = core_store_ids[0] >> 16;
+    m[4] = core_store_ids[0] >> 8;
+    m[5] = core_store_ids[0];
+    return r;
+}
+
+/* 0x4000d79c (rows.s): a received pattern's buffer, checked, before stock
+ * loads it */
+void core_dump_in(unsigned char *buf)
+{
+    unsigned char *rows = buf + STORED_ROWS, *r;
+    unsigned id;
+    int i, j, ok = 0;
+    for (i = 0; i < ROWS; i++)
+        if (marker(r = rows + ROW * i)) {
+            id = (unsigned)r[2] << 24 | (unsigned)r[3] << 16 | (unsigned)r[4] << 8 | r[5];
+            ok = id && id == core_store_ids[0];
+            for (j = 0; j < ROW; j++)
+                r[j] = j < 2 ? 0xff : 0;
+        }
+    if (!ok)
+        unappend(rows);
+}
+
+/* st_proj_load: a project of a layout this build does not read keeps no mod
+ * locks */
+void core_rows_forget(void)
+{
+    int k;
+    for (k = 0; k < 129; k++) {
+        unappend(stored_rows(k));
+        drop(store_of(k), store_of(k) + STORE_LOCKS);
     }
 }
 

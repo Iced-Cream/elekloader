@@ -113,6 +113,8 @@
   {"addr": "0x400c4d62", "stock": "286effac202c0008", "op": "jmp", "target": "core_trig_list"},
   {"addr": "0x400c3eb0", "stock": "2f022e3c400c070a", "op": "jmp", "target": "core_euclid_list"},
   {"addr": "0x400c058c", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_lock_paste"},
+  {"addr": "0x4000eff2", "stock": "4eb94000937c", "op": "jsr", "target": "core_dump_out"},
+  {"addr": "0x4000d79c", "stock": "2f4200102f43000c", "op": "jmp", "target": "core_dump_check"},
   {"addr": "0x401dce60", "stock": "400a98b4", "op": "ptr", "target": "core_lock_get_vt"},
   {"addr": "0x401dce64", "stock": "400a9926", "op": "ptr", "target": "core_lock_set_vt"},
   {"addr": "0x401dce68", "stock": "400a99c2", "op": "ptr", "target": "core_lock_clear_vt"},

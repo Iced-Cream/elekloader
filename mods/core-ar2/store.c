@@ -583,11 +583,16 @@ int st_proj_init(void *project, int a, int b, int c)
  * the scopes the loaded image (a file's buffer, else the stored project) had
  * nothing for. A file of an older project version (st_image 0) brings no
  * project data. */
+void core_rows_forget(void);
+
 int st_proj_load(void *live, unsigned char *src, void *progress)
 {
     int r = st_proj_load_body(live, src, progress), g, j, s;
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
+    /* its mod p-locks' codes are its layout's (rows.c, 0.8) */
+    if (!from || !known_id(rd32(store_byte(from, 0))))
+        core_rows_forget();
     for (s = SC_GLOBAL; s <= SC_PROJECT; s++)
         if (!store_ok(from, s))
             dropped |= 1 << s;

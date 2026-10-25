@@ -1664,9 +1664,14 @@ sound's value, clamped to the parameter's `min..max`.
 Mod locks follow the trigs they belong to through copy, paste, clear and
 undo of a trig, page, track or pattern, and through a trig shift.
 
+A pattern's SysEx dump carries its mod locks with a marker of the build's
+layout ID, and a received pattern keeps them only when the marker is the
+receiving build's own; a project of a layout the build doesn't read loads
+without them. Lock codes are a build's own, so a mod lock never lands on
+another build's parameter.
+
 Limits (0.8): a value above 127 can't be locked; scenes, performance and
-MIDI don't carry mod locks yet, and SysEx pattern dumps aren't guarded
-for them. Checked in the emulator only.
+MIDI don't carry mod locks yet. Checked in the emulator only.
 
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 

@@ -188,8 +188,8 @@ def test_core_ar2_sites():
     assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 11 lock
-    # sites (0.8) and the 16 lock row sites (0.8)
-    assert len(mod['sites']) == 84
+    # sites (0.8) and the 18 lock row sites (0.8)
+    assert len(mod['sites']) == 86
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
                                    'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload',
@@ -216,7 +216,8 @@ def test_core_ar2_sites():
                                    'core_lock_get_vt', 'core_lock_set_vt', 'core_lock_clear_vt',
                                    'core_lock_turn_vt', 'core_memset', 'core_new', 'core_new_array',
                                    'core_track_clear', 'core_step_clear', 'core_trig_list',
-                                   'core_euclid_list', 'core_lock_paste')}
+                                   'core_euclid_list', 'core_lock_paste', 'core_dump_out',
+                                   'core_dump_check')}
     assert rows == {0x40098bc0: ('jmp', 'core_memcpy', '226f0004206f0008'),
                     0x40098c08: ('jmp', 'core_memset', '206f000871af000b'),
                     0x40082a40: ('jmp', 'core_new', '4ef9400827c4'),
@@ -226,6 +227,8 @@ def test_core_ar2_sites():
                     0x400c4d62: ('jmp', 'core_trig_list', '286effac202c0008'),
                     0x400c3eb0: ('jmp', 'core_euclid_list', '2f022e3c400c070a'),
                     0x400c058c: ('jmp', 'core_lock_paste', '4feffff448d7040c'),
+                    0x4000eff2: ('jsr', 'core_dump_out', '4eb94000937c'),
+                    0x4000d79c: ('jmp', 'core_dump_check', '2f4200102f43000c'),
                     0x40008f98: ('jmp', 'core_row_load', '4fefffdc48d73c7c'),
                     0x40009216: ('jmp', 'core_rebuild', '4fefffd048d77cfc'),
                     0x4009a954: ('jmp', 'core_trig_locks', '42404fefffe0'),

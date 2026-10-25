@@ -430,9 +430,13 @@ writes them into the stored pattern as rows, as stock's rebuild would.
 | rebuild | 0x40009216 (`jmp`) | after stock's rows, the lock store's mod locks as rows, in code then track order, while fewer than 71 rows are used, so stock's locks always fit first |
 | trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`) |
 | lock get, set, clear, turn | sound set vtable +60..+72, 0x401dce60..0x401dce6c (`ptr`) | a mod parameter's knob (its page id) with a trig held: the lock goes into the ledger; any other id goes to stock's routine |
+| dump out | 0x4000eff2 (`jsr`) | stock's pattern save into a SysEx dump's buffer, then a marker row for its mod rows (code 127, track 0xfe, the layout ID), or, with no free row, no mod rows |
+| dump in | 0x4000d79c (`jmp`) | a received pattern, once stock has checked it: its mod rows stay only with a marker holding this build's own layout ID; the marker goes |
 
 Pattern init (`st_pat_init`, Mod storage) also clears the pattern's mod
-locks. A set or turn takes whole steps of 0..127, starting a turn from the
+locks, and a project load whose image's layout ID this build doesn't read
+(`st_proj_load`) drops every pattern's: codes are a build's, from its
+lockfile. A set or turn takes whole steps of 0..127, starting a turn from the
 sound's value; values are clamped to the parameter's `min..max` and to 127.
 A new row is refused, as stock refuses one, when 71 rows are in use. The
 ledger holds 16,384 locks at most (all patterns, clipboards and undo
@@ -446,11 +450,14 @@ clear removes both and its undo brings them back; so do track clear and
 its undo, and a track copy, clear and paste; trig shift right twice moves
 them to steps 3 and 8, left once to 16 and 5 (wrapping); pattern clear and
 its undo; a pattern copy into A03 gives A03's stored pattern the row; after
-a power cycle with no save the pattern plays the lock. Not checked: Euclid's
-convert. Not on a unit.
+a power cycle with no save the pattern plays the lock. A SysEx dump of A01
+carries the mod row and the marker; sent back into A03 it keeps the row
+(and not the marker), and with the marker's ID changed or with no marker
+A03 gets no mod row. Not checked: Euclid's convert, a foreign project's
+load. Not on a unit.
 
-Not followed yet: the SysEx dump guard, scenes and performance, MIDI, and
-fine values (a value above 127 can't be locked).
+Not followed yet: scenes and performance, MIDI, and fine values (a value
+above 127 can't be locked).
 
 ## Checked so far
 
