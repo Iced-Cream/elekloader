@@ -1393,6 +1393,34 @@ machine. The value a randomize or reload writes reaches the mod through
 the field, not through its `core_params` delta, so a mod that keeps a copy
 elsewhere reads the field again.
 
+### Mod p-locks (core-ar2 0.9, Analog Rytm MKII)
+
+A lockable parameter (above) is p-locked like a stock one: hold a trig and
+turn the parameter's page knob (the `id` it registered). The lock is a row
+in the pattern's lock pool with the field's lock code, so it is saved,
+reloaded, copied and pasted with the pattern, and it shares the pattern's
+72 rows with stock's locks (stock's always fit first; core uses at most 71
+rows, as stock does).
+
+The mod reads the lock while the trig plays:
+
+```c
+#include "analog-rytm-mk2/lock.h"
+
+int v = core_lock_value(track, STORE(my_depth));   /* 0..127, or -1: none */
+int depth = v >= 0 ? v : core_store_get(STORE(my_depth), sound, 0);
+```
+
+`core_lock_value(track, field)` is the lock of the trig last played on the
+track (0..12), set with the trig's other locks before it sounds, or -1 when
+that trig has none. A set or a turn moves in whole steps of 0..127 from the
+sound's value, clamped to the parameter's `min..max`.
+
+Limits (0.9): a value above 127 can't be locked; track, page and trig
+operations (copy, clear, shift a track or a trig), scenes, performance and
+MIDI don't carry mod locks yet, and SysEx pattern dumps aren't guarded
+for them. Checked in the emulator only.
+
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 
 core-a4 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's

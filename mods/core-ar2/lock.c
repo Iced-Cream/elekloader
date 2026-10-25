@@ -141,16 +141,28 @@ const char *core_pseudo_short(int id)
 
 /* ---- RANDOMIZE PAGE and RELOAD PAGE on a mod parameter's knob ---- */
 
+const struct core_lock_param *core_lock_by_id(int id, unsigned *code);
+
 static const struct core_lock_param *by_id(int id)
 {
     unsigned code;
+    return core_lock_by_id(id, &code);
+}
+
+/* for rows.c: a page id's parameter and its code */
+const struct core_lock_param *core_lock_by_id(int id, unsigned *code)
+{
     if (!id)
         return 0;
-    for (code = FIRST_CODE; code <= LAST_CODE; code++)
-        if (param(code) && param(code)->id == id)
-            return param(code);
+    for (*code = FIRST_CODE; *code <= LAST_CODE; ++*code)
+        if (param(*code) && param(*code)->id == id)
+            return param(*code);
     return 0;
 }
+
+unsigned core_lock_field(const struct core_lock_param *p) { return p->field; }
+int core_lock_min(const struct core_lock_param *p) { return p->min; }
+int core_lock_max(const struct core_lock_param *p) { return p->max; }
 
 #define LIVE_KITS 0x412558e3                  /* the live project +0xa8cf18: the kits as edited */
 #define LIVE_KITS_SAVED 0x4f180                 /* then the kits as saved */
@@ -171,7 +183,7 @@ static unsigned char *edited_sound(void *p)
  * sound setter (0x400a9dea) asks it; only a sound of an edited kit counts.
  * Stock returns it in %d0, so the call is typed as returning a number (gcc
  * reads a returned pointer from %a0). */
-static unsigned char *set_sound(void *set)
+unsigned char *core_lock_sound(void *set)
 {
     void *obj = set ? *(void **)((char *)set + 24) : 0;
     if (!obj)
@@ -189,7 +201,7 @@ static unsigned char *set_sound(void *set)
 #define ID_COMMON ((int (*)(int))0x40006f18)
 #define ID_MACHINE ((int (*)(int))0x4000714a)
 
-static int stock_takes(int id, const unsigned char *s)
+int core_lock_stock_takes(int id, const unsigned char *s)
 {
     int slot = ID_SLOT(id);
     if (slot < 0 || slot > 41)
@@ -204,7 +216,7 @@ int core_lock_rand(void *set, int id)
     const struct core_lock_param *p = by_id(id);
     unsigned char *s;
     unsigned span;
-    if (!p || !(s = set_sound(set)) || stock_takes(id, s))
+    if (!p || !(s = core_lock_sound(set)) || core_lock_stock_takes(id, s))
         return 0;
     span = p->max - p->min + 1;
     core_store_set(p->field, s, 0, p->min + (RANDOM() & 0x7fff) % span);
@@ -227,7 +239,7 @@ int core_reload(void *view, int track, int **ids, int d)
         return r;
     s = (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + 42 + 152 * track;
     for (id = ids[0]; id && id < ids[1]; id++)
-        if ((p = by_id(*id)) != 0 && !stock_takes(*id, s))
+        if ((p = by_id(*id)) != 0 && !core_lock_stock_takes(*id, s))
             core_store_set(p->field, s, 0, core_store_get(p->field, s + LIVE_KITS_SAVED, 0));
     return r;
 }

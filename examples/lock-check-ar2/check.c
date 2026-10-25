@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* lock-check: the smallest user of core-ar2's lockable parameters (core 0.8).
+/* lock-check: the smallest user of core-ar2's lockable parameters (core 0.8)
+ * and their p-locks (core 0.9).
  *
  * mod.json declares two sound fields with "lock": true, so the lockfile
  * gives each a lock code, and registers them in core_lock_params. Core then
@@ -11,7 +12,10 @@
  *
  * Behind the LFO key, a LOCK CHECK page shows A on knob A (borrowing stock's
  * id 1, as mods' pages do) for track 1's sound of the current kit: RANDOMIZE
- * PAGE and RELOAD PAGE reach it through its lock parameter's id.
+ * PAGE and RELOAD PAGE reach it through its lock parameter's id. With a trig
+ * held, knob A sets that trig's p-lock of A instead (core 0.9), and a second
+ * bar above the first shows the lock of the trig track 1 plays, half a pixel
+ * a step from the left (core_lock_value), none when it has no lock of A.
  */
 #include "analog-rytm-mk2/store.h"
 #include "analog-rytm-mk2/lock.h"
@@ -52,6 +56,9 @@ void lc_draw(void *bmp, void *ctrl)
         FILLRECT(bmp, 0, 60, 2, 61, 1);
     if (b)
         FILLRECT(bmp, 0, 62, 2, 63, 1);
+    FILLRECT(bmp, 0, 57, 127, 58, 0);
+    if ((v = core_lock_value(0, STORE(lc_a))) >= 0)
+        FILLRECT(bmp, 0, 57, v / 2, 58, 1);
 }
 
 /* track 1's sound of the current kit: the live kits as edited, the stored

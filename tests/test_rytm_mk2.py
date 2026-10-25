@@ -131,8 +131,10 @@ def test_core_ar2_sites():
     for s in mod['sites']:
         a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
-        if s['op'] == 'ptr':            # data: a vtable entry (0.8: the sound set's +76), not code
-            assert a == 0x401dce24 + 76 and want == (0x400a86dc).to_bytes(4, 'big'), s
+        if s['op'] == 'ptr':            # data: the sound set's vtable entries, not code: +76
+            # (0.8, the slot id) and +60..+72 (0.9, the lock get, set, clear and turn)
+            ptrs = {76: 0x400a86dc, 60: 0x400a98b4, 64: 0x400a9926, 68: 0x400a99c2, 72: 0x400a8560}
+            assert a - 0x401dce24 in ptrs and want == ptrs[a - 0x401dce24].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
         assert ok, (s, note)
@@ -185,8 +187,9 @@ def test_core_ar2_sites():
     o = 0x400cbd3e + 2 + 0x10 - DEV.main_load                # the branch skips setsel(view, 0)
     assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
-    # the 10 view sites, the step and the FX keep, and the 8 lock sites (0.8)
-    assert len(mod['sites']) == 64
+    # the 10 view sites, the step and the FX keep, the 8 lock sites (0.8) and
+    # the 8 lock row sites (0.9)
+    assert len(mod['sites']) == 72
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
                                    'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload')}
@@ -194,6 +197,22 @@ def test_core_ar2_sites():
                     0x400aa31e: ('jmp', 'core_dst_list_end'), 0x4004a7e8: ('jmp', 'core_dst_label'),
                     0x400ffab2: ('jmp', 'core_dst_text'), 0x401dce70: ('ptr', 'core_dst_slot_id'),
                     0x400aa32a: ('jmp', 'core_rand_param'), 0x400af32c: ('jmp', 'core_reload')}, lock
+    # the lock rows (0.9): four routines' entries, their first instructions as
+    # stock has them, and the sound set's lock get, set, clear and turn
+    rows = {int(x['addr'], 16): (x['op'], x['target'], x['stock']) for x in mod['sites']
+            if x.get('target') in ('core_memcpy', 'core_row_load', 'core_rebuild', 'core_trig_locks',
+                                   'core_lock_get_vt', 'core_lock_set_vt', 'core_lock_clear_vt',
+                                   'core_lock_turn_vt')}
+    assert rows == {0x40098bc0: ('jmp', 'core_memcpy', '226f0004206f0008'),
+                    0x40008f98: ('jmp', 'core_row_load', '4fefffdc48d73c7c'),
+                    0x40009216: ('jmp', 'core_rebuild', '4fefffd048d77cfc'),
+                    0x4009a954: ('jmp', 'core_trig_locks', '42404fefffe0'),
+                    0x401dce60: ('ptr', 'core_lock_get_vt', '400a98b4'),
+                    0x401dce64: ('ptr', 'core_lock_set_vt', '400a9926'),
+                    0x401dce68: ('ptr', 'core_lock_clear_vt', '400a99c2'),
+                    0x401dce6c: ('ptr', 'core_lock_turn_vt', '400a8560')}, rows
+    for a, (_op, _t, b) in rows.items():
+        assert img[a - DEV.main_load:a - DEV.main_load + len(b) // 2] == bytes.fromhex(b), hex(a)
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0

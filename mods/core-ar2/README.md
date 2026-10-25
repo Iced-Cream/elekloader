@@ -6,8 +6,9 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
 with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, from 0.7 with
-write-through storage (Write-through, below), and from 0.8 with lockable
-parameters in `lock.c` and `lock.s` (Lockable parameters, below). On its own it changes nothing the unit does.
+write-through storage (Write-through, below), from 0.8 with lockable
+parameters in `lock.c` and `lock.s` (Lockable parameters, below), and from 0.9
+with their p-locks in `rows.c` and `rows.s` (Mod p-locks, below). On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -346,6 +347,45 @@ sound's machine's).
 A call to a stock routine that returns a pointer is typed as returning a
 number: stock returns it in `%d0`, and gcc reads a returned pointer from
 `%a0`.
+
+## Mod p-locks (0.9)
+
+The second part of the lock service (docs/ADAPTING.md, "Mod p-locks
+(core-ar2 0.9, Analog Rytm MKII)"): a lockable parameter is p-locked like a
+stock one, with a trig held and its page knob turned, and the mod reads the
+playing trig's value with `core_lock_value(track, field)`.
+
+A pattern keeps its p-locks in a pool of 72 rows of 66 bytes, `[code]
+[track][64 step bytes]`; stock's codes are 0..41, a mod parameter's row
+carries its lock code (42..127). Stock only stores the rows: it edits and
+plays a live lock store and rebuilds the rows from it, dropping codes it
+doesn't know. So core keeps each pattern object's mod rows itself (a
+shadow on the heap, in row form) and follows stock with it.
+
+| site | 1.74 | what |
+|---|---|---|
+| memcpy | 0x40098bc0 (`jmp`) | a copy of a whole pattern object (85,760 bytes: pattern switch, SAVE and RELOAD PATTERN, copy, paste, undo) also copies the source's shadow |
+| row load | 0x40008f98 (`jmp`) | after stock, the rows with codes 42..127 and a track below 13 become the object's shadow |
+| rebuild | 0x40009216 (`jmp`) | after stock's rows, the shadow's, in code then track order, while fewer than 71 rows are used, so stock's locks always fit first |
+| trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`) |
+| lock get, set, clear, turn | sound set vtable +60..+72, 0x401dce60..0x401dce6c (`ptr`) | a mod parameter's knob (its page id) with a trig held: the lock goes into the shadow and, as stock writes its own lock edits, into the stored pattern's rows; any other id goes to stock's routine |
+
+Pattern init (`st_pat_init`, Mod storage) also clears the object's shadow.
+A set or turn takes whole steps of 0..127, starting a turn from the sound's
+value; values are clamped to the parameter's `min..max` and to 127.
+
+Checked in the emulator (dtboot, OS 1.74, `examples/lock-check-ar2` 1.1): a
+trig held and the knob turned makes a row with the parameter's code in the
+stored pattern; the trig plays the value; SAVE and RELOAD PATTERN keep it;
+it survives a power cycle with no save, and the reloaded pattern plays it;
+a copy of A01 pasted into A03 carries the row (A03's object gets its shadow).
+Not checked yet: A03 playing it after the paste (in the emulator stock's
+screen stops updating after a paste, on stock too) and a pattern clear. Not
+on a unit.
+
+Not followed yet: track, page and trig operations (copy, clear, shift,
+paste of a track or a trig), track init, the SysEx dump guard, scenes and performance,
+MIDI, and fine values (a value above 127 can't be locked).
 
 ## Checked so far
 

@@ -1,11 +1,11 @@
 {
  "id": "lock-check",
- "version": "1.0",
+ "version": "1.1",
  "title": "Lock check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "The smallest user of core-ar2's lockable parameters (core 0.8): two lockable sound fields, LOCK CHECK A and B, which appear at the end of every sound's LFO destination list. A bar along the bottom of the screen shows the offset track 1's LFO gives the destination chosen there, from the middle. A LOCK CHECK page behind the LFO key shows A on knob A, for track 1's sound, so RANDOMIZE PAGE and RELOAD PAGE can be tried on it.",
+ "description": "The smallest user of core-ar2's lockable parameters (core 0.8): two lockable sound fields, LOCK CHECK A and B, which appear at the end of every sound's LFO destination list. A bar along the bottom of the screen shows the offset track 1's LFO gives the destination chosen there, from the middle. A LOCK CHECK page behind the LFO key shows A on knob A, for track 1's sound, so RANDOMIZE PAGE and RELOAD PAGE can be tried on it, and with a trig held its p-lock (core 0.9), which a second bar shows while the trig plays.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "sources": [
@@ -108,7 +108,7 @@
   }
  ],
  "resources": {
-  "core": "0.8"
+  "core": "0.9"
  },
  "requires": [
   "core"
