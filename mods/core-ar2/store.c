@@ -29,7 +29,8 @@
  * track, pattern, project), then T B for each of the 129 x 13 pattern tracks,
  * then P B for each of the 129 patterns, then the project's bytes. The
  * stored project (the working copy at 0x405c8f20) carries the build's own
- * store; a project file, Total Recall's buffer and the like carry theirs.
+ * store; a project file and the like carry theirs (a Total Recall take sends
+ * the stored project itself).
  *
  * The SysEx project commands that copy, swap or write whole stored songs go
  * through st_song_copy, which leaves the target's store bytes, and those for
