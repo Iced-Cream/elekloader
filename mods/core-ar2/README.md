@@ -436,9 +436,14 @@ writes them into the stored pattern as rows, as stock's rebuild would.
 Pattern init (`st_pat_init`, Mod storage) also clears the pattern's mod
 locks, and a project load whose image's layout ID this build doesn't read
 (`st_proj_load`) drops every pattern's: codes are a build's, from its
-lockfile. A set or turn takes whole steps of 0..127, starting a turn from the
-sound's value; values are clamped to the parameter's `min..max` and to 127.
-A new row is refused, as stock refuses one, when 71 rows are in use. The
+lockfile. A set or turn takes whole steps, starting a turn from the sound's
+value; values are clamped to the parameter's `min..max` and to 16383. A
+parameter above 127 (`core_lock_shift`) takes two rows per track, as stock's
+fine locks do: bits 13..7 in a row with its code and track, bits 6..0 in a
+row with its code and the track + 0x40; core places both or neither, and
+loads a first row without its second as the value's bits 13..7. A new row
+is refused, as stock refuses one, when 71 rows (two, for a parameter above
+127) would be in use. The
 ledger holds 16,384 locks at most (all patterns, clipboards and undo
 buffers together); a copy that would pass that drops the locks it copies.
 
@@ -450,7 +455,9 @@ clear removes both and its undo brings them back; so do track clear and
 its undo, and a track copy, clear and paste; trig shift right twice moves
 them to steps 3 and 8, left once to 16 and 5 (wrapping); pattern clear and
 its undo; a pattern copy into A03 gives A03's stored pattern the row; after
-a power cycle with no save the pattern plays the lock. A SysEx dump of A01
+a power cycle with no save the pattern plays the lock (again on 26 Oct, after
+a fix: 0.8's layout check in `st_proj_load` read the ID's bytes wrongly and
+dropped every mod lock at each project load and boot). A SysEx dump of A01
 carries the mod row and the marker; sent back into A03 it keeps the row
 (and not the marker), and with the marker's ID changed or with no marker
 A03 gets no mod row. Not checked: Euclid's convert, a foreign project's
@@ -470,7 +477,7 @@ kit's copies take it as they take stock's. Mods read it with
 
 | site | 1.74 | what |
 |---|---|---|
-| knob turn, push | 0x400385f8, 0x400387ba (`jmp`) | a parameter view's turn and push: with a scene's or a performance's pad held, a mod parameter's knob (its page id, where stock doesn't take the id for the track's sound) sets its entry: a scene's from the sound's value, a performance's depth from 0, whole steps, clamped to `min..max` and 127 (a depth to ±127); stock refuses the id there |
+| knob turn, push | 0x400385f8, 0x400387ba (`jmp`) | a parameter view's turn and push: with a scene's or a performance's pad held, a mod parameter's knob (its page id, where stock doesn't take the id for the track's sound) sets its entry: a scene's from the sound's value, a performance's depth from 0, whole (coarse) steps, clamped to `min..max` (a depth to ±127 steps); stock refuses the id there |
 | performance build, scene build | 0x4011f744, 0x4011f844 (`jsr`) | the audio side's lists index a parameter table by track × 42 + 26 + code, so an entry with a code above 41 would write another track's parameter: core gives it track 0xff, and stock takes it as an empty entry (the dummy index 25) |
 | code to file, file to code | 0x40007602, 0x400075c8 (`jmp`) | a kit file stores each entry's code as a parameter number (0..41 both ways, a permutation); a drum track's 42..127 stays itself, so a saved kit keeps its mod entries |
 | kit dump | 0x4000f2a2 (`jsr`) | stock's kit save into a SysEx dump's buffer, then an empty entry (`00 ff 00 00`) in place of each mod entry |
@@ -516,7 +523,7 @@ get them in that order.
 
 | site | 1.74 | what |
 |---|---|---|
-| NRPN in | 0x400b2b26 (`jmp`) | a track's NRPN in (obj, nrpn, value, track, flag), the track's channel's and the auto channel's: an NRPN of MSB 4 on a drum track is core's, which sets the parameter in the track's sound of the current kit, clamped to `min..max` and 127 (an LSB with no parameter is dropped); any other goes on to stock |
+| NRPN in | 0x400b2b26 (`jmp`) | a track's NRPN in (obj, nrpn, value, track, flag), the track's channel's and the auto channel's: an NRPN of MSB 4 on a drum track is core's, which sets the parameter in the track's sound of the current kit, clamped to `min..max` (an LSB with no parameter is dropped); any other goes on to stock |
 | CC in | 0x400b0544 (`jmp`) | a track's CC in (obj, cc, value, track, flag): a CC of the pool whose code has a parameter is core's, set as above; any other goes on to stock |
 | knob out | `core_param_delta` (pages.s) | after a mod's `delta` takes a turn of a lockable parameter's knob, core sends it as stock's parameter out (0x400a9754) sends a stock one: only while PARAM OUTPUT is on (MIDI CONFIG +160, 0x400b56c0), as an NRPN (+112 = 0, 0x40085962) or a CC (+112 = 1, 0x4008591a; none for a code above 74), on the channel stock's 0x400a9844 gives |
 
@@ -533,7 +540,19 @@ checked: the clamp of LOCK CHECK B (0..15) from MIDI, an NRPN or CC while
 live recording (core records no p-lock from it), what the knob sends with a
 trig held or in scene edit, a unit.
 
-Not followed yet: fine values (a value above 127 can't be locked).
+Values above 127 (0.8) follow stock's fine parameters: a p-lock (two rows,
+above) and an NRPN (both data bytes) hold the whole value, up to 16383; a
+scene lock, a performance depth and a CC hold its coarse step,
+`value >> core_lock_shift`, the shift that brings `max` into 0..127, since a
+kit's file keeps only an entry's high byte. Checked in the emulator
+(`examples/lock-check-ar2` 1.3, LOCK CHECK C, 0..1000, on knob B, 26 Oct
+2026): NRPN 4:2 with 7, 4 sets C to 900, and a turn sends 904 back as
+`... 06 07 26 08`; a trig held and knob B turned locks 901 as two rows
+(`2c 00 07`, `2c 40 05`), and the trig plays 901 (`core_lock_value`); a
+power cycle with no save keeps both rows and the lock plays; a scene lock
+from 900 turned 20 steps stops at the coarse 125 (`7d` in the entry, 1000).
+Not checked: the performance depth and CC of C, a pattern's SysEx dump with
+the two rows, trig copy of C.
 
 ## Checked so far
 

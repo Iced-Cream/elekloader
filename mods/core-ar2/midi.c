@@ -4,7 +4,8 @@
  *
  * Stock's NRPNs for a track's sound use MSBs 0..3. A mod parameter is NRPN
  * MSB 4, LSB its lock code - 42, on the track's channel, its value in the
- * data entry MSB (0..127; the LSB is ignored). Stock leaves 33 CCs on a
+ * data entry MSB (0..127; the LSB is ignored), or for a parameter above 127
+ * in both (0..16383), as stock sends a fine parameter's. Stock leaves 33 CCs on a
  * track's channel unused (none of its tables maps them, and they are not the
  * performances' CCs, 0x401de1f4); the first 33 codes, 42..74, get them in
  * order (CC_POOL), so a parameter's CC, like its NRPN, follows its code:
@@ -44,21 +45,25 @@ const struct core_lock_param *core_lock_knob(void *view, int id, int *track, uns
 unsigned core_lock_field(const struct core_lock_param *p);
 int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
+int core_lock_shift(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 
-/* the parameter of a code in the track's sound of the current kit: a 7-bit
- * value, clamped to its range */
-static void set(unsigned code, int value, int track)
+/* the parameter of a code in the track's sound of the current kit, from an
+ * NRPN's 14-bit value or a CC's 7, clamped to its range. A parameter up to
+ * 127 takes the NRPN's MSB; one above, the NRPN's whole value and the CC's
+ * coarse step (core_lock_shift). */
+static void set(unsigned code, int value, int cc, int track)
 {
     const struct core_lock_param *p = core_lock_by_code(code);
     unsigned k = (unsigned)WORKING_KIT_INDEX[0] << 24 | (unsigned)WORKING_KIT_INDEX[1] << 16 |
                  (unsigned)WORKING_KIT_INDEX[2] << 8 | WORKING_KIT_INDEX[3];
-    int hi;
+    int sh;
     if (!p || k >= 128)
         return;
-    hi = core_lock_max(p) > 127 ? 127 : core_lock_max(p);
-    value = value < core_lock_min(p) ? core_lock_min(p) : value > hi ? hi : value;
+    sh = core_lock_shift(p);
+    value = cc ? value << sh : sh ? value : value >> 7;
+    value = value < core_lock_min(p) ? core_lock_min(p) : value > core_lock_max(p) ? core_lock_max(p) : value;
     core_store_set(core_lock_field(p),
                    (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + 42 + 152 * track, 0, value);
 }
@@ -70,7 +75,7 @@ int core_nrpn_in(int nrpn, int value, int track)
 {
     if (nrpn >> 7 != MSB || (unsigned)track >= 12)
         return 0;
-    set(FIRST_CODE + (nrpn & 127), (value >> 7) & 127, track);
+    set(FIRST_CODE + (nrpn & 127), value & 16383, 0, track);
     return 1;
 }
 
@@ -84,7 +89,7 @@ int core_cc_in(int cc, int value, int track)
         if (CC_POOL[i] == cc) {
             if (!core_lock_by_code(FIRST_CODE + i))
                 return 0;
-            set(FIRST_CODE + i, value & 127, track);
+            set(FIRST_CODE + i, value & 127, 1, track);
             return 1;
         }
     return 0;
@@ -95,7 +100,7 @@ void core_midi_knob(void *view, int id)
 {
     unsigned code, cfg;
     unsigned char *s;
-    int track, v;
+    int track, v, sh;
     const struct core_lock_param *p = core_lock_knob(view, id, &track, &code, &s);
     if (!p)
         return;
@@ -103,14 +108,15 @@ void core_midi_knob(void *view, int id)
     if (!PARAM_OUT(cfg))
         return;
     v = (int)core_store_get(core_lock_field(p), s, 0);
-    v = v < 0 ? 0 : v > 127 ? 127 : v;
+    v = v < 0 ? 0 : v > core_lock_max(p) ? core_lock_max(p) : v;
+    sh = core_lock_shift(p);
     switch (PARAM_OUT_KIND(cfg)) {
     case 0:
-        SEND_NRPN(OUT_CHANNEL(0), MSB << 7 | (code - FIRST_CODE), v << 7, 1);
+        SEND_NRPN(OUT_CHANNEL(0), MSB << 7 | (code - FIRST_CODE), sh ? v : v << 7, 1);
         break;
     case 1:
         if (code - FIRST_CODE < CCS)
-            SEND_CC(OUT_CHANNEL(0), CC_POOL[code - FIRST_CODE], v);
+            SEND_CC(OUT_CHANNEL(0), CC_POOL[code - FIRST_CODE], v >> sh);
         break;
     }
 }

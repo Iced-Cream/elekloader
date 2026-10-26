@@ -169,7 +169,21 @@ const struct core_lock_param *core_lock_by_code(unsigned code)
 
 unsigned core_lock_field(const struct core_lock_param *p) { return p->field; }
 int core_lock_min(const struct core_lock_param *p) { return p->min; }
-int core_lock_max(const struct core_lock_param *p) { return p->max; }
+
+/* the most a lock holds: max, at most 16383 (14 bits, an NRPN's value) */
+#define TOP 16383
+int core_lock_max(const struct core_lock_param *p) { return p->max > TOP ? TOP : p->max; }
+
+/* a parameter above 127's coarse step, as a shift: scene locks, performance
+ * depths and CCs hold value >> shift, 0..127, as stock's fine parameters
+ * keep only their whole steps there; p-locks and NRPNs the whole value */
+int core_lock_shift(const struct core_lock_param *p)
+{
+    int s = 0;
+    while (core_lock_max(p) >> s > 127)
+        s++;
+    return s;
+}
 
 #define LIVE_KITS 0x412558e3                  /* the live project +0xa8cf18: the kits as edited */
 #define LIVE_KITS_SAVED 0x4f180                 /* then the kits as saved */

@@ -32,7 +32,7 @@
 struct core_lock_param {
     unsigned field;             /* STORE(sym): a lockable sound field */
     int32_t id;                 /* its page knob's id, or 0 */
-    int16_t min, max;           /* the values the field takes */
+    int16_t min, max;           /* the values the field takes (locks: to 16383) */
     const char *short_name;     /* the DST value: up to 4 characters */
     const char *name;           /* the destination menu: up to 32 */
 };
@@ -47,27 +47,31 @@ int core_lock_code(unsigned field);
 int core_lfo_offset(int track, unsigned field);
 
 /* core-ar2 0.8: the field's p-lock on the trig track (0..12) last played,
- * 0..127, or -1 when that trig has none. Set with the trig's other locks,
+ * in min..max, or -1 when that trig has none. Set with the trig's other locks,
  * before it sounds; the mod uses it in place of the sound's value for that
  * trig. A p-lock is set like a stock one: a trig held, the parameter's knob
  * (its id) turned. It is a lock row in the pattern, coded by the field's
  * lock code, so it shares the pattern's 72 rows with stock's (71 used at
- * most, stock's first); a value above 127 can't be locked yet. */
+ * most, stock's first); a parameter whose max is above 127 takes two rows
+ * per track and keeps its whole value. */
 int core_lock_value(int track, unsigned field);
 
 /* core-ar2 0.8: the field's lock in the active scene of the kit track
- * (0..11) plays, 0..127, or -1 when the scene has none (or no scene is
+ * (0..11) plays, in min..max, or -1 when the scene has none (or no scene is
  * active). A scene lock is set like a stock one: the scene's pad held in
  * scene edit, the parameter's knob turned. It is an entry with the field's
- * lock code in the kit's 48 scene locks, shared with stock's. The mod uses it
- * in place of the sound's value while the scene is active. */
+ * lock code in the kit's 48 scene locks, shared with stock's. Above 127 it
+ * moves in coarse steps (max shifted right into 0..127), as the kit's file
+ * keeps only a lock's whole step. The mod uses it in place of the sound's
+ * value while the scene is active. */
 int core_scene_value(int track, unsigned field);
 
 /* core-ar2 0.8: the offset the performances give the field on track (0..11)
- * now, in 8.8 steps (one step is 256): each performance's depth for it times
- * its pad's pressure, as stock adds a performance's to a stock parameter.
- * The depth is set like a stock one, the performance's pad held in its edit
- * and the knob turned; it is an entry in the kit's 48 performance locks. The
+ * now, in 8.8 steps of the field (one step is 256): each performance's depth
+ * for it times its pad's pressure, as stock adds a performance's to a stock
+ * parameter. The depth is set like a stock one, the performance's pad held
+ * in its edit and the knob turned; it is an entry in the kit's 48
+ * performance locks, in coarse steps above 127 (as core_scene_value). The
  * mod adds it to the value it uses, as it adds core_lfo_offset. */
 int core_perf_offset(int track, unsigned field);
 

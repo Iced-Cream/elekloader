@@ -47,8 +47,12 @@
  * rows out. A received pattern (0x4000d79c, once stock has checked it)
  * keeps its mod rows only with a marker holding this build's own layout ID;
  * the marker never stays. A project of a layout this build does not read
- * (st_proj_load) loses its mod rows. Not yet followed (core-ar2 README): a
- * mod parameter above 127.
+ * (st_proj_load) loses its mod rows.
+ *
+ * A parameter above 127 (lock.c, core_lock_shift) is locked whole: its lock
+ * takes two rows per track, the value's bits 13..7 in the first and its bits
+ * 6..0 in a second, with the code and the track + 0x40 (LOW), as stock keeps
+ * a fine lock in two rows; core places both or neither.
  */
 
 #include <stdint.h>
@@ -84,13 +88,15 @@
 #define LAST_CODE 127
 #define CODES (LAST_CODE - FIRST_CODE + 1)
 #define DEAD 0xff
+#define LOW 0x40                                /* a low row's track: + the track */
+#define NONE 0xffff
 #define MOST 16384                              /* the ledger's entries at most */
 
 struct ent {
     unsigned addr;              /* the step record */
     unsigned char code;         /* 42..127, DEAD once gone */
-    unsigned char value;        /* 0..127 */
-    unsigned short pad;
+    unsigned char pad;
+    unsigned short value;       /* 0..16383 */
 };
 
 struct ledger {
@@ -100,20 +106,22 @@ struct ledger {
 
 struct core_lock_param;
 const struct core_lock_param *core_lock_by_id(int id, unsigned *code);
+const struct core_lock_param *core_lock_by_code(unsigned code);
 unsigned char *core_lock_sound(void *set);
 int core_lock_stock_takes(int id, const unsigned char *s);
 int core_lock_code(unsigned field);
 unsigned core_lock_field(const struct core_lock_param *p);
 int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
+int core_lock_shift(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
 extern const unsigned core_store_ids[];         /* this build's layout ID first */
 
 static struct ledger *volatile led;
 static volatile unsigned gen;   /* every change, to the array or in place */
 
-/* the playing trig's mod locks, per track (0xff: none) */
-volatile unsigned char core_lock_now[13][CODES];
+/* the playing trig's mod locks, per track (NONE: none) */
+volatile unsigned short core_lock_now[13][CODES];
 
 static unsigned short irq_mask(void)
 {
@@ -262,6 +270,19 @@ static int empty(const unsigned char *r)
     return r[0] == 0xff && r[1] == 0xff;
 }
 
+/* a mod row, a first one or a low one */
+static int mod_row(const unsigned char *r)
+{
+    return mod_code(r[0]) && (r[1] < 13 || (r[1] >= LOW && r[1] < LOW + 13));
+}
+
+/* does a code's lock take two rows? */
+static int wide(int code)
+{
+    const struct core_lock_param *p = core_lock_by_code(code);
+    return p && core_lock_shift(p);
+}
+
 static int used(const unsigned char *rows)
 {
     int i, u = 0;
@@ -272,48 +293,67 @@ static int used(const unsigned char *rows)
 }
 
 /* a lock store's mod locks as rows after the ones in rows, in code order
- * then track order, where they fit under stock's 71 */
+ * then track order, where they fit under stock's 71 (a wide code's two rows
+ * or neither) */
 static void append(unsigned char *rows, unsigned store)
 {
     struct ledger *l = led;
-    unsigned char at[CODES][13], *r;
+    unsigned char at[CODES][13], lo[CODES][13], *r;
     unsigned o;
-    int u, code, t, s, i, k = 0, first, last;
+    int u, code, t, s, i, n, w, k = 0, first, last;
     if (!l)
         return;
     first = lower(l, store);
     last = lower(l, store + STORE_LOCKS);
     for (code = 0; code < CODES; code++)
         for (t = 0; t < 13; t++)
-            at[code][t] = 0xff;
+            at[code][t] = lo[code][t] = 0xff;
     for (i = first; i < last; i++)
         if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS)
             at[l->e[i].code - FIRST_CODE][o / TRACK_LOCKS] = 0xfe;
     u = used(rows);
-    for (code = 0; code < CODES; code++)
+    for (code = 0; code < CODES; code++) {
+        w = wide(FIRST_CODE + code);
         for (t = 0; t < 13; t++) {
             if (at[code][t] == 0xff)
                 continue;
             at[code][t] = 0xff;
-            if (u >= MAX_USED)
+            if (u + 1 + w > MAX_USED)
                 continue;
-            while (k < ROWS && !empty(rows + ROW * k))
-                k++;
-            if (k == ROWS)
-                goto fill;
-            r = rows + ROW * k;
-            r[0] = FIRST_CODE + code;
-            r[1] = t;
-            for (s = 0; s < 64; s++)
-                r[2 + s] = 0xff;
-            at[code][t] = k;
-            u++;
+            for (n = 0; n <= w; n++) {
+                while (k < ROWS && !empty(rows + ROW * k))
+                    k++;
+                if (k == ROWS)
+                    goto fill;
+                r = rows + ROW * k;
+                r[0] = FIRST_CODE + code;
+                r[1] = n ? LOW + t : t;
+                for (s = 0; s < 64; s++)
+                    r[2 + s] = 0xff;
+                if (n)
+                    lo[code][t] = k;
+                else
+                    at[code][t] = k;
+            }
+            u += 1 + w;
         }
+    }
 fill:
     for (i = first; i < last; i++)
-        if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS &&
-            (k = at[l->e[i].code - FIRST_CODE][o / TRACK_LOCKS]) < ROWS)
-            rows[ROW * k + 2 + o % TRACK_LOCKS / STEP_LOCKS] = l->e[i].value;
+        if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS) {
+            code = l->e[i].code - FIRST_CODE;
+            t = o / TRACK_LOCKS;
+            s = o % TRACK_LOCKS / STEP_LOCKS;
+            n = lo[code][t];
+            if ((k = at[code][t]) >= ROWS || (wide(FIRST_CODE + code) && n >= ROWS))
+                continue;
+            if (n < ROWS) {
+                rows[ROW * k + 2 + s] = l->e[i].value >> 7 & 127;
+                rows[ROW * n + 2 + s] = l->e[i].value & 127;
+            } else {
+                rows[ROW * k + 2 + s] = l->e[i].value > 127 ? 127 : l->e[i].value;
+            }
+        }
 }
 
 /* the mod rows go */
@@ -321,7 +361,7 @@ static void unappend(unsigned char *rows)
 {
     int i, j;
     for (i = 0; i < ROWS; i++)
-        if (mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13)
+        if (mod_row(rows + ROW * i))
             for (j = 0; j < ROW; j++)
                 rows[ROW * i + j] = j < 2 ? 0xff : 0;
 }
@@ -441,6 +481,11 @@ void core_rows_load(unsigned store, const unsigned char *rows)
                 add[x].addr = store + TRACK_LOCKS * t + STEP_LOCKS * s;
                 add[x].code = r[0];
                 add[x].value = r[2 + s];
+                for (j = 0; j < ROWS; j++)              /* its low row */
+                    if (rows[ROW * j] == r[0] && rows[ROW * j + 1] == LOW + t) {
+                        add[x].value = r[2 + s] << 7 | (rows[ROW * j + 2 + s] & 127);
+                        break;
+                    }
                 add[x++].pad = 0;
             }
     if (!replace(store, store + STORE_LOCKS, add, x))
@@ -562,13 +607,17 @@ static int put(unsigned addr, int code, int v);
 
 /* 0x400c058c (rows.s): (track record, step, code, value 8.8, fine) for a
  * code above 41; 1 when it was set */
+static int clamp(const struct core_lock_param *p, int v);
+
 int core_rows_paste(unsigned rec, int step, int code, int value)
 {
+    const struct core_lock_param *p;
     unsigned a;
     if (code < FIRST_CODE || code > LAST_CODE || TRACK_LENGTH(rec) < step || !(a = step_addr(rec, step)))
         return 0;
     value >>= 8;
-    return put(a, code, value < 0 ? 0 : value > 127 ? 127 : value);
+    p = core_lock_by_code(code);
+    return put(a, code, p ? clamp(p, value) : value < 0 ? 0 : value > 127 ? 127 : value);
 }
 
 /* ---- playback: the trig's locks (0x4009a954: track, out, the step's
@@ -580,7 +629,7 @@ void core_rows_trig(int track, unsigned step)
     if ((unsigned)track >= 13)
         return;
     for (i = 0; i < CODES; i++)
-        core_lock_now[track][i] = 0xff;
+        core_lock_now[track][i] = NONE;
     for (i = l ? lower(l, step) : 0; l && i < l->n && l->e[i].addr == step; i++)
         if (l->e[i].code != DEAD)
             core_lock_now[track][l->e[i].code - FIRST_CODE] = l->e[i].value;
@@ -592,7 +641,7 @@ int core_lock_value(int track, unsigned field)
     if ((unsigned)track >= 13 || code < FIRST_CODE)
         return -1;
     v = core_lock_now[track][code - FIRST_CODE];
-    return v == 0xff ? -1 : v;
+    return v == NONE ? -1 : v;
 }
 
 /* ---- editing: a mod parameter's knob with a trig held ---- */
@@ -634,7 +683,7 @@ static int has_row(unsigned addr, int code)
     return 0;
 }
 
-/* v: 0..127, or -1 to clear; 0 when there was no room */
+/* v: 0..16383, or -1 to clear; 0 when there was no room */
 static int put(unsigned addr, int code, int v)
 {
     struct ent at[CODES + 1];
@@ -644,7 +693,7 @@ static int put(unsigned addr, int code, int v)
             at[j++] = at[i];
     if (v >= 0) {
         /* a new row in a live pattern: stock's 71 must leave room */
-        if (live >= 0 && !has_row(addr, code) && used(stored_rows(live)) >= MAX_USED)
+        if (live >= 0 && !has_row(addr, code) && used(stored_rows(live)) + 1 + wide(code) > MAX_USED)
             return 0;
         for (i = j; i > 0 && at[i - 1].code > code; i--)
             at[i] = at[i - 1];
@@ -673,8 +722,6 @@ static const struct core_lock_param *ours(void *set, int id, unsigned *code)
 static int clamp(const struct core_lock_param *p, int v)
 {
     int lo = core_lock_min(p), hi = core_lock_max(p);
-    if (hi > 127)
-        hi = 127;
     return v < lo ? lo : v > hi ? hi : v;
 }
 

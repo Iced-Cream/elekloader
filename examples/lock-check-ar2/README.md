@@ -1,13 +1,14 @@
 # lock-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks and from 1.2 their scene and performance locks (core 0.8).
-It declares two sound fields with `"lock": true` and registers them in
+A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks and from 1.3 a value above 127 (core 0.8).
+It declares three sound fields with `"lock": true` and registers them in
 `core_lock_params`:
 
 | field | bits | code (from a new lockfile) | DST menu | DST value | range |
 |---|---|---|---|---|---|
 | `lc_a` | 7 | 42 | MOD:LOCK CHECK A | LCA | 0..127, page knob id 1 |
 | `lc_b` | 4 | 43 | MOD:LOCK CHECK B | LCB | 0..15 |
+| `lc_c` | 10 | 44 | MOD:LOCK CHECK C | LCC | 0..1000, page knob id 2 |
 
 A bar along the bottom edge shows the offset track 1's LFO gives either one
 (`core_lfo_offset`), from the middle, a pixel per stock knob step; a small
@@ -23,7 +24,11 @@ held in scene edit sets the scene's lock of `lc_a`, and with a
 performance's pad held in performance edit its depth; a third bar above
 the second shows `lc_a` as the active scene and the performances leave it
 (`core_scene_value`, else the sound's value, plus `core_perf_offset`), half
-a pixel per step, and is empty while neither touches it.
+a pixel per step, and is empty while neither touches it. From 1.3, knob B
+shows `lc_c`, 0..1000 (borrowing the dead record id 2), with its value as a
+number in the pop-up (the knob's ring draws a 0..127 knob's); its p-locks,
+scene locks, performance depths and MIDI follow core's rules for a value
+above 127 (two rows, coarse steps of 8, a 14-bit NRPN). No bar shows C.
 
 The screen's y counts from the bottom row (y 0 is the bottom edge). 1.0
 drew its bars at y 57..63, which is the top edge, over the stock header's
@@ -33,9 +38,9 @@ top rows; 1.0.1 and later draw them from y 0 (1.2's third bar at y 8..9).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/lock-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/lock-check-ar2/out/lock-check-1.2.elemod \
+    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/lock-check-ar2/out/lock-check-1.3.elemod \
     --out rytm-lock.syx --version LK09
 ```
 
-Core labels the knob with the parameter's short name, LCA, in place of stock's
-label for id 1 (ERR).
+Core labels the knobs with the parameters' short names, LCA and LCC, in place
+of stock's labels for ids 1 and 2 (ERR).

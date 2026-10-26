@@ -1606,9 +1606,15 @@ const struct core_lock_param my_depth_param =
 |---|---|
 | `field` | the lockable field |
 | `id` | the page knob's id (`core_params`), or 0 |
-| `min`, `max` | the values the field takes |
+| `min`, `max` | the values the field takes; locks and MIDI go up to 16383 |
 | `short_name` | the DST value's text and the page knob's label, up to 4 characters |
 | `name` | the destination menu's text, up to 32 |
+
+A parameter whose `max` is above 127 is locked as stock locks its fine
+parameters: a p-lock and an NRPN hold the whole value (up to 16383), while
+a scene lock, a performance depth and a CC hold its coarse step, the value
+shifted right until `max` fits in 0..127 (0..1000 moves in steps of 8), as
+the kit's file keeps only a stock lock's whole step.
 
 What core does with it:
 
@@ -1653,14 +1659,15 @@ The mod reads the lock while the trig plays:
 ```c
 #include "analog-rytm-mk2/lock.h"
 
-int v = core_lock_value(track, STORE(my_depth));   /* 0..127, or -1: none */
+int v = core_lock_value(track, STORE(my_depth));   /* min..max, or -1: none */
 int depth = v >= 0 ? v : core_store_get(STORE(my_depth), sound, 0);
 ```
 
 `core_lock_value(track, field)` is the lock of the trig last played on the
 track (0..12), set with the trig's other locks before it sounds, or -1 when
-that trig has none. A set or a turn moves in whole steps of 0..127 from the
-sound's value, clamped to the parameter's `min..max`.
+that trig has none. A set or a turn moves in whole steps from the sound's
+value, clamped to the parameter's `min..max`. A lock above 127 takes two of
+the pattern's rows for its track.
 
 Mod locks follow the trigs they belong to through copy, paste, clear and
 undo of a trig, page, track or pattern, and through a trig shift.
@@ -1671,9 +1678,8 @@ receiving build's own; a project of a layout the build doesn't read loads
 without them. Lock codes are a build's own, so a mod lock never lands on
 another build's parameter.
 
-Limits (0.8): a value above 127 can't be locked; an NRPN or CC received while
-live recording sets the parameter but records no p-lock. Checked in the
-emulator only.
+Limits (0.8): an NRPN or CC received while live recording sets the
+parameter but records no p-lock. Checked in the emulator only.
 
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
@@ -1697,11 +1703,12 @@ if (v < 0)
 v += (core_perf_offset(track, STORE(my_depth)) + core_lfo_offset(track, STORE(my_depth))) / 256;
 ```
 
-`core_scene_value(track, field)` is the active scene's lock (0..127) on a
-drum track (0..11), or -1 when the scene has none or no scene is active.
-`core_perf_offset(track, field)` is what the performances add now, in 8.8
-steps like `core_lfo_offset`: each depth times its pad's pressure, as stock
-adds a performance's to a stock parameter. Which of the trig's lock and the
+`core_scene_value(track, field)` is the active scene's lock (in `min..max`;
+above 127 a coarse step's value) on a drum track (0..11), or -1 when the
+scene has none or no scene is active. `core_perf_offset(track, field)` is
+what the performances add now, in 8.8 steps of the parameter: each depth
+times its pad's pressure, as stock adds a performance's to a stock
+parameter. Which of the trig's lock and the
 scene's wins is the mod's choice; the order above is one.
 
 A kit's SysEx dump leaves the mod entries out, and a kit of a layout the
@@ -1712,11 +1719,11 @@ Checked in the emulator only.
 
 A lockable parameter is NRPN MSB 4, LSB its lock code - 42, on its track's
 channel (or the auto channel, for the active track), with its value in the
-data entry MSB. The first 33 codes (42..74) also have a CC, from the 33 a
+data entry MSB (above 127: the whole value, in the MSB and the LSB). The first 33 codes (42..74) also have a CC, from the 33 a
 track's channel leaves unused, in order: 8, 9, 48..63, 65..69, 84, 85,
 110..116, 119 (code 42 is CC 8, code 74 is CC 119). Core sets the parameter
 in the track's sound of the current kit when either comes in, clamped to
-the parameter's `min..max` (and 127), and sends it when the mod's page knob
+the parameter's `min..max`, and sends it when the mod's page knob
 turns it, as stock sends a stock parameter: while PARAM OUTPUT is on, as an
 NRPN or a CC as it is set (MIDI CONFIG > PORT CONFIG; a parameter with no
 CC sends nothing as CC), on the channel stock uses. The mod does nothing

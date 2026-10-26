@@ -26,6 +26,11 @@
  *     build does not read loses its mod entries (store.c), since codes are a
  *     build's.
  *
+ * A parameter above 127 (lock.c, core_lock_shift) is locked and given a
+ * depth in its coarse steps (value >> shift, 0..127), as stock's fine
+ * parameters keep only whole steps here: the kit's file keeps an entry's
+ * whole step only.
+ *
  * The LFO destination list holds mod parameters (lock.c); the velocity and
  * aftertouch lists, built by the same routine, do not (lock.s), since their
  * routes index the same table.
@@ -59,7 +64,9 @@ int core_lock_stock_takes(int id, const unsigned char *s);
 unsigned core_lock_field(const struct core_lock_param *p);
 int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
+int core_lock_shift(const struct core_lock_param *p);
 int core_lock_code(unsigned field);
+const struct core_lock_param *core_lock_by_code(unsigned code);
 unsigned core_store_get(unsigned field, void *item, int index);
 
 static int mod_entry(const unsigned char *e)
@@ -68,6 +75,13 @@ static int mod_entry(const unsigned char *e)
 }
 
 /* ---- for mods ---- */
+
+/* a code's coarse shift (0 for a parameter up to 127) */
+static int shift(int code)
+{
+    const struct core_lock_param *p = core_lock_by_code(code);
+    return p ? core_lock_shift(p) : 0;
+}
 
 static const unsigned char *audio_kit(void)
 {
@@ -84,7 +98,7 @@ int core_scene_value(int track, unsigned field)
         return -1;
     for (i = 0, e = kit + SCENE_LIST; i < ENTRIES; i++, e += ENTRY)
         if ((signed char)e[4] == scene && e[2] == track && e[3] == code)
-            return e[0];
+            return e[0] << shift(code);
     return -1;
 }
 
@@ -99,7 +113,7 @@ int core_perf_offset(int track, unsigned field)
     for (i = 0, e = kit + PERF_LIST; i < ENTRIES; i++, e += ENTRY)
         if (e[2] == track && e[3] == code && e[4] < 12)
             sum += (int16_t)(e[0] << 8 | e[1]) * PRESSURE[e[4]] >> 15;
-    return sum;
+    return sum << shift(code);
 }
 
 /* ---- editing, with a scene's or a performance's pad held ---- */
@@ -139,18 +153,19 @@ static int clamp(int v, int lo, int hi)
 }
 
 /* 0x400385f8 (view, id, delta 8.8), a turn: 1 when core took it, -1 for
- * stock. A scene's lock moves a whole step at least, in the parameter's
- * range; a performance's depth the same, either way. */
+ * stock. A scene's lock moves a whole (coarse) step at least, in the
+ * parameter's range; a performance's depth the same, either way. */
 int core_scene_turn(void *view, int id, int delta)
 {
     void *o = held(view);
     const struct core_lock_param *p;
     unsigned code;
     unsigned char *s;
-    int track, v, rel, step;
+    int track, v, rel, step, sh;
     if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return -1;
     rel = (unsigned char)METHOD(o, 32)(o);
+    sh = core_lock_shift(p);
     step = delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0;
     if ((unsigned char)METHOD(o, 28)(o, track, code))
         v = (int16_t)METHOD(o, 24)(o, track, code) >> 8;
@@ -158,13 +173,12 @@ int core_scene_turn(void *view, int id, int delta)
         METHOD(o, 20)(o, track, code, 0);
         return 1;
     } else
-        v = core_store_get(core_lock_field(p), s, 0);
+        v = core_store_get(core_lock_field(p), s, 0) >> sh;
     if (rel) {
-        int span = core_lock_max(p) - core_lock_min(p);
+        int span = (core_lock_max(p) - core_lock_min(p)) >> sh;
         v = clamp(v + step, -(span > 127 ? 127 : span), span > 127 ? 127 : span);
     } else {
-        int hi = core_lock_max(p) > 127 ? 127 : core_lock_max(p);
-        v = clamp(v + step, core_lock_min(p), hi);
+        v = clamp(v + step, core_lock_min(p) >> sh, core_lock_max(p) >> sh);
     }
     METHOD(o, 20)(o, track, code, v << 8);
     return 1;
@@ -183,7 +197,9 @@ int core_scene_push(void *view, int id)
     if ((unsigned char)METHOD(o, 28)(o, track, code))
         return 0;
     METHOD(o, 20)(o, track, code,
-                  (unsigned char)METHOD(o, 32)(o) ? 0 : (int)core_store_get(core_lock_field(p), s, 0) << 8);
+                  (unsigned char)METHOD(o, 32)(o)
+                      ? 0
+                      : (int)(core_store_get(core_lock_field(p), s, 0) >> core_lock_shift(p)) << 8);
     return 1;
 }
 

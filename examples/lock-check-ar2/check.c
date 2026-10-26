@@ -2,17 +2,18 @@
 /* lock-check: the smallest user of core-ar2's lockable parameters (core 0.8)
  * and their p-locks.
  *
- * mod.json declares two sound fields with "lock": true, so the lockfile
+ * mod.json declares three sound fields with "lock": true, so the lockfile
  * gives each a lock code, and registers them in core_lock_params. Core then
- * lists LOCK CHECK A and B at the end of every sound's LFO destination menu
- * (shown as LCA and LCB in the DST value). A bar along the bottom edge shows
- * the offset track 1's LFO gives either one (core_lfo_offset), from the
+ * lists LOCK CHECK A, B and C at the end of every sound's LFO destination
+ * menu (shown as LCA, LCB and LCC in the DST value). A bar along the bottom
+ * edge shows the offset track 1's LFO gives A or B (core_lfo_offset), from the
  * middle, one pixel per stock knob step; a 3x3 square at the left end shows
  * which (top: A, bottom: B).
  *
  * Behind the LFO key, a LOCK CHECK page shows A on knob A (borrowing stock's
- * id 1, as mods' pages do) for track 1's sound of the current kit: RANDOMIZE
- * PAGE and RELOAD PAGE reach it through its lock parameter's id. With a trig
+ * id 1, as mods' pages do) and C, 0..1000, a value above 127, on knob B (id
+ * 2) for track 1's sound of the current kit: RANDOMIZE PAGE and RELOAD PAGE
+ * reach them through their lock parameters' ids. With a trig
  * held, knob A sets that trig's p-lock of A instead, and a second
  * bar above the first shows the lock of the trig track 1 plays, half a pixel
  * a step from the left (core_lock_value), none when it has no lock of A.
@@ -30,9 +31,11 @@ typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour
 
 STORE_FIELD(lc_a);
 STORE_FIELD(lc_b);
+STORE_FIELD(lc_c);
 
 const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "LOCK CHECK A"};
 const struct core_lock_param lc_param_b = {STORE(lc_b), 0, 0, 15, "LCB", "LOCK CHECK B"};
+const struct core_lock_param lc_param_c = {STORE(lc_c), 2, 0, 1000, "LCC", "LOCK CHECK C"};
 
 /* track 1's sound of the current kit: the live kits as edited, the stored
  * project's working kit index */
@@ -87,29 +90,50 @@ void lc_draw(void *bmp, void *ctrl)
     }
 }
 
-const struct core_page lc_page = {14, "LOCK CHECK", {1, 0, 0, 0, 0, 0, 0, 0}};
+const struct core_page lc_page = {14, "LOCK CHECK", {1, 2, 0, 0, 0, 0, 0, 0}};
 const struct core_view_page lc_view_page = {CORE_VIEW_LFO, 14, 0};
+
+/* knob A is A (id 1, 0..127), knob B is C (id 2, 0..1000) */
+static unsigned lc_field(int32_t id)
+{
+    return id == 1 ? STORE(lc_a) : STORE(lc_c);
+}
 
 static int lc_get(int32_t id, int32_t *value)
 {
     void *s = sound1();
-    if (id != 1 || !s)
+    if ((id != 1 && id != 2) || !s)
         return 0;
-    *value = core_store_get(STORE(lc_a), s, 0) << 8;
+    *value = core_store_get(lc_field(id), s, 0) << 8;
     return 1;
 }
 
 static int lc_delta(void *view, int32_t id, int32_t delta, int32_t func)
 {
     void *s = sound1();
-    int v;
+    int v, top = id == 1 ? 127 : 1000;
     (void)view;
     (void)func;
-    if (id != 1 || !s)
+    if ((id != 1 && id != 2) || !s)
         return 0;
-    v = (int)core_store_get(STORE(lc_a), s, 0) + (delta > 0 ? (delta + 255) / 256 : -((255 - delta) / 256));
-    core_store_set(STORE(lc_a), s, 0, v < 0 ? 0 : v > 127 ? 127 : v);
+    v = (int)core_store_get(lc_field(id), s, 0) + (delta > 0 ? (delta + 255) / 256 : -((255 - delta) / 256));
+    core_store_set(lc_field(id), s, 0, v < 0 ? 0 : v > top ? top : v);
     return 1;
 }
 
-const struct core_param lc_params = {1, 1, lc_get, lc_delta, 0};
+/* C's value as a number: stock draws a 0..127 knob's */
+static int lc_text(struct core_text *t)
+{
+    int v = t->value >> 8, n = 0, d;
+    char *b = t->buf;
+    if (t->id != 2)
+        return CORE_TEXT_PASS;
+    for (d = 1000; d > 1; d /= 10)
+        if (v >= d || n)
+            b[n++] = '0' + v / d % 10;
+    b[n++] = '0' + v % 10;
+    b[n] = 0;
+    return CORE_TEXT_DONE;
+}
+
+const struct core_param lc_params = {1, 2, lc_get, lc_delta, lc_text};
