@@ -281,6 +281,34 @@ unsigned core_knob_label(void *set, int id)
     return KNOB_LABEL(set, id);
 }
 
+/* param_value_text's last word (pages.s, after the mods' text entries
+ * passed): a mod parameter's value, with a trig held its lock's, as a
+ * number. Stock would check the id against the set (vtable +36) and, for the
+ * id a mod page borrows (an Error record, another machine's parameter),
+ * write ERR. Where stock takes the id for the set's sound, it is stock's. */
+int core_lock_text(void *set, int id, int value, char *buf)
+{
+    const struct core_lock_param *p = by_id(id);
+    unsigned char *s;
+    unsigned v, d;
+    int n = 0, digits = 0;
+    if (!p || ((s = core_lock_sound(set)) && core_lock_stock_takes(id, s)))
+        return 0;
+    if (value < 0) {
+        buf[n++] = '-';
+        value = -value;
+    }
+    v = (unsigned)value >> 8;
+    for (d = 10000; d > 1; d /= 10)
+        if (v >= d || digits) {
+            buf[n++] = '0' + v / d % 10;
+            digits = 1;
+        }
+    buf[n++] = '0' + v % 10;
+    buf[n] = 0;
+    return 1;
+}
+
 /* 0x400a9022, a knob's name (set, id): the record's +0x28, called by the
  * header's pop-up as a knob turns (0x4003a1c6, 0x4003a8d6), which formats
  * it. A mod parameter's knob shows its name, as core_knob_label its short

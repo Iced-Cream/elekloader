@@ -387,6 +387,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | reload | 0x400af32c (`jmp`) | RELOAD PAGE's copy: after stock's, each parameter's knob takes its value from the track's sound in the current kit's saved copy (live kits +0x4f180) |
 | knob label | 0x40037c1a, 0x40037d42, 0x400d37fa (`jsr`) | the calls of 0x400a9000 (a record's label, +0x30) in the page's two knob draws and the knob's pop-up: a parameter's page knob shows its short name |
 | knob name | 0x4003a1c6, 0x4003a8d6 (`jsr`) | the calls of 0x400a9022 (a record's name, +0x28) in the header's pop-up as a knob turns: a parameter's page knob shows its name there, not the borrowed record's ERROR |
+| value text | param_value_text, 0x400a864c (pages.s) | after every `core_params` text entry passed: a parameter's page knob, whose value stock would check against the borrowed record and write as ERR (as it does with a trig held), shows its value (with a trig held its lock's) as a number |
 
 The step, the validity check, page turns and RANDOMIZE on DST follow from
 the list, with no sites of their own. Flags need none: pseudo ids read
@@ -745,7 +746,9 @@ stock bytes, and that each covers whole instructions.
   in DST for every one (stock lists of 28 to 33 entries, the mod
   parameters after them); the machine was written, not switched through
   its menu. RELOAD PAGE
-  took `lc_a` from 10 back to the saved kit's 77. Not checked: scrolling
+  took `lc_a` from 10 back to the saved kit's 77. With a trig held, knob A
+  shows its lock's value (it showed ERR before 0.8's value text), and a
+  stock knob its own. Not checked: scrolling
   through the menu (the emulator's turns did not move its cursor) and
   anything on a unit.
 

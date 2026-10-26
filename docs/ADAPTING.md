@@ -1634,8 +1634,11 @@ What core does with it:
   saved copy.
 - **The knob's label** is the short name, where stock would show the
   borrowed id's own label (an Error record's is ERR).
+- **The knob's value text**, where the mod's `core_params` `text` passes,
+  is the value as a number (with a trig held, the lock's), where stock
+  would check the borrowed id and write ERR.
 
-All three leave the knob to stock when the id is the sound's own stock
+All of these leave the knob to stock when the id is the sound's own stock
 parameter (its slot is a stock one and it is common or the sound's
 machine's): a page knob borrowing another machine's id is core's only on
 the machines that reject it.

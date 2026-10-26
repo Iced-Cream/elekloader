@@ -173,7 +173,16 @@ core_param_text:
         addq.l  #4,%sp                    | 1: the text is written
         rts
 9:      addq.l  #4,%sp
-        lea     -20(%sp),%sp
+        move.l  16(%sp),-(%sp)            | 0.8: a lockable parameter's number
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        jsr     core_lock_text
+        lea     16(%sp),%sp
+        tst.l   %d0
+        beq.s   8f
+        rts
+8:      lea     -20(%sp),%sp
         movem.l %d2-%d4/%a2-%a3,(%sp)
         jmp     TEXT_RET
 
