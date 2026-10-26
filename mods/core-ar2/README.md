@@ -580,8 +580,9 @@ nothing there. In live recording, 150 turns of knob A over a bar lock all
 16 steps, as a stock knob's do (stock's SRC TUN, the same turns), and CC 8
 and CC 9 lock A and C (two rows) on the steps playing as they arrive, as
 CC 16 locks stock's TUN; the same turns and CCs while playing without
-recording, or in grid recording, lock nothing. Not checked on a unit:
-live recording.
+recording, or in grid recording, lock nothing. On a unit (26 Oct 2026)
+knob turns and CC 8 while live recording locked steps 3, 7, 11 and 15, and
+the same while only playing locked none.
 
 Values above 127 (0.8) follow stock's fine parameters: a p-lock (two rows,
 above) and an NRPN (both data bytes) hold the whole value, up to 16383; a
@@ -800,9 +801,11 @@ stock bytes, and that each covers whole instructions.
   copy, the lock rows through a power cycle, a scene lock and a
   performance depth on the knob and in the bar, pad pressure, RELOAD and
   RANDOMIZE PAGE, NRPN and CC, and 75 s of play with the LFO on LCA (CPU
-  75-85 %, no dropouts). Not checked on a unit: page copy and paste, a
-  scene entry through a project's save and load, MIDI's clamps, and live
-  recording.
+  75-85 %, no dropouts). A second unit run (L8H9: core 0.8 with lock-check
+  1.4 and analoghealth) passed page copy, clear, paste and undo of a
+  trig's lock; live recording (above); a scene lock and DST on LCA through
+  SAVE PROJECT and a load, with LCB's code by NRPN showing ERR; and NRPN
+  4:2 at 16383 setting C to 1000. Both flashes came back in 15 s.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
