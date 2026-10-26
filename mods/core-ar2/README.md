@@ -465,8 +465,12 @@ A03 gets no mod row. In the audio interrupt (26 Oct, timed with DMA timer
 0 in a debug build, A01 playing with its two locks): noting a trig's mod
 locks takes at most 70 timer ticks of the 88,010 between audio blocks,
 0.08% a trig (503, 0.6%, before it cleared only the codes the last trig
-set), so 12 tracks trigging in one block add under 1%. Not checked:
-Euclid's convert, a foreign project's load. Not on a unit.
+set), so 12 tracks trigging in one block add under 1%. A project saved
+as 003 (SAVE PROJECT AS) and loaded back, after another project and after a
+project stock 1.74 created (CREATE NEW, so with no layout ID, which booted
+on 0.8 with no mod data), brings back the fine rows of C, the sound's mod
+fields and a performance depth of C (26 Oct). Not checked: Euclid's
+convert. Not on a unit.
 
 ## Mod scene and performance locks (0.8)
 
@@ -511,7 +515,8 @@ pressure) the bar shows 17. The LFO destination list ends with the two
 lock-check parameters (ids 469, 470), read from memory after the list
 build. Not checked: the velocity and aftertouch lists without them (the
 emulator didn't open their parameter choice; the list kind, 0x200, is read
-from the code), a project saved to and loaded from a file. A kit dump
+from the code), a scene entry through a project's save and load (a
+performance entry of C comes back, above). A kit dump
 (26 Oct, lock-check 1.3, C at 900 on track 1, the kit saved) carries the
 sounds' mod fields as saved (`001c20` and the layout ID); sent back with
 kit 6 as its target it gives stored kit 6 the same fields, and its scene
@@ -564,8 +569,10 @@ kit's file keeps only an entry's high byte. Checked in the emulator
 power cycle with no save keeps both rows and the lock plays; a scene lock
 from 900 turned 20 steps stops at the coarse 125 (`7d` in the entry, 1000).
 A SysEx dump of the pattern carries both rows, and sent into A03 it gives
-A03's stored pattern both. Not checked: the performance depth and CC of C,
-trig copy of C.
+A03's stored pattern both; a trig copy of step 1 onto step 5 copies both
+rows; in performance edit knob B gives C a depth of 19 coarse steps (entry
+`13 00 00 2c 01`). Not checked: the value C plays with that performance's
+pad pressed (no bar shows C).
 
 ## Checked so far
 
