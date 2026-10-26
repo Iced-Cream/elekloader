@@ -723,9 +723,14 @@ stock bytes, and that each covers whole instructions.
   LCA, its short name, and the SRC page kept stock's labels. On 26 Oct, 80
   RANDOMIZE PAGEs on the stock LFO page set DST to LCA, LCB or LCC 7 times
   (3 of the list's 36 entries) and to stock destinations otherwise, with
-  the mod code in the sound's DST byte. Not checked: scrolling through the
-  menu (the emulator's turns did not move its cursor), a reload from a
-  saved kit with a value other than 0, and anything on a unit.
+  the mod code in the sound's DST byte. With track 1's machine byte (sound
+  +104) written to each of 0..35 in turn, RANDOMIZE PAGE put a mod code
+  in DST for every one (stock lists of 28 to 33 entries, the mod
+  parameters after them); the machine was written, not switched through
+  its menu. RELOAD PAGE
+  took `lc_a` from 10 back to the saved kit's 77. Not checked: scrolling
+  through the menu (the emulator's turns did not move its cursor) and
+  anything on a unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
