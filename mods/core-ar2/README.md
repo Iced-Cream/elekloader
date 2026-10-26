@@ -784,9 +784,15 @@ stock bytes, and that each covers whole instructions.
   callers are pattern init and the pattern load (row load), checked above,
   and a third (0x400c19dc) no code refers to. DST set to LCA (NRPN 1:35,
   42), SAVE PROJECT, DST changed, the project loaded: DST is LCA again
-  (L8H6, before `core_lfo_dst`, brought it back as FIN, 18); the same
-  project loaded on stock 1.74 has DST 64 (the page shows `…`, the LFO
-  modulates nothing, the OS runs on). On a unit (OS 1.74, 26 Oct
+  (L8H6, before `core_lfo_dst`, brought it back as FIN, 18). With
+  lock-check 1.4 (`"lfo"` on A and C) the DST menu ends with MOD:LOCK
+  CHECK A and C, B's code by NRPN shows ERR, and LCC comes back through a
+  save and a load; that project loaded on stock 1.74 has DST None (stored
+  41, shown `…`). On stock 1.74, sound dumps of each stored value 42..127
+  load as the slots its table gives (5 of them stock parameters), and a
+  stock save of slot 64 (what the earlier stored 42 loaded as) comes back
+  as ACC; on 0.8 the stock sounds whose byte loads as 64 or 47 load as
+  None. On a unit (OS 1.74, 26 Oct
   2026, core 0.8 with lock-check 1.3 and analoghealth) remote turns
   reached MOD:LOCK CHECK C and YES set LCC; an earlier unit run (T37)
   stopped on MOD:LOCK CHECK A because its turns were one count each, too
