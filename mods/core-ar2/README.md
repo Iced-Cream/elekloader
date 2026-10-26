@@ -748,9 +748,11 @@ stock bytes, and that each covers whole instructions.
   its menu. RELOAD PAGE
   took `lc_a` from 10 back to the saved kit's 77. With a trig held, knob A
   shows its lock's value (it showed ERR before 0.8's value text), and a
-  stock knob its own. Not checked: scrolling
-  through the menu (the emulator's turns did not move its cursor) and
-  anything on a unit.
+  stock knob its own. With DST on LCA, turning DST scrolls the menu down
+  to MOD:LOCK CHECK B and C and up to stock's AMP entries, and YES on
+  C sets DST to LCC (the DST byte holds 44). In the emulator the menu
+  moves only on turns of eight encoder steps, stock 1.74's too.
+  Not checked: anything on a unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
