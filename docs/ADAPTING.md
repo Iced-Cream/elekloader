@@ -1613,9 +1613,11 @@ const struct core_lock_param my_depth_param =
 
 Write the name in proper case and the category in upper case, as stock
 does (`AMP:Reverb Send`, `FILT:Resonance`); core takes them as they are.
-Stock's categories are 3 or 4 characters, so core shows at most 4 of a
-category, and `CORE_LOCK_CATEGORY("...")` makes a longer one a compile
-error in C.
+Stock's categories are 3 or 4 characters, and `CORE_LOCK_CATEGORY("...")`
+makes a longer one a compile error in C. Core shows at most 4 characters
+of a short name or a category and 32 of a name, whatever the mod gives:
+stock draws a short name with an unbounded `%s` into a 128-byte buffer, so
+core never hands it a longer string.
 
 A parameter whose `max` is above 127 is locked as stock locks its fine
 parameters: a p-lock and an NRPN hold the whole value (up to 16383), while

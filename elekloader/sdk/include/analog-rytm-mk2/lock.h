@@ -34,14 +34,17 @@ struct core_lock_param {
     unsigned field;             /* STORE(sym): a lockable sound field */
     int32_t id;                 /* its page knob's id, or 0 */
     int16_t min, max;           /* the values the field takes (locks: to 16383) */
-    const char *short_name;     /* the DST value: up to 4 characters */
-    const char *name;           /* the destination menu: up to 32, in proper case as stock's */
+    const char *short_name;     /* the DST value and the knob's label: up to 4 characters */
+    const char *name;           /* the destination menu and the knob's pop-up: up to 32, in
+                                 * proper case as stock's */
     const char *category;       /* before the colon in the menu: up to 4 characters, upper
                                  * case as stock's (SAMP, FILT, AMP), or 0 for MOD */
 };
 
-/* a category, refused by the compiler when it is longer than 4 characters
- * (core shows at most 4 of one given without it) */
+/* Core hands stock at most 4 characters of a short name or a category and
+ * 32 of a name, so no length a mod gives can overrun stock's buffers. A
+ * category written with this is refused by the compiler when it is longer
+ * than 4 characters. */
 #define CORE_LOCK_CATEGORY(s) ((s) + 0 * sizeof(char[sizeof(s) <= 5 ? 1 : -1]))
 
 /* the field's lock code (42..127), or 0 when it has none */

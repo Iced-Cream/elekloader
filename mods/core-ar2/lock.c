@@ -58,6 +58,25 @@ static const struct core_lock_param *by_code[LAST_CODE + 1];
 static unsigned char lfo_ok[LAST_CODE + 1];
 static volatile int made;
 
+/* and its strings, cut to what stock shows: stock draws a short name with a
+ * plain %s into a 128-byte stack buffer (0x4007154c, by 0x40097dcc), so no
+ * string of a mod's reaches stock uncut */
+#define SHORT_MAX 4
+#define NAME_MAX 32
+#define CATEGORY_MAX 4
+static char shorts[LAST_CODE + 1 - FIRST_CODE][SHORT_MAX + 1];
+static char names[LAST_CODE + 1 - FIRST_CODE][NAME_MAX + 1];
+static char categories[LAST_CODE + 1 - FIRST_CODE][CATEGORY_MAX + 1];
+
+static void cut(char *to, const char *from, int max)
+{
+    int i = 0;
+    if (from)
+        for (; i < max && from[i]; i++)
+            to[i] = from[i];
+    to[i] = 0;
+}
+
 static void make(void)
 {
     const unsigned *c;
@@ -69,6 +88,9 @@ static void make(void)
                 if ((*p)->field == c[0]) {
                     by_code[code] = *p;
                     lfo_ok[code] = !!(c[1] & LFO);
+                    cut(shorts[code - FIRST_CODE], (*p)->short_name, SHORT_MAX);
+                    cut(names[code - FIRST_CODE], (*p)->name, NAME_MAX);
+                    cut(categories[code - FIRST_CODE], (*p)->category, CATEGORY_MAX);
                     break;
                 }
     made = 1;
@@ -145,29 +167,21 @@ void core_dst_append(void **list)
 const char *core_pseudo_name(int id)
 {
     unsigned code = pseudo_code(id);
-    return code ? param(code)->name : 0;
+    return code && param(code)->name ? names[code - FIRST_CODE] : 0;
 }
 
 const char *core_pseudo_short(int id)
 {
     unsigned code = pseudo_code(id);
-    return code ? param(code)->short_name : 0;
+    return code && param(code)->short_name ? shorts[code - FIRST_CODE] : 0;
 }
 
 /* the menu label's category (lock.s): the parameter's, at most 4
  * characters, or MOD when it has none */
 const char *core_pseudo_category(int id)
 {
-    static char cat[5];
     unsigned code = pseudo_code(id);
-    const char *c = code ? param(code)->category : 0;
-    int i;
-    if (!c || !*c)
-        return "MOD";
-    for (i = 0; i < 4 && c[i]; i++)
-        cat[i] = c[i];
-    cat[i] = 0;
-    return cat;
+    return code && categories[code - FIRST_CODE][0] ? categories[code - FIRST_CODE] : "MOD";
 }
 
 /* ---- RANDOMIZE PAGE and RELOAD PAGE on a mod parameter's knob ---- */
@@ -310,10 +324,11 @@ int core_reload(void *view, int track, int **ids, int d)
 
 unsigned core_knob_label(void *set, int id)
 {
-    const struct core_lock_param *p = by_id(id);
+    unsigned code;
+    const struct core_lock_param *p = core_lock_by_id(id, &code);
     unsigned char *s;
     if (p && p->short_name && !((s = core_lock_sound(set)) && core_lock_stock_takes(id, s)))
-        return (unsigned)p->short_name;
+        return (unsigned)shorts[code - FIRST_CODE];
     return KNOB_LABEL(set, id);
 }
 
@@ -353,9 +368,10 @@ int core_lock_text(void *set, int id, int value, char *buf)
 
 unsigned core_knob_name(void *set, int id)
 {
-    const struct core_lock_param *p = by_id(id);
+    unsigned code;
+    const struct core_lock_param *p = core_lock_by_id(id, &code);
     unsigned char *s;
     if (p && p->name && !((s = core_lock_sound(set)) && core_lock_stock_takes(id, s)))
-        return (unsigned)p->name;
+        return (unsigned)names[code - FIRST_CODE];
     return KNOB_NAME(set, id);
 }
