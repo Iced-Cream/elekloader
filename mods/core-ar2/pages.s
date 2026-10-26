@@ -90,7 +90,20 @@ param_next:
 
 | page_get_value (0x40038462): `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@`.
 | Frame: 0 the cursor, 4 the answer, 12 view, 16 id, 20 lock.
+| With a scene's or performance's pad held, core_held_get (scenes.c, 0.8)
+| answers a mod parameter's lock there first.
 core_param_get:
+        subq.l  #4,%sp                    | its answer
+        pea     (%sp)
+        move.l  16(%sp),-(%sp)            | id
+        move.l  16(%sp),-(%sp)            | view
+        jsr     core_held_get
+        lea     12(%sp),%sp
+        tst.l   %d0
+        beq.s   0f
+        move.l  (%sp)+,%d0
+        rts
+0:      addq.l  #4,%sp
         lea     core_params,%a1
         subq.l  #8,%sp
 1:      move.l  16(%sp),%d0

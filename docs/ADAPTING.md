@@ -1637,6 +1637,9 @@ What core does with it:
 - **The knob's value text**, where the mod's `core_params` `text` passes,
   is the value as a number (with a trig held, the lock's), where stock
   would check the borrowed id and write ERR.
+- **The knob's value**, with a scene's or a performance's pad held, is its
+  lock there (a scene's lock, a performance's depth), before the mod's
+  `core_params` `get` is asked, as stock's knobs show theirs.
 
 All of these leave the knob to stock when the id is the sound's own stock
 parameter (its slot is a stock one and it is common or the sound's

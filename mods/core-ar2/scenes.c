@@ -203,6 +203,28 @@ int core_scene_push(void *view, int id)
     return 1;
 }
 
+/* page_get_value (pages.s, before the mods' get): with a scene's or a
+ * performance's pad held, a mod knob shows its lock there, as stock's knobs
+ * do: a scene's lock, else (0) the sound's value; a performance's depth,
+ * else 0. 1 and *value (8.8) when it answers. */
+int core_held_get(void *view, int id, int *value)
+{
+    void *o = held(view);
+    const struct core_lock_param *p;
+    unsigned code;
+    unsigned char *s;
+    int track;
+    if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
+        return 0;
+    if ((unsigned char)METHOD(o, 28)(o, track, code))
+        *value = ((int16_t)METHOD(o, 24)(o, track, code) >> 8 << core_lock_shift(p)) * 256;
+    else if ((unsigned char)METHOD(o, 32)(o))
+        *value = 0;
+    else
+        return 0;
+    return 1;
+}
+
 /* ---- keeping codes on the unit ---- */
 
 /* 0x4000f2a2: a kit's SysEx dump (buffer, kit, a). Stock writes each entry

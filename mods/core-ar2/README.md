@@ -490,6 +490,7 @@ kit's copies take it as they take stock's. Mods read it with
 | site | 1.74 | what |
 |---|---|---|
 | knob turn, push | 0x400385f8, 0x400387ba (`jmp`) | a parameter view's turn and push: with a scene's or a performance's pad held, a mod parameter's knob (its page id, where stock doesn't take the id for the track's sound) sets its entry: a scene's from the sound's value, a performance's depth from 0, whole (coarse) steps, clamped to `min..max` (a depth to ±127 steps); stock refuses the id there |
+| knob value | page_get_value, 0x40038462 (pages.s) | before the mods' `get`: with a scene's or a performance's pad held, a mod parameter's knob shows its entry there (a scene's lock, a performance's depth; with no entry, a scene's knob the sound's value and a performance's 0), as stock's knobs do; the mod's `get` would show the sound's value |
 | performance build, scene build | 0x4011f744, 0x4011f844 (`jsr`) | the audio side's lists index a parameter table by track × 42 + 26 + code, so an entry with a code above 41 would write another track's parameter: core gives it track 0xff, and stock takes it as an empty entry (the dummy index 25) |
 | code to file, file to code | 0x40007602, 0x400075c8 (`jmp`) | a kit file stores each entry's code as a parameter number (0..41 both ways, a permutation); a drum track's 42..127 stays itself, so a saved kit keeps its mod entries |
 | kit dump | 0x4000f2a2 (`jsr`) | stock's kit save into a SysEx dump's buffer, then an empty entry (`00 ff 00 00`) in place of each mod entry |
@@ -524,6 +525,14 @@ performance entry of C comes back, above). A kit dump
 sounds' mod fields as saved (`001c20` and the layout ID); sent back with
 kit 6 as its target it gives stored kit 6 the same fields, and its scene
 and performance entries come in empty, as they go out. Not on a unit.
+
+The knob's value with a pad held (26 Oct, lock-check 1.3, panel keys): on
+LOCK CHECK's knob A, PERF + SD held and the knob turned shows the depth it
+sets (10), and SCNE + BD the scene's lock (11). With no pad held the knob
+shows the sound's value, and with a trig held its lock (7). The Rytm takes
+a pad pressed within about 0.15 s of PERF or SCNE as a plain press, so
+the turn then edits the sound's value instead. LOCK CHECK's bars cover the
+bottom rows, where stock draws the SCENE and PERF bar.
 
 ## Mod parameters on MIDI (0.8)
 
