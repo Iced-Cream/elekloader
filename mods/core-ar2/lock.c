@@ -5,7 +5,7 @@
  * The linker gives core the table core_lock_codes, {field descriptor, code}
  * for each field declared "lock": true, from the lockfile, with LFO (0x100)
  * set in the code of a field also declared "lfo": true, and mods add
- * {field, id, min, max, short name, name} to core_lock_params. A parameter
+ * {field, id, min, max, short name, name, category} to core_lock_params. A parameter
  * with a code and an entry is lockable; one with LFO set also gets:
  *
  *   - a pseudo id, PSEUDO + code - 42, above stock's 469 records: the LFO
@@ -39,6 +39,7 @@ struct core_lock_param {
     int16_t min, max;
     const char *short_name;
     const char *name;
+    const char *category;
 };
 
 extern const unsigned core_lock_codes[];                       /* {field, code}..., {0, 0} */
@@ -151,6 +152,22 @@ const char *core_pseudo_short(int id)
 {
     unsigned code = pseudo_code(id);
     return code ? param(code)->short_name : 0;
+}
+
+/* the menu label's category (lock.s): the parameter's, at most 4
+ * characters, or MOD when it has none */
+const char *core_pseudo_category(int id)
+{
+    static char cat[5];
+    unsigned code = pseudo_code(id);
+    const char *c = code ? param(code)->category : 0;
+    int i;
+    if (!c || !*c)
+        return "MOD";
+    for (i = 0; i < 4 && c[i]; i++)
+        cat[i] = c[i];
+    cat[i] = 0;
+    return cat;
 }
 
 /* ---- RANDOMIZE PAGE and RELOAD PAGE on a mod parameter's knob ---- */

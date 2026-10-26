@@ -75,7 +75,8 @@ core_dst_list_end:
 
 | 0x4004a7e8, the destination menu's item label (the id in %d3, the owner's
 | short name in %d0, the string in %d2): `cmpi.l #469,%d3`. A pseudo id's
-| label is "MOD:" and its name, through stock's own format.
+| label is its category (MOD when it has none), a colon and its name,
+| through stock's own format.
 core_dst_label:
         cmp.l   #PSEUDO,%d3
         bcs.s   1f
@@ -87,7 +88,10 @@ core_dst_label:
         beq.s   2f
         addq.l  #4,%sp
         move.l  %d0,-(%sp)
-        pea     mod_owner
+        move.l  %d3,-(%sp)
+        jsr     core_pseudo_category
+        addq.l  #4,%sp
+        move.l  %d0,-(%sp)
         jmp     0x4004a806
 2:      move.l  (%sp)+,%d0
 1:      cmp.l   #PSEUDO,%d3
@@ -132,7 +136,3 @@ core_reload_body:
         lea     -60(%sp),%sp
         movem.l %d2-%d7/%a2-%a6,(%sp)
         jmp     0x400af334
-
-        .section .rodata
-mod_owner:
-        .asciz  "MOD"

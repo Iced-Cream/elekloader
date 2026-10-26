@@ -372,7 +372,7 @@ The first part of the lock service (docs/ADAPTING.md, "Lockable parameters
 gets a lock code (42..127) from the lockfile; the linker writes `{field,
 code}` into `core_lock_codes`, with 0x100 set in the code of a field also
 declared `"lfo": true`, and the mod adds `{field, id, min, max, short name,
-name}` to `core_lock_params`. A parameter without `"lfo"` is lockable only:
+name, category}` to `core_lock_params`. A parameter without `"lfo"` is lockable only:
 none of the LFO sites below take it (an NRPN 1:35 that sets its code shows
 ERR and modulates nothing). Core gives each LFO parameter a
 **pseudo id**, 469 + code - 42, above stock's 469 records: the LFO
@@ -386,7 +386,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
 | sound save, load | 0x4000843a, 0x400081f6 (store.c, `st_sound_save`, `st_sound_load`) | stock saves the LFO's destination (live sound +28, a slot) as the stored sound's +100 through a table of its 42 parameters (0x401c5c7c) and loads it through the inverse (0x401c5d24), which have no entry for a code: a code would come back as a stock parameter (42 as FIN). Core keeps the code, less 41, in its sound field `core_lfo_dst` (7 bits, placed by the linker in a build with an `"lfo"` field) and writes 41 into the stored byte, stock's own None (META:None, slot 0): stock, or a build that does not know the code, loads that LFO with no destination, and stock's saves keep it so. Neither table has a bound: a slot above 41 that stock saves comes back as one of its parameters (64, as 42 loads, as ACC, 39), so on load a slot of 42..127 that `core_lfo_dst` did not give (a sound from stock or another layout) is set to None |
 | list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter |
-| menu label | 0x4004a7e8 (`jmp`) | `MOD:` and the name, through stock's `%.16s:%.32s` |
+| menu label | 0x4004a7e8 (`jmp`) | the category (at most 4 characters; `MOD` when there is none), a colon and the name, through stock's `%.16s:%.32s` |
 | DST value | 0x400ffab2 (`jmp`) | the short name |
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
 | reload | 0x400af32c (`jmp`) | RELOAD PAGE's copy: after stock's, each parameter's knob takes its value from the track's sound in the current kit's saved copy (live kits +0x4f180) |

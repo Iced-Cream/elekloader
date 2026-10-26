@@ -4,8 +4,9 @@
  *
  * mod.json declares three sound fields with "lock": true, so the lockfile
  * gives each a lock code, and registers them in core_lock_params. A and C
- * are also "lfo": true, so core lists LOCK CHECK A and C at the end of every
- * sound's LFO destination menu (shown as LCA and LCC in the DST value); B,
+ * are also "lfo": true, so core lists them at the end of every sound's LFO
+ * destination menu, as MOD:Lock Check A and LCHK:Lock Check C (1.5; shown as
+ * LCA and LCC in the DST value); B,
  * lockable only, is not listed (1.4). A bar along the bottom edge shows the
  * offset track 1's LFO gives A or C (core_lfo_offset), from the middle, one
  * pixel per stock knob step; a 3x3 square at the left end shows which (top:
@@ -34,9 +35,11 @@ STORE_FIELD(lc_a);
 STORE_FIELD(lc_b);
 STORE_FIELD(lc_c);
 
-const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "LOCK CHECK A"};
-const struct core_lock_param lc_param_b = {STORE(lc_b), 0, 0, 15, "LCB", "LOCK CHECK B"};
-const struct core_lock_param lc_param_c = {STORE(lc_c), 2, 0, 1000, "LCC", "LOCK CHECK C"};
+/* 1.5: A takes core's category (MOD), C its own (LCHK) */
+const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "Lock Check A", 0};
+const struct core_lock_param lc_param_b = {STORE(lc_b), 0, 0, 15, "LCB", "Lock Check B", 0};
+const struct core_lock_param lc_param_c = {STORE(lc_c), 2, 0, 1000, "LCC", "Lock Check C",
+                                           CORE_LOCK_CATEGORY("LCHK")};
 
 /* track 1's sound of the current kit: the live kits as edited, the stored
  * project's working kit index */

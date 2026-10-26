@@ -15,10 +15,11 @@
  *
  *     STORE_FIELD(my_depth);
  *     const struct core_lock_param my_depth_param =
- *         {STORE(my_depth), 449, 0, 127, "DEP", "MY DEPTH"};
+ *         {STORE(my_depth), 449, 0, 127, "DEP", "My Depth", CORE_LOCK_CATEGORY("MINE")};
  *
  * Core then lists the parameter in each sound's LFO destination menu (after
- * stock's), names it there and in the DST value, and keeps the LFO's offset
+ * stock's, as category:name, "MOD" when the category is 0), names it there
+ * and in the DST value, and keeps the LFO's offset
  * for it, which the mod reads with core_lfo_offset and adds to the value it
  * uses. With id, the page knob that shows the parameter (core_params),
  * RANDOMIZE PAGE gives the knob a value in min..max and RELOAD PAGE takes it
@@ -34,8 +35,14 @@ struct core_lock_param {
     int32_t id;                 /* its page knob's id, or 0 */
     int16_t min, max;           /* the values the field takes (locks: to 16383) */
     const char *short_name;     /* the DST value: up to 4 characters */
-    const char *name;           /* the destination menu: up to 32 */
+    const char *name;           /* the destination menu: up to 32, in proper case as stock's */
+    const char *category;       /* before the colon in the menu: up to 4 characters, upper
+                                 * case as stock's (SAMP, FILT, AMP), or 0 for MOD */
 };
+
+/* a category, refused by the compiler when it is longer than 4 characters
+ * (core shows at most 4 of one given without it) */
+#define CORE_LOCK_CATEGORY(s) ((s) + 0 * sizeof(char[sizeof(s) <= 5 ? 1 : -1]))
 
 /* the field's lock code (42..127), or 0 when it has none */
 int core_lock_code(unsigned field);

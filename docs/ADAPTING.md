@@ -1599,7 +1599,7 @@ The mod registers each one in `core_lock_params`
 ```c
 STORE_FIELD(my_depth);
 const struct core_lock_param my_depth_param =
-    {STORE(my_depth), 449, 0, 127, "DEP", "MY DEPTH"};
+    {STORE(my_depth), 449, 0, 127, "DEP", "My Depth", CORE_LOCK_CATEGORY("MINE")};
 ```
 
 | member | |
@@ -1609,6 +1609,13 @@ const struct core_lock_param my_depth_param =
 | `min`, `max` | the values the field takes; locks and MIDI go up to 16383 |
 | `short_name` | the DST value's text and the page knob's label, up to 4 characters |
 | `name` | the destination menu's text, up to 32 |
+| `category` | the destination menu's text before the colon, up to 4 characters, or 0 for `MOD` |
+
+Write the name in proper case and the category in upper case, as stock
+does (`AMP:Reverb Send`, `FILT:Resonance`); core takes them as they are.
+Stock's categories are 3 or 4 characters, so core shows at most 4 of a
+category, and `CORE_LOCK_CATEGORY("...")` makes a longer one a compile
+error in C.
 
 A parameter whose `max` is above 127 is locked as stock locks its fine
 parameters: a p-lock and an NRPN hold the whole value (up to 16383), while
@@ -1621,7 +1628,7 @@ What core does with it:
 - **LFO destination.** A lockable field declared with `"lfo": true` as
   well is an LFO destination; one without it is lockable only, and an
   `"lfo"` field must be lockable. Each sound's DST menu lists the LFO
-  destinations after stock's, as `MOD:` and the name; the DST value shows
+  destinations after stock's, as the category, a colon and the name; the DST value shows
   the short name. The LFO's DST byte holds the code. Stock saves the
   destination through a table of its own parameters only, so core keeps the
   code in a 7-bit sound field of its own, `core_lfo_dst`, which the linker

@@ -1,14 +1,14 @@
 # lock-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127 and from 1.4 a lockable parameter that is not an LFO destination (core 0.8).
+A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination and from 1.5 a category of its own (core 0.8).
 It declares three sound fields with `"lock": true` and registers them in
 `core_lock_params`; `lc_a` and `lc_c` are also `"lfo": true`:
 
 | field | bits | code (from a new lockfile) | CC (`"cc": true`, from a new lockfile) | DST menu (`"lfo": true`) | DST value | range |
 |---|---|---|---|---|---|---|
-| `lc_a` | 7 | 42 | 8 | MOD:LOCK CHECK A | LCA | 0..127, page knob id 1 |
+| `lc_a` | 7 | 42 | 8 | MOD:Lock Check A (core's category) | LCA | 0..127, page knob id 1 |
 | `lc_b` | 4 | 43 | none | not listed | ERR (NRPN 1:35 only) | 0..15 |
-| `lc_c` | 10 | 44 | 9 | MOD:LOCK CHECK C | LCC | 0..1000, page knob id 2 |
+| `lc_c` | 10 | 44 | 9 | LCHK:Lock Check C (its own) | LCC | 0..1000, page knob id 2 |
 
 A bar along the bottom edge shows the offset track 1's LFO gives A or C
 (`core_lfo_offset`), from the middle, a pixel per stock knob step; a small
@@ -38,7 +38,7 @@ top rows; 1.0.1 and later draw them from y 0 (1.2's third bar at y 8..9).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/lock-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/lock-check-ar2/out/lock-check-1.4.elemod \
+    --mod mods/core-ar2/out/core-0.8.elemod --mod examples/lock-check-ar2/out/lock-check-1.5.elemod \
     --out rytm-lock.syx --version LK09
 ```
 
