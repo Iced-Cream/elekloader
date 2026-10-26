@@ -469,8 +469,10 @@ set), so 12 tracks trigging in one block add under 1%. A project saved
 as 003 (SAVE PROJECT AS) and loaded back, after another project and after a
 project stock 1.74 created (CREATE NEW, so with no layout ID, which booted
 on 0.8 with no mod data), brings back the fine rows of C, the sound's mod
-fields and a performance depth of C (26 Oct). Not checked: Euclid's
-convert. Not on a unit.
+fields and a performance depth of C (26 Oct). Euclid's convert (PL1 4,
+TRO +1, EUC turned off with FUNC held) treats C's two rows as it treats a
+stock filter lock on the same steps: step 1's move to step 2, and step 5's
+go, as the stock lock on steps 5 and 9 goes (26 Oct). Not on a unit.
 
 ## Mod scene and performance locks (0.8)
 
