@@ -120,8 +120,12 @@ extern const unsigned core_store_ids[];         /* this build's layout ID first 
 static struct ledger *volatile led;
 static volatile unsigned gen;   /* every change, to the array or in place */
 
-/* the playing trig's mod locks, per track (NONE: none) */
+/* the playing trig's mod locks, per track, each value + 1 (0: none, so a
+ * track no trig has played yet has none); now_set: the codes the track's
+ * last trig set, which the next one clears, so a trig costs its own rows,
+ * not one store a code */
 volatile unsigned short core_lock_now[13][CODES];
+static unsigned char now_set[13][CODES], now_n[13];
 
 static unsigned short irq_mask(void)
 {
@@ -625,14 +629,19 @@ int core_rows_paste(unsigned rec, int step, int code, int value)
 void core_rows_trig(int track, unsigned step)
 {
     struct ledger *l = led;
-    int i;
+    int i, c, n;
     if ((unsigned)track >= 13)
         return;
-    for (i = 0; i < CODES; i++)
-        core_lock_now[track][i] = NONE;
+    for (i = 0; i < now_n[track]; i++)
+        core_lock_now[track][now_set[track][i]] = 0;
+    n = 0;
     for (i = l ? lower(l, step) : 0; l && i < l->n && l->e[i].addr == step; i++)
-        if (l->e[i].code != DEAD)
-            core_lock_now[track][l->e[i].code - FIRST_CODE] = l->e[i].value;
+        if (l->e[i].code != DEAD && n < CODES) {
+            c = l->e[i].code - FIRST_CODE;
+            core_lock_now[track][c] = l->e[i].value + 1;
+            now_set[track][n++] = c;
+        }
+    now_n[track] = n;
 }
 
 int core_lock_value(int track, unsigned field)
@@ -641,7 +650,7 @@ int core_lock_value(int track, unsigned field)
     if ((unsigned)track >= 13 || code < FIRST_CODE)
         return -1;
     v = core_lock_now[track][code - FIRST_CODE];
-    return v == NONE ? -1 : v;
+    return v - 1;
 }
 
 /* ---- editing: a mod parameter's knob with a trig held ---- */

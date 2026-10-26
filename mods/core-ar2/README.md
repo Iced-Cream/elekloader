@@ -429,7 +429,7 @@ writes them into the stored pattern as rows, as stock's rebuild would.
 | lock set | 0x400c058c (`jmp`) | a listed lock with a code above 41, as a paste sets it, is a mod lock |
 | row load | 0x40008f98 (`jmp`) | after stock, the rows with codes 42..127 and a track below 13 become the lock store's mod locks |
 | rebuild | 0x40009216 (`jmp`) | after stock's rows, the lock store's mod locks as rows, in code then track order, while fewer than 71 rows are used, so stock's locks always fit first |
-| trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`) |
+| trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`), clearing only the codes the track's last trig set |
 | lock get, set, clear, turn | sound set vtable +60..+72, 0x401dce60..0x401dce6c (`ptr`) | a mod parameter's knob (its page id) with a trig held: the lock goes into the ledger; any other id goes to stock's routine |
 | dump out | 0x4000eff2 (`jsr`) | stock's pattern save into a SysEx dump's buffer, then a marker row for its mod rows (code 127, track 0xfe, the layout ID), or, with no free row, no mod rows |
 | dump in | 0x4000d79c (`jmp`) | a received pattern, once stock has checked it: its mod rows stay only with a marker holding this build's own layout ID; the marker goes |
@@ -461,8 +461,12 @@ a fix: 0.8's layout check in `st_proj_load` read the ID's bytes wrongly and
 dropped every mod lock at each project load and boot). A SysEx dump of A01
 carries the mod row and the marker; sent back into A03 it keeps the row
 (and not the marker), and with the marker's ID changed or with no marker
-A03 gets no mod row. Not checked: Euclid's convert, a foreign project's
-load. Not on a unit.
+A03 gets no mod row. In the audio interrupt (26 Oct, timed with DMA timer
+0 in a debug build, A01 playing with its two locks): noting a trig's mod
+locks takes at most 70 timer ticks of the 88,010 between audio blocks,
+0.08% a trig (503, 0.6%, before it cleared only the codes the last trig
+set), so 12 tracks trigging in one block add under 1%. Not checked:
+Euclid's convert, a foreign project's load. Not on a unit.
 
 ## Mod scene and performance locks (0.8)
 
