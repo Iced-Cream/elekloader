@@ -814,7 +814,11 @@ stock bytes, and that each covers whole instructions.
   plays; a scene lock set with the scene's pad held shows on the knob in
   scene edit only and in the third bar while the scene is active, as a stock
   parameter's scene lock does; and Overbridge shows the LFO destination
-  LCA as None.
+  LCA as None. By hand on the unit (L8C2, 8cfa555, lock-check 1.5): the DST
+  list ends with MOD:Lock Check A and LCHK:Lock Check C, without B, and
+  picking C shows LCC. In an emulator, a 240-character short name, a
+  7-character category and a 62-character name show as 4, 4 and the menu's
+  width, with no fault.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
