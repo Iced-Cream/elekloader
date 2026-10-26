@@ -759,11 +759,17 @@ stock bytes, and that each covers whole instructions.
   shows its lock's value (it showed ERR before 0.8's value text), and a
   stock knob its own. With DST on LCA, turning DST scrolls the menu down
   to MOD:LOCK CHECK B and C and up to stock's AMP entries, and YES on
-  C sets DST to LCC (the DST byte holds 44), but this emulator does the
-  same with the build that stopped on MOD:LOCK CHECK A on a unit (T37), so
-  it does not show the menu works; elkbench's emulator moves no DST menu,
-  stock's included.
-  Not checked: anything on a unit.
+  C sets DST to LCC (the DST byte holds 44). On a unit (OS 1.74, 26 Oct
+  2026, core 0.8 with lock-check 1.3 and analoghealth) remote turns
+  reached MOD:LOCK CHECK C and YES set LCC; an earlier unit run (T37)
+  stopped on MOD:LOCK CHECK A because its turns were one count each, too
+  few for a list menu to move. The same run passed trig p-locks and trig
+  copy, the lock rows through a power cycle, a scene lock and a
+  performance depth on the knob and in the bar, pad pressure, RELOAD and
+  RANDOMIZE PAGE, NRPN and CC, and 75 s of play with the LFO on LCA (CPU
+  75-85 %, no dropouts). Not checked on a unit: page copy and paste, track
+  init, a scene entry through a project's save and load, and MIDI's edge
+  cases.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
