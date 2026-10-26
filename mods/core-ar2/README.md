@@ -507,23 +507,31 @@ dump. Not on a unit.
 The fourth part of the lock service (docs/ADAPTING.md, "Mod parameters on
 MIDI (core-ar2 0.8, Analog Rytm MKII)", in `midi.c` and `midi.s`). Stock's
 NRPNs for a track's sound use MSBs 0..3; a mod parameter is NRPN MSB 4, LSB
-its lock code - 42, its value in the data entry MSB.
+its lock code - 42, its value in the data entry MSB. On a track's channel
+stock maps no parameter to 33 CCs (its CC tables, 0x413dc2d8 and the
+machines' 0x413dd3b4, read from memory after boot, hold 0 for them) and
+leaves them out of the performances' 12 (0x401de1f4, which every track's
+channel answers): 8, 9, 48..63, 65..69, 84, 85, 110..116, 119. Codes 42..74
+get them in that order.
 
 | site | 1.74 | what |
 |---|---|---|
 | NRPN in | 0x400b2b26 (`jmp`) | a track's NRPN in (obj, nrpn, value, track, flag), the track's channel's and the auto channel's: an NRPN of MSB 4 on a drum track is core's, which sets the parameter in the track's sound of the current kit, clamped to `min..max` and 127 (an LSB with no parameter is dropped); any other goes on to stock |
-| knob out | `core_param_delta` (pages.s) | after a mod's `delta` takes a turn of a lockable parameter's knob, core sends its NRPN as stock's parameter out (0x400a9754) sends a stock one: only while PARAM OUTPUT is on (MIDI CONFIG +160, 0x400b56c0) and set to NRPN (+112, 0x400b563c), on the channel stock's 0x400a9844 gives, through 0x40085962 |
+| CC in | 0x400b0544 (`jmp`) | a track's CC in (obj, cc, value, track, flag): a CC of the pool whose code has a parameter is core's, set as above; any other goes on to stock |
+| knob out | `core_param_delta` (pages.s) | after a mod's `delta` takes a turn of a lockable parameter's knob, core sends it as stock's parameter out (0x400a9754) sends a stock one: only while PARAM OUTPUT is on (MIDI CONFIG +160, 0x400b56c0), as an NRPN (+112 = 0, 0x40085962) or a CC (+112 = 1, 0x4008591a; none for a code above 74), on the channel stock's 0x400a9844 gives |
 
 Checked in the emulator (dtboot, OS 1.74, `examples/lock-check-ar2` 1.2,
 26 Oct 2026), on the LOCK CHECK page: NRPN 4:0 value 100 on channel 1 turns
 knob A to 100, and value 16 on the auto channel (14) to 16; NRPN 4:5 (no
 parameter) changes nothing; a stock NRPN (LFO SPEED, 1:32) still sets its
-knob. With PARAM OUTPUT on and NRPN (written into the MIDI CONFIG, since
-this card's globals have it off and CC), three steps of knob A send `BD 63
-04 BD 62 00 BD 06 65 BD 26 00` and the next two values, as a stock LFO
-knob's turn sends `BD 63 01 BD 62 20 BD 06 71 BD 26 00`. Not checked: an
-NRPN while live recording (core records no p-lock from it), what the knob
-sends with a trig held or in scene edit, a unit.
+knob; CC 8 value 100 on channel 1 turns knob A to 100. With PARAM OUTPUT on
+(written into the MIDI CONFIG, since this card's globals have it off and
+set to CC), three steps of knob A send `BD 63 04 BD 62 00 BD 06 65 BD 26 00`
+and the next two values as NRPN, as a stock LFO knob's turn sends `BD 63 01
+BD 62 20 BD 06 71 BD 26 00`, and `BD 08 65 BD 08 66 BD 08 67` as CC. Not
+checked: the clamp of LOCK CHECK B (0..15) from MIDI, an NRPN or CC while
+live recording (core records no p-lock from it), what the knob sends with a
+trig held or in scene edit, a unit.
 
 Not followed yet: fine values (a value above 127 can't be locked).
 

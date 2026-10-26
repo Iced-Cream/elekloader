@@ -1671,7 +1671,7 @@ receiving build's own; a project of a layout the build doesn't read loads
 without them. Lock codes are a build's own, so a mod lock never lands on
 another build's parameter.
 
-Limits (0.8): a value above 127 can't be locked; an NRPN received while
+Limits (0.8): a value above 127 can't be locked; an NRPN or CC received while
 live recording sets the parameter but records no p-lock. Checked in the
 emulator only.
 
@@ -1712,16 +1712,21 @@ Checked in the emulator only.
 
 A lockable parameter is NRPN MSB 4, LSB its lock code - 42, on its track's
 channel (or the auto channel, for the active track), with its value in the
-data entry MSB. Core sets the parameter in the track's sound of the current
-kit when the NRPN comes in, clamped to the parameter's `min..max` (and 127),
-and sends it when the mod's page knob turns it, as stock sends a stock
-parameter: with PARAM OUTPUT on and set to NRPN (MIDI CONFIG > PORT CONFIG),
-on the channel stock uses. The mod does nothing for this; its knob's
-`delta` turns the value, and core sends it after. Lock codes are a build's
-own (Lockable parameters, above), so a parameter's NRPN number is too: a
-controller mapped to one build's numbers needs remapping after a build whose
-lockfile gave the parameter another code. CC carries no mod parameter
-(stock's CC numbers leave none free). Checked in the emulator only.
+data entry MSB. The first 33 codes (42..74) also have a CC, from the 33 a
+track's channel leaves unused, in order: 8, 9, 48..63, 65..69, 84, 85,
+110..116, 119 (code 42 is CC 8, code 74 is CC 119). Core sets the parameter
+in the track's sound of the current kit when either comes in, clamped to
+the parameter's `min..max` (and 127), and sends it when the mod's page knob
+turns it, as stock sends a stock parameter: while PARAM OUTPUT is on, as an
+NRPN or a CC as it is set (MIDI CONFIG > PORT CONFIG; a parameter with no
+CC sends nothing as CC), on the channel stock uses. The mod does nothing
+for this; its knob's `delta` turns the value, and core sends it after.
+
+Lock codes are a build's own (Lockable parameters, above), so a parameter's
+NRPN and CC numbers are too: a controller mapped to one build's numbers
+needs remapping after a build whose lockfile gave the parameter another
+code, and a parameter whose code is above 74 has no CC. Checked in the
+emulator only.
 
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 
