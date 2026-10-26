@@ -805,7 +805,10 @@ stock bytes, and that each covers whole instructions.
   1.4 and analoghealth) passed page copy, clear, paste and undo of a
   trig's lock; live recording (above); a scene lock and DST on LCA through
   SAVE PROJECT and a load, with LCB's code by NRPN showing ERR; and NRPN
-  4:2 at 16383 setting C to 1000. Both flashes came back in 15 s.
+  4:2 at 16383 setting C to 1000. Both flashes came back in 15 s. Then,
+  on stock 1.74 on the unit, that project (DST LCA) loaded with DST None
+  (`…`), and kept it through two rounds of SAVE PROJECT, another
+  project's load and a load back.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
