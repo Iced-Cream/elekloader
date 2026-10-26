@@ -131,6 +131,8 @@
   {"addr": "0x40037c1a", "stock": "4eb9400a9000", "op": "jsr", "target": "core_knob_label"},
   {"addr": "0x40037d42", "stock": "4eb9400a9000", "op": "jsr", "target": "core_knob_label"},
   {"addr": "0x400d37fa", "stock": "4eb9400a9000", "op": "jsr", "target": "core_knob_label"},
+  {"addr": "0x4003a1c6", "stock": "4eb9400a9022", "op": "jsr", "target": "core_knob_name"},
+  {"addr": "0x4003a8d6", "stock": "4eb9400a9022", "op": "jsr", "target": "core_knob_name"},
   {"addr": "0x40038462", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_param_get"},
   {"addr": "0x400378a6", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_param_delta"},
   {"addr": "0x400a864c", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_param_text"},

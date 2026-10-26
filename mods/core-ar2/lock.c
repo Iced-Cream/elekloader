@@ -280,3 +280,18 @@ unsigned core_knob_label(void *set, int id)
         return (unsigned)p->short_name;
     return KNOB_LABEL(set, id);
 }
+
+/* 0x400a9022, a knob's name (set, id): the record's +0x1c, called by the
+ * header's pop-up as a knob turns (0x4003a1c6, 0x4003a8d6), which formats
+ * it. A mod parameter's knob shows its name, as core_knob_label its short
+ * name. */
+#define KNOB_NAME ((unsigned (*)(void *, int))0x400a9022)
+
+unsigned core_knob_name(void *set, int id)
+{
+    const struct core_lock_param *p = by_id(id);
+    unsigned char *s;
+    if (p && p->name && !((s = core_lock_sound(set)) && core_lock_stock_takes(id, s)))
+        return (unsigned)p->name;
+    return KNOB_NAME(set, id);
+}

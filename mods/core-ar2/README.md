@@ -386,6 +386,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
 | reload | 0x400af32c (`jmp`) | RELOAD PAGE's copy: after stock's, each parameter's knob takes its value from the track's sound in the current kit's saved copy (live kits +0x4f180) |
 | knob label | 0x40037c1a, 0x40037d42, 0x400d37fa (`jsr`) | the calls of 0x400a9000 (a record's label, +0x30) in the page's two knob draws and the knob's pop-up: a parameter's page knob shows its short name |
+| knob name | 0x4003a1c6, 0x4003a8d6 (`jsr`) | the calls of 0x400a9022 (a record's name, +0x1c) in the header's pop-up as a knob turns: a parameter's page knob shows its name there, not the borrowed record's ERROR |
 
 The step, the validity check, page turns and RANDOMIZE on DST follow from
 the list, with no sites of their own. Flags need none: pseudo ids read
