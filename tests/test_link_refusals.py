@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from elekloader import devices, elemod, link                       # noqa: E402
+from elekloader import devices, elemod, link, store               # noqa: E402
 from elekloader.devices import Release                             # noqa: E402
 from elekloader.elemod import ModError, sha                        # noqa: E402
 
@@ -865,22 +865,36 @@ def test_analog_rytm_fixtures():
     assert run_rows('analog-rytm-mk2') == 7
 
 
-def test_the_lfo_destination_field_is_placed_only_with_a_lockable_field():
+def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
     """core_lfo_dst (core-ar2 0.8): a core that imports it gets a 7-bit sound field of its own in a
-    build with a lockable field, and the symbol 0 (no field) in a build without one."""
+    build with a field declared "lfo": true, and the symbol 0 (no field) in a build whose fields are
+    only lockable; an "lfo" field's code carries LFO_FLAG in core_lock_codes, a lockable one's not.
+    "lfo" without "lock" is refused."""
     with Bench('analog-rytm-mk2') as B:
         core = keeper(B)
         core['imports'] = core['imports'] + ['core_lfo_dst']
         core['collections']['core_lock_codes'] = {'entry': 8}
-        for lockable in (True, False):
-            mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': lockable}])
+        for lfo in (True, False):
+            mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'lfo': lfo},
+                                        {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True}])
             out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
             placed = [f for f in out.store['fields'] if f['sym'] == 'core_lfo_dst']
-            if lockable:
+            codes = {(c['mod'], c['sym']): c['code'] for c in out.store['codes']}
+            entries = [int.from_bytes(e[4:], 'big') for e in store.code_entries(out.store, [('m', 'st_a')] if lfo else [])]
+            if lfo:
                 assert placed == [{'mod': 'core', 'sym': 'core_lfo_dst', 'scope': 'sound',
                                    'offset': 0, 'bits': 7}], out.store['fields']
+                assert sorted(entries) == sorted([codes[('m', 'st_a')] | store.LFO_FLAG, codes[('m', 'st_b')]])
             else:
                 assert placed == [], out.store['fields']
+                assert sorted(entries) == sorted(codes.values())
+        mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lfo': True}])
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        except ModError as e:
+            assert 'only a lockable field ("lock": true) can be an LFO destination' in str(e), e
+        else:
+            raise AssertionError('"lfo" without "lock" was accepted')
 
 
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():

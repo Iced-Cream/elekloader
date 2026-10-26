@@ -90,6 +90,7 @@ export class Mod2 implements AnyMod {
   storage: [string, string, number][]
   locks: string[]
   ccs: string[]
+  lfos: string[]
   regions: Region[]
   names: string[]
   needsCore: string | null
@@ -192,6 +193,7 @@ export class Mod2 implements AnyMod {
       this.storage = store.parseDecls(doc)
       this.locks = store.parseLocks(doc)
       this.ccs = store.parseCcs(doc)
+      this.lfos = store.parseLfos(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
       throw e
@@ -592,7 +594,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(locks.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} declare${users.length === 1 ? 's' : ''} lockable parameters, which ${core.label()} does not keep (no table ${store.CODES_TABLE})`)
     }
-    if (locks.length && core.imports.includes(store.LOCK_DST) && store.lockDstBits(dev.key))
+    const lfos = order.flatMap(m => m.lfos.map(sym => [m.id, sym] as [string, string]))
+    if (lfos.length && core.imports.includes(store.LOCK_DST) && store.lockDstBits(dev.key))
       // the core keeps a code as an LFO destination
       decls.push([core.id, store.LOCK_DST, 'sound', store.lockDstBits(dev.key)])
     const ccs = order.flatMap(m => m.ccs.map(sym => [m.id, sym] as [string, string]))
@@ -603,8 +606,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
-    if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no lockable field
-    for (const [table, made] of [[store.CODES_TABLE, store.codeEntries], [store.CCS_TABLE, store.ccEntries]] as const)
+    if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field
+    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos)], [store.CCS_TABLE, store.ccEntries]] as const)
       if (tables.has(table))
         made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))
     const taken = new Set(order.flatMap(m => m.exports))

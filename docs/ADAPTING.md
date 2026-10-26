@@ -1575,8 +1575,8 @@ its own jump ends.
 ### Lockable parameters (core-ar2 0.8, Analog Rytm MKII)
 
 The first part of core's lock service: a mod parameter kept in a sound
-field can be an LFO destination, and RANDOMIZE PAGE and RELOAD PAGE reach
-its page knob. (P-locks, scenes, performances and MIDI build on the same
+field can be an LFO destination (with `"lfo": true`), and RANDOMIZE PAGE
+and RELOAD PAGE reach its page knob. (P-locks, scenes, performances and MIDI build on the same
 codes, below.)
 
 A sound-scope storage field declared with `"lock": true` gets a **lock
@@ -1618,14 +1618,18 @@ the kit's file keeps only a stock lock's whole step.
 
 What core does with it:
 
-- **LFO destination.** Each sound's DST menu lists the mod parameters after
-  stock's, as `MOD:` and the name; the DST value shows the short name. The
-  LFO's DST byte holds the code. Stock saves the destination through a table
-  of its own parameters only, so core keeps the code in a 7-bit sound field
-  of its own, `core_lfo_dst`, which the linker places in a build with a
-  lockable field (the mods' sound fields then have 49 bits, not 56); the
-  saved sound holds a destination stock has none of, so stock, or a build
-  without the code, loads that LFO with no destination. Stock's LFO block skips a slot above 41;
+- **LFO destination.** A lockable field declared with `"lfo": true` as
+  well is an LFO destination; one without it is lockable only, and an
+  `"lfo"` field must be lockable. Each sound's DST menu lists the LFO
+  destinations after stock's, as `MOD:` and the name; the DST value shows
+  the short name. The LFO's DST byte holds the code. Stock saves the
+  destination through a table of its own parameters only, so core keeps the
+  code in a 7-bit sound field of its own, `core_lfo_dst`, which the linker
+  places in a build with an `"lfo"` field (the mods' sound fields then have
+  49 bits, not 56; a build whose fields are lockable only keeps all 56); the
+  saved sound holds stock's own None (META:None), so stock, or a build
+  without the code, loads that LFO with no destination and keeps it so
+  through its own saves. Stock's LFO block skips a slot above 41;
   there core keeps the track's code and the offset stock would have added,
   and `core_lfo_offset(track, field)` gives it to the mod: 8.8 steps of a
   stock 0..127 knob (one step is 256), 0 when the LFO points elsewhere. The

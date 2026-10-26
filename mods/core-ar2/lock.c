@@ -3,9 +3,10 @@
  * (README, "Lockable parameters"). Every address is OS 1.74's.
  *
  * The linker gives core the table core_lock_codes, {field descriptor, code}
- * for each field declared "lock": true, from the lockfile, and mods add
+ * for each field declared "lock": true, from the lockfile, with LFO (0x100)
+ * set in the code of a field also declared "lfo": true, and mods add
  * {field, id, min, max, short name, name} to core_lock_params. A parameter
- * with a code and an entry gets:
+ * with a code and an entry is lockable; one with LFO set also gets:
  *
  *   - a pseudo id, PSEUDO + code - 42, above stock's 469 records: the LFO
  *     destination list (0x400aa280) holds parameter ids, and its users turn
@@ -17,8 +18,9 @@
  *   - the LFO's offset: where the audio interrupt's LFO block skips a slot
  *     above 41 (0x4009eac8), core keeps the track's code and the offset
  *     stock would have added (lock.s), and core_lfo_offset hands it on;
- *   - with a page id: RANDOMIZE PAGE and RELOAD PAGE on its knob (lock.s),
- *     and its short name as the knob's label.
+ *
+ * and any of them, with a page id, gets RANDOMIZE PAGE and RELOAD PAGE on
+ * its knob (lock.s), and its short name as the knob's label.
  */
 
 #include <stdint.h>
@@ -26,6 +28,7 @@
 #define PSEUDO 469
 #define FIRST_CODE 42
 #define LAST_CODE 127
+#define LFO 0x100                             /* in core_lock_codes: an LFO destination */
 #define SOUND_SLOT_ID ((int (*)(void *, int))0x400a86dc)   /* sound vtable +76, stock's */
 #define LIST_APPEND ((void (*)(void *, int *))0x40197a94)   /* (vector, &id) */
 #define RANDOM ((unsigned (*)(void))0x4002a6e0)   /* as stock's randomize uses */
@@ -51,17 +54,20 @@ volatile int16_t core_lfo_value[13];
 
 /* each code's parameter, made once, on the first ask */
 static const struct core_lock_param *by_code[LAST_CODE + 1];
+static unsigned char lfo_ok[LAST_CODE + 1];
 static volatile int made;
 
 static void make(void)
 {
     const unsigned *c;
     const struct core_lock_param *const *p;
+    unsigned code;
     for (c = core_lock_codes; c[0]; c += 2)
-        if (c[1] >= FIRST_CODE && c[1] <= LAST_CODE)
+        if ((code = c[1] & 0xff) >= FIRST_CODE && code <= LAST_CODE)
             for (p = core_lock_params; *p; p++)
                 if ((*p)->field == c[0]) {
-                    by_code[c[1]] = *p;
+                    by_code[code] = *p;
+                    lfo_ok[code] = !!(c[1] & LFO);
                     break;
                 }
     made = 1;
@@ -74,19 +80,26 @@ static const struct core_lock_param *param(unsigned code)
     return code >= FIRST_CODE && code <= LAST_CODE ? by_code[code] : 0;
 }
 
+/* an LFO destination's parameter, or 0 */
+static const struct core_lock_param *lfo_param(unsigned code)
+{
+    return param(code) && lfo_ok[code] ? by_code[code] : 0;
+}
+
 int core_lock_code(unsigned field)
 {
     const unsigned *c;
     for (c = core_lock_codes; c[0]; c += 2)
         if (c[0] == field)
-            return c[1];
+            return c[1] & 0xff;
     return 0;
 }
 
 int core_lfo_offset(int track, unsigned field)
 {
     unsigned code;
-    if ((unsigned)track >= 13 || !(code = core_lfo_code[track]) || code != (unsigned)core_lock_code(field))
+    if ((unsigned)track >= 13 || !(code = core_lfo_code[track]) || code != (unsigned)core_lock_code(field) ||
+        !lfo_param(code))
         return 0;
     return core_lfo_value[track];
 }
@@ -95,14 +108,14 @@ int core_lfo_offset(int track, unsigned field)
 static unsigned pseudo_code(int id)
 {
     unsigned code = id - PSEUDO + FIRST_CODE;
-    return id >= PSEUDO && param(code) ? code : 0;
+    return id >= PSEUDO && lfo_param(code) ? code : 0;
 }
 
 /* sound vtable +76 (ptr site): a slot that is a mod parameter's code gives
  * its pseudo id, any other slot stock's id */
 int core_dst_slot_id(void *set, int slot)
 {
-    if (slot >= FIRST_CODE && slot <= LAST_CODE && param(slot))
+    if (slot >= FIRST_CODE && slot <= LAST_CODE && lfo_param(slot))
         return PSEUDO + slot - FIRST_CODE;
     return SOUND_SLOT_ID(set, slot);
 }
@@ -121,7 +134,7 @@ void core_dst_append(void **list)
 {
     int code, id;
     for (code = FIRST_CODE; code <= LAST_CODE; code++)
-        if (param(code)) {
+        if (lfo_param(code)) {
             id = PSEUDO + code - FIRST_CODE;
             LIST_APPEND(*list, &id);
         }
@@ -165,6 +178,12 @@ const struct core_lock_param *core_lock_by_id(int id, unsigned *code)
 const struct core_lock_param *core_lock_by_code(unsigned code)
 {
     return param(code);
+}
+
+/* for store.c: an LFO destination's parameter, or 0 */
+const struct core_lock_param *core_lock_lfo(unsigned code)
+{
+    return lfo_param(code);
 }
 
 unsigned core_lock_field(const struct core_lock_param *p) { return p->field; }

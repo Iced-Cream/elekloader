@@ -169,6 +169,7 @@ class Mod2:
             self.storage = store.parse_decls(doc)
             self.locks = store.parse_locks(doc)
             self.ccs = store.parse_ccs(doc)
+            self.lfos = store.parse_lfos(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
@@ -582,7 +583,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             raise ModError('%s declare%s lockable parameters, which %s does not keep (no table %s)'
                            % (', '.join(sorted({k[0] for k in locks})), 's' if len({k[0] for k in locks}) == 1
                               else '', core.label(), store.CODES_TABLE))
-        if locks and store.LOCK_DST in core.imports and store.lock_dst_bits(dev.key):
+        lfos = [(m.id, sym) for m in order for sym in m.lfos]
+        if lfos and store.LOCK_DST in core.imports and store.lock_dst_bits(dev.key):
             # the core keeps a code as an LFO destination
             decls.append((core.id, store.LOCK_DST, 'sound', store.lock_dst_bits(dev.key)))
         ccs = [(m.id, sym) for m in order for sym in m.ccs]
@@ -592,8 +594,9 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                               else '', core.label(), store.CCS_TABLE))
         new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs)
         store_syms, ids = store.symbols(new_lock, dev.key)
-        store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no lockable field
-        for table, made in ((store.CODES_TABLE, store.code_entries), (store.CCS_TABLE, store.cc_entries)):
+        store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
+        for table, made in ((store.CODES_TABLE, lambda l: store.code_entries(l, lfos)),
+                            (store.CCS_TABLE, store.cc_entries)):
             if table in tables:
                 for i, data in enumerate(made(new_lock)):
                     entries[table].append((-1, '', i, core, {'data': data, 'relocs': []}))

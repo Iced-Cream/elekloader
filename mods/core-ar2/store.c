@@ -437,23 +437,26 @@ int st_locks_save(unsigned char *dst, unsigned char *live, int a)
  * and loads it back through the inverse table, which has no entry for a
  * lock code: a mod parameter's would come back as a stock one. So core
  * keeps the code, less 41, in its own sound field core_lfo_dst (the linker
- * places it in a build with a lockable parameter; 0, none, otherwise), and
- * the stored byte gets DST_NONE, whose slot (64) is none of stock's: stock,
- * or a build that does not know the code, loads an LFO with no destination
- * (stock shows ERR and skips it). */
+ * places it in a build with an "lfo" field; 0, none, otherwise), and the
+ * stored byte gets DST_NONE, stock's own None (META:None, slot 0): stock,
+ * or a build that does not know the code, loads an LFO with no destination,
+ * and keeps it so through its own saves. Neither table has a bound, so a
+ * slot above 41 saved by stock comes back as one of its parameters; and on
+ * load, a slot of 42..127 that core_lfo_dst did not give (a sound from
+ * stock or from another layout) would read as a code, so it loads as None. */
 extern char core_lfo_dst[];
 #define LIVE_DST 28
 #define STORED_DST 100
-#define DST_NONE 42
+#define DST_NONE 41
 struct core_lock_param;
-const struct core_lock_param *core_lock_by_code(unsigned code);
+const struct core_lock_param *core_lock_lfo(unsigned code);
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 
 int st_sound_save(unsigned char *dst, unsigned char *live, int a)
 {
     unsigned f = (unsigned)core_lfo_dst, c = live ? live[LIVE_DST] : 0;
-    int mine = f && c >= 42 && c <= 127 && core_lock_by_code(c), r;
+    int mine = f && c >= 42 && c <= 127 && core_lock_lfo(c), r;
     if (f && live)
         core_store_set(f, live, 0, mine ? c - 41 : 0);
     r = st_sound_save_body(dst, live, a);
@@ -481,9 +484,12 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[SOUND_HOME + sound_at(j)] =
                 ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
-        if (core_lfo_dst && (j = core_store_get((unsigned)core_lfo_dst, live, 0)) &&
-            core_lock_by_code(j + 41))
-            live[LIVE_DST] = j + 41;
+        if (core_lfo_dst) {
+            if (live[LIVE_DST] >= 42 && live[LIVE_DST] <= 127)
+                live[LIVE_DST] = 0;
+            if ((j = core_store_get((unsigned)core_lfo_dst, live, 0)) && core_lock_lfo(j + 41))
+                live[LIVE_DST] = j + 41;
+        }
     }
     return r;
 }

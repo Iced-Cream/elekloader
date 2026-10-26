@@ -79,13 +79,16 @@ a build has such a field:
 
 The core reads them from the table core_lock_ccs: {field descriptor, CC}.
 
-The LFO destination (core-ar2 0.8). Stock saves a sound's LFO destination as
-an index into a table of its own parameters, which has no entry for a lock
-code, so a core that keeps a mod parameter there imports the field
-core_lfo_dst: in a build with a lockable field the linker places it, as the
-core's own sound field of the device's `lock_dst` bits, and the core keeps
-the code in it; in a build without one it is not placed (its symbol is 0)
-and the mods have the whole room.
+The LFO destination (core-ar2 0.8). A lockable field declared with
+`"lfo": true` is also an LFO destination. Stock saves a sound's LFO
+destination as an index into a table of its own parameters, which has no
+entry for a lock code, so a core that keeps a mod parameter there imports
+the field core_lfo_dst: in a build with an `"lfo"` field the linker places
+it, as the core's own sound field of the device's `lock_dst` bits, and the
+core keeps the code in it; in a build without one it is not placed (its
+symbol is 0) and the mods have the whole room. The core reads the flag from
+core_lock_codes: an `"lfo"` field's code has LFO_FLAG set. The flag is not
+stored data, so it is not part of the layout ID.
 
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
@@ -107,6 +110,7 @@ IDS_TABLE = 'core_store_ids'
 CODES_TABLE = 'core_lock_codes'
 CCS_TABLE = 'core_lock_ccs'
 LOCK_DST = 'core_lfo_dst'
+LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
 FIRST_CODE, LAST_CODE = 42, 127
 LOCK_SCOPES = ('sound',)
 
@@ -197,6 +201,11 @@ def parse_locks(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('lock') is True]
 
 
+def parse_lfos(m):
+    """A mod document's "storage" -> the syms of its fields that are LFO destinations, in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('lfo') is True]
+
+
 def parse_ccs(m):
     """A mod document's "storage" -> the syms of its fields with a CC, in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('cc') is True]
@@ -209,13 +218,16 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc'}:
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-        for k in ('lock', 'cc'):
+        for k in ('lock', 'cc', 'lfo'):
             if k in f and not isinstance(f[k], bool):
                 raise ModError('storage field %r: "%s" is true or false' % (f.get('sym'), k))
         if f.get('cc') and not f.get('lock'):
             raise ModError('storage field %r: only a lockable field ("lock": true) can have a CC'
+                           % (f.get('sym'),))
+        if f.get('lfo') and not f.get('lock'):
+            raise ModError('storage field %r: only a lockable field ("lock": true) can be an LFO destination'
                            % (f.get('sym'),))
         if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
             raise ModError('storage field %r: only %s fields can be lockable'
@@ -604,12 +616,14 @@ def symbols(lock, dev_key):
     return out, [i.to_bytes(4, 'big') for i in ids]
 
 
-def code_entries(lock):
+def code_entries(lock, lfos=()):
     """-> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes
-    each, by code."""
+    each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set."""
     desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
             for f in lock['fields']}
-    return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big') + c['code'].to_bytes(4, 'big')
+    lfos = set(lfos)
+    return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big')
+            + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)).to_bytes(4, 'big')
             for c in lock.get('codes', [])]
 
 

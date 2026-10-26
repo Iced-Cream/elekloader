@@ -3,12 +3,13 @@
  * and their p-locks.
  *
  * mod.json declares three sound fields with "lock": true, so the lockfile
- * gives each a lock code, and registers them in core_lock_params. Core then
- * lists LOCK CHECK A, B and C at the end of every sound's LFO destination
- * menu (shown as LCA, LCB and LCC in the DST value). A bar along the bottom
- * edge shows the offset track 1's LFO gives A or B (core_lfo_offset), from the
- * middle, one pixel per stock knob step; a 3x3 square at the left end shows
- * which (top: A, bottom: B).
+ * gives each a lock code, and registers them in core_lock_params. A and C
+ * are also "lfo": true, so core lists LOCK CHECK A and C at the end of every
+ * sound's LFO destination menu (shown as LCA and LCC in the DST value); B,
+ * lockable only, is not listed (1.4). A bar along the bottom edge shows the
+ * offset track 1's LFO gives A or C (core_lfo_offset), from the middle, one
+ * pixel per stock knob step; a 3x3 square at the left end shows which (top:
+ * A, bottom: C).
  *
  * Behind the LFO key, a LOCK CHECK page shows A on knob A (borrowing stock's
  * id 1, as mods' pages do) and C, 0..1000, a value above 127, on knob B (id
@@ -56,8 +57,8 @@ void lc_tick(void *ctrl)
 
 void lc_draw(void *bmp, void *ctrl)
 {
-    int a = core_lfo_offset(0, STORE(lc_a)), b = core_lfo_offset(0, STORE(lc_b));
-    int v = (a ? a : b) / 256, p;
+    int a = core_lfo_offset(0, STORE(lc_a)), c = core_lfo_offset(0, STORE(lc_c));
+    int v = (a ? a : c) / 256, p;
     void *s;
     (void)ctrl;
     /* y counts from the bottom row: 0..3 is the bottom edge */
@@ -72,7 +73,7 @@ void lc_draw(void *bmp, void *ctrl)
         FILLRECT(bmp, 64 + v, 0, 64, 1, 1);
     if (a)
         FILLRECT(bmp, 0, 2, 2, 3, 1);
-    if (b)
+    if (c)
         FILLRECT(bmp, 0, 0, 2, 1, 1);
     FILLRECT(bmp, 0, 5, 127, 6, 0);
     if ((v = core_lock_value(0, STORE(lc_a))) >= 0)

@@ -145,6 +145,10 @@ DECLS = {
                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': False}]},
     'cc without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'cc': True}]},
     'cc type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': 'yes'}]},
+    'lfo': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': True},
+                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': False}]},
+    'lfo without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lfo': True}]},
+    'lfo type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': 1}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
 }
 
@@ -193,6 +197,7 @@ def main():
                 lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, None, [tuple(k) for k in locks],
                                              [tuple(k) for k in ccs])
                 res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
+                            'lfo_codes': [t.hex() for t in store.code_entries(lock, [tuple(k) for k in ccs])],
                             'ccs': [t.hex() for t in store.cc_entries(lock)],
                             'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
             except ModError as e:
@@ -207,7 +212,7 @@ def main():
     for name, doc in DECLS.items():
         try:
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
-                                  'ccs': store.parse_ccs(doc)}
+                                  'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

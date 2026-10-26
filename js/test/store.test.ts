@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, codeEntries, dumps, fromImage, layoutId, parseCcs, parseDecls, parseLocks, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, codeEntries, dumps, fromImage, layoutId, parseCcs, parseDecls, parseLfos, parseLocks, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -68,6 +68,7 @@ test('CCs: the same CCs, notes and table entries', () => {
       assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
       assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
       assert.deepEqual(codeEntries(l).map(hex), want.codes, `${name} step ${i}: codes`)
+      assert.deepEqual(codeEntries(l, ccs).map(hex), want.lfo_codes, `${name} step ${i}: codes with LFO`)
       assert.deepEqual(ccEntries(l).map(hex), want.ccs, `${name} step ${i}: CCs`)
       assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
       assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
@@ -89,6 +90,7 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
       assert.deepEqual(parseDecls(c.doc), c.ok, name)
       assert.deepEqual(parseLocks(c.doc), c.locks, name)
       assert.deepEqual(parseCcs(c.doc), c.ccs, name)
+      assert.deepEqual(parseLfos(c.doc), c.lfos, name)
     }
   }
 })

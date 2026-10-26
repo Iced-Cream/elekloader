@@ -231,7 +231,8 @@ Nothing is built unless all of these pass:
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
 `global`, `track`, `pattern` or `project`) and `bits` (1-32), and on a
 sound field `"lock": true` for a lockable parameter (core-ar2 0.8), with
-`"cc": true` for one that also gets a MIDI CC. Only a core
+`"cc": true` for one that also gets a MIDI CC and `"lfo": true` for one that
+is also an LFO destination. Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -271,7 +272,7 @@ the ancestors), taken whenever the layout changes; a lockfile whose ID came
 from somewhere else keeps it until then. Lockable fields add `codes`,
 `freed_codes` and `next_code` (part of the layout ID), and fields with a CC
 `ccs` and `freed_ccs` (`mod`, `sym`, `cc`; not part of it). In a build
-with a lockable field, a core that imports `core_lfo_dst` gets it as a sound
+with an `"lfo"` field, a core that imports `core_lfo_dst` gets it as a sound
 field of its own (`mod` its id, the device's bits: 7 on the Analog Rytm
 MKII), placed like a mod's; in a build without one the symbol is 0 and the
 field is not placed. docs/ADAPTING.md ("Mod storage
