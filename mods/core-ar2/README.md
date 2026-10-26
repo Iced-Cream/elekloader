@@ -511,8 +511,11 @@ pressure) the bar shows 17. The LFO destination list ends with the two
 lock-check parameters (ids 469, 470), read from memory after the list
 build. Not checked: the velocity and aftertouch lists without them (the
 emulator didn't open their parameter choice; the list kind, 0x200, is read
-from the code), a project saved to and loaded from a file, a received kit
-dump. Not on a unit.
+from the code), a project saved to and loaded from a file. A kit dump
+(26 Oct, lock-check 1.3, C at 900 on track 1, the kit saved) carries the
+sounds' mod fields as saved (`001c20` and the layout ID); sent back with
+kit 6 as its target it gives stored kit 6 the same fields, and its scene
+and performance entries come in empty, as they go out. Not on a unit.
 
 ## Mod parameters on MIDI (0.8)
 
@@ -560,8 +563,9 @@ kit's file keeps only an entry's high byte. Checked in the emulator
 (`2c 00 07`, `2c 40 05`), and the trig plays 901 (`core_lock_value`); a
 power cycle with no save keeps both rows and the lock plays; a scene lock
 from 900 turned 20 steps stops at the coarse 125 (`7d` in the entry, 1000).
-Not checked: the performance depth and CC of C, a pattern's SysEx dump with
-the two rows, trig copy of C.
+A SysEx dump of the pattern carries both rows, and sent into A03 it gives
+A03's stored pattern both. Not checked: the performance depth and CC of C,
+trig copy of C.
 
 ## Checked so far
 
