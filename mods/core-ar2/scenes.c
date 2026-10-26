@@ -116,9 +116,10 @@ static void *held(void *view)
     return vt == SCENE_VT || vt == PERF_VT ? o : 0;
 }
 
-/* the knob's mod parameter on the view's track, with its code and sound */
-static const struct core_lock_param *knob(void *view, int id, int *track, unsigned *code,
-                                          unsigned char **s)
+/* the knob's mod parameter on the view's track, with its code and sound
+ * (midi.c too) */
+const struct core_lock_param *core_lock_knob(void *view, int id, int *track, unsigned *code,
+                                               unsigned char **s)
 {
     unsigned k = (unsigned)WORKING_KIT_INDEX[0] << 24 | (unsigned)WORKING_KIT_INDEX[1] << 16 |
                  (unsigned)WORKING_KIT_INDEX[2] << 8 | WORKING_KIT_INDEX[3];
@@ -147,7 +148,7 @@ int core_scene_turn(void *view, int id, int delta)
     unsigned code;
     unsigned char *s;
     int track, v, rel, step;
-    if (!o || !(p = knob(view, id, &track, &code, &s)))
+    if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return -1;
     rel = (unsigned char)METHOD(o, 32)(o);
     step = delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0;
@@ -177,7 +178,7 @@ int core_scene_push(void *view, int id)
     unsigned code;
     unsigned char *s;
     int track;
-    if (!o || !(p = knob(view, id, &track, &code, &s)))
+    if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return -1;
     if ((unsigned char)METHOD(o, 28)(o, track, code))
         return 0;

@@ -1576,8 +1576,8 @@ its own jump ends.
 
 The first part of core's lock service: a mod parameter kept in a sound
 field can be an LFO destination, and RANDOMIZE PAGE and RELOAD PAGE reach
-its page knob. (P-locks, scenes and performances build on the same codes,
-below; MIDI later.)
+its page knob. (P-locks, scenes, performances and MIDI build on the same
+codes, below.)
 
 A sound-scope storage field declared with `"lock": true` gets a **lock
 code**, 42..127, from the build's lockfile, the number core knows the
@@ -1671,8 +1671,9 @@ receiving build's own; a project of a layout the build doesn't read loads
 without them. Lock codes are a build's own, so a mod lock never lands on
 another build's parameter.
 
-Limits (0.8): a value above 127 can't be locked; MIDI doesn't carry mod
-locks yet. Checked in the emulator only.
+Limits (0.8): a value above 127 can't be locked; an NRPN received while
+live recording sets the parameter but records no p-lock. Checked in the
+emulator only.
 
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
@@ -1706,6 +1707,21 @@ scene's wins is the mod's choice; the order above is one.
 A kit's SysEx dump leaves the mod entries out, and a kit of a layout the
 build doesn't read loads without them: lock codes are a build's own.
 Checked in the emulator only.
+
+### Mod parameters on MIDI (core-ar2 0.8, Analog Rytm MKII)
+
+A lockable parameter is NRPN MSB 4, LSB its lock code - 42, on its track's
+channel (or the auto channel, for the active track), with its value in the
+data entry MSB. Core sets the parameter in the track's sound of the current
+kit when the NRPN comes in, clamped to the parameter's `min..max` (and 127),
+and sends it when the mod's page knob turns it, as stock sends a stock
+parameter: with PARAM OUTPUT on and set to NRPN (MIDI CONFIG > PORT CONFIG),
+on the channel stock uses. The mod does nothing for this; its knob's
+`delta` turns the value, and core sends it after. Lock codes are a build's
+own (Lockable parameters, above), so a parameter's NRPN number is too: a
+controller mapped to one build's numbers needs remapping after a build whose
+lockfile gave the parameter another code. CC carries no mod parameter
+(stock's CC numbers leave none free). Checked in the emulator only.
 
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 

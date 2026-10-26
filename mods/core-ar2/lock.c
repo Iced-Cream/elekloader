@@ -161,6 +161,12 @@ const struct core_lock_param *core_lock_by_id(int id, unsigned *code)
     return 0;
 }
 
+/* for midi.c: a code's parameter, or 0 */
+const struct core_lock_param *core_lock_by_code(unsigned code)
+{
+    return param(code);
+}
+
 unsigned core_lock_field(const struct core_lock_param *p) { return p->field; }
 int core_lock_min(const struct core_lock_param *p) { return p->min; }
 int core_lock_max(const struct core_lock_param *p) { return p->max; }

@@ -188,8 +188,9 @@ def test_core_ar2_sites():
     assert img[o - 16:o] == bytes.fromhex('20532250 42a72f08 20690060 4e90508f'.replace(' ', '')), x
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 11 lock
-    # sites (0.8), the 18 lock row sites (0.8) and the 7 scene and performance sites (0.8)
-    assert len(mod['sites']) == 93
+    # sites (0.8), the 18 lock row sites (0.8), the 7 scene and performance sites (0.8)
+    # and the NRPN in site (0.8)
+    assert len(mod['sites']) == 94
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
                                    'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload',
@@ -254,6 +255,10 @@ def test_core_ar2_sites():
                       0x4000f2a2: ('jsr', 'core_kit_dump_out', '4eb9400088d6')}, scenes
     for a, (_op, _t, b) in scenes.items():
         assert img[a - DEV.main_load:a - DEV.main_load + len(b) // 2] == bytes.fromhex(b), hex(a)
+    # MIDI (0.8): a track's NRPN in, its first instructions as stock has them
+    x = [x for x in mod['sites'] if x.get('target') == 'core_nrpn_site'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x400b2b26', 'jmp', '4fefffe448d70c7c'), x
+    assert img[0x400b2b26 - DEV.main_load:0x400b2b2e - DEV.main_load].hex() == x['stock'], x
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
