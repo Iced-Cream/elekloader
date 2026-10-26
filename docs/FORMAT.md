@@ -270,7 +270,11 @@ device, `split`, `generation`, `next`, `fields` and `freed`, not the ID or
 the ancestors), taken whenever the layout changes; a lockfile whose ID came
 from somewhere else keeps it until then. Lockable fields add `codes`,
 `freed_codes` and `next_code` (part of the layout ID), and fields with a CC
-`ccs` and `freed_ccs` (`mod`, `sym`, `cc`; not part of it). docs/ADAPTING.md ("Mod storage
+`ccs` and `freed_ccs` (`mod`, `sym`, `cc`; not part of it). In a build
+with a lockable field, a core that imports `core_lfo_dst` gets it as a sound
+field of its own (`mod` its id, the device's bits: 7 on the Analog Rytm
+MKII), placed like a mod's; in a build without one the symbol is 0 and the
+field is not placed. docs/ADAPTING.md ("Mod storage
 (core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4 0.1, Analog
 Four MKII)") has the rest.
 

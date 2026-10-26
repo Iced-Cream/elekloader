@@ -1620,7 +1620,12 @@ What core does with it:
 
 - **LFO destination.** Each sound's DST menu lists the mod parameters after
   stock's, as `MOD:` and the name; the DST value shows the short name. The
-  LFO's DST byte holds the code. Stock's LFO block skips a slot above 41;
+  LFO's DST byte holds the code. Stock saves the destination through a table
+  of its own parameters only, so core keeps the code in a 7-bit sound field
+  of its own, `core_lfo_dst`, which the linker places in a build with a
+  lockable field (the mods' sound fields then have 49 bits, not 56); the
+  saved sound holds a destination stock has none of, so stock, or a build
+  without the code, loads that LFO with no destination. Stock's LFO block skips a slot above 41;
   there core keeps the track's code and the offset stock would have added,
   and `core_lfo_offset(track, field)` gives it to the mod: 8.8 steps of a
   stock 0..127 knob (one step is 256), 0 when the LFO points elsewhere. The

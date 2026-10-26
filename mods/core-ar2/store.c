@@ -432,11 +432,35 @@ int st_locks_save(unsigned char *dst, unsigned char *live, int a)
 
 /* ---- sounds and kits: their own bytes, with their own copy of the ID ---- */
 
+/* The LFO's destination (0.8): stock saves it (live sound +28, a slot) as
+ * the stored sound's +100, an index into a table of stock's 42 parameters,
+ * and loads it back through the inverse table, which has no entry for a
+ * lock code: a mod parameter's would come back as a stock one. So core
+ * keeps the code, less 41, in its own sound field core_lfo_dst (the linker
+ * places it in a build with a lockable parameter; 0, none, otherwise), and
+ * the stored byte gets DST_NONE, whose slot (64) is none of stock's: stock,
+ * or a build that does not know the code, loads an LFO with no destination
+ * (stock shows ERR and skips it). */
+extern char core_lfo_dst[];
+#define LIVE_DST 28
+#define STORED_DST 100
+#define DST_NONE 42
+struct core_lock_param;
+const struct core_lock_param *core_lock_by_code(unsigned code);
+unsigned core_store_get(unsigned field, void *item, int index);
+void core_store_set(unsigned field, void *item, int index, unsigned value);
+
 int st_sound_save(unsigned char *dst, unsigned char *live, int a)
 {
-    int r = st_sound_save_body(dst, live, a);
+    unsigned f = (unsigned)core_lfo_dst, c = live ? live[LIVE_DST] : 0;
+    int mine = f && c >= 42 && c <= 127 && core_lock_by_code(c), r;
+    if (f && live)
+        core_store_set(f, live, 0, mine ? c - 41 : 0);
+    r = st_sound_save_body(dst, live, a);
     if (dst && live) {
         int j;
+        if (mine)
+            dst[STORED_DST] = DST_NONE;
         for (j = 0; j < 3; j++)
             dst[SOUND_SPARE + j] = live[SOUND_HOME + j];
         for (j = 3; j < SOUND_BYTES; j++)
@@ -457,6 +481,9 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[SOUND_HOME + sound_at(j)] =
                 ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
+        if (core_lfo_dst && (j = core_store_get((unsigned)core_lfo_dst, live, 0)) &&
+            core_lock_by_code(j + 41))
+            live[LIVE_DST] = j + 41;
     }
     return r;
 }

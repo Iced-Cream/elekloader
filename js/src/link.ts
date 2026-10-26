@@ -385,7 +385,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       fields.set(sym, m)
     }
   }
-  if (tables.has(store.IDS_TABLE)) for (const x of store.GEN_SYMS) fields.set(x, null)
+  if (tables.has(store.IDS_TABLE)) for (const x of [...store.GEN_SYMS, store.LOCK_DST]) fields.set(x, null)
   for (const m of mods) {
     for (const x of m.imports) {
       if (owner.has(x) || tables.has(x) || LINKER_SYMS.has(x) || sized.has(x) || m.weak.has(x)
@@ -592,6 +592,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(locks.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} declare${users.length === 1 ? 's' : ''} lockable parameters, which ${core.label()} does not keep (no table ${store.CODES_TABLE})`)
     }
+    if (locks.length && core.imports.includes(store.LOCK_DST) && store.lockDstBits(dev.key))
+      // the core keeps a code as an LFO destination
+      decls.push([core.id, store.LOCK_DST, 'sound', store.lockDstBits(dev.key)])
     const ccs = order.flatMap(m => m.ccs.map(sym => [m.id, sym] as [string, string]))
     if (ccs.length && !tables.has(store.CCS_TABLE)) {
       const users = [...new Set(ccs.map(k => k[0]))].sort(cmp)
@@ -600,6 +603,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
+    if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no lockable field
     for (const [table, made] of [[store.CODES_TABLE, store.codeEntries], [store.CCS_TABLE, store.ccEntries]] as const)
       if (tables.has(table))
         made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))

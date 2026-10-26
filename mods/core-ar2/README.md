@@ -206,7 +206,8 @@ What it does not do:
   values, if its mod returns.
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
-- **Sounds**: 56 bits, set by the stored sound's spare bytes. The four
+- **Sounds**: 56 bits, set by the stored sound's spare bytes, 49 for mods
+  in a build with a lockable parameter (`core_lfo_dst`, below). The four
   aftertouch routes' low bytes are free in a live sound too, but there is
   no stored byte left to keep them in.
 - **voice-dac** (rytm2_mods) hooks the same velocity-route sites itself
@@ -380,6 +381,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | LFO apply | 0x4009eac0 (`jmp`, 10 B) | stock skips a slot above 41; core keeps the track's code and the offset stock would add (`core_lfo_offset`), and clears the code for a stock slot |
 | id to slot | 0x40006ea8 (`jmp`) | a pseudo id's slot is its code; the sound setter then rejects it (slot above 41), as for any stock id it can't set |
 | slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
+| sound save, load | 0x4000843a, 0x400081f6 (store.c, `st_sound_save`, `st_sound_load`) | stock saves the LFO's destination (live sound +28, a slot) as the stored sound's +100 through a table of its 42 parameters (0x401c5c7c) and loads it through the inverse (0x401c5d24), which have no entry for a code: a code would come back as a stock parameter (42 as FIN). Core keeps the code, less 41, in its sound field `core_lfo_dst` (7 bits, placed by the linker in a build with a lockable field) and writes 42 into the stored byte, which stock loads as slot 64, none of its parameters: stock, or a build that does not know the code, loads that LFO with no destination |
 | list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter |
 | menu label | 0x4004a7e8 (`jmp`) | `MOD:` and the name, through stock's `%.16s:%.32s` |
 | DST value | 0x400ffab2 (`jmp`) | the short name |
@@ -777,7 +779,11 @@ stock bytes, and that each covers whole instructions.
   as saved. Track init (0x400118e8) writes only a track's settings
   (length, scale, speed), so it moves no lock, stock's or a mod's; its
   callers are pattern init and the pattern load (row load), checked above,
-  and a third (0x400c19dc) no code refers to. On a unit (OS 1.74, 26 Oct
+  and a third (0x400c19dc) no code refers to. DST set to LCA (NRPN 1:35,
+  42), SAVE PROJECT, DST changed, the project loaded: DST is LCA again
+  (L8H6, before `core_lfo_dst`, brought it back as FIN, 18); the same
+  project loaded on stock 1.74 has DST 64 (the page shows `…`, the LFO
+  modulates nothing, the OS runs on). On a unit (OS 1.74, 26 Oct
   2026, core 0.8 with lock-check 1.3 and analoghealth) remote turns
   reached MOD:LOCK CHECK C and YES set LCC; an earlier unit run (T37)
   stopped on MOD:LOCK CHECK A because its turns were one count each, too

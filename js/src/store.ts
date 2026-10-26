@@ -26,6 +26,7 @@ export const GEN_SYMS = ['__store_gen', '__store_gen2']
 export const IDS_TABLE = 'core_store_ids'
 export const CODES_TABLE = 'core_lock_codes'
 export const CCS_TABLE = 'core_lock_ccs'
+export const LOCK_DST = 'core_lfo_dst'
 const FIRST_CODE = 42, LAST_CODE = 127
 const LOCK_SCOPES = ['sound']
 
@@ -41,7 +42,7 @@ export type Code = { mod: string; sym: string; code: number }
 export type Cc = { mod: string; sym: string; cc: number }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
 
-type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number }; ccs?: number[] }
+type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number }; ccs?: number[]; lockDst?: number }
 const range = (a: number, b: number) => Array.from({ length: b - a }, (_, i) => a + i)
 const DEVICES: Record<string, Spec> = {
   'analog-rytm-mk2': {
@@ -54,6 +55,7 @@ const DEVICES: Record<string, Spec> = {
     // the CCs no table of stock's maps on a track's channel and that are not the performances' (0x401de1f4), in the
     // order fields get them
     ccs: [8, 9, ...range(48, 64), ...range(65, 70), 84, 85, ...range(110, 117), 119],
+    lockDst: 7,                                 // core_lfo_dst: a code - 41, 0 for none
   },
   'analog-four-mk2': {                          // core-a4 (mods/core-a4/store.c)
     fixed: { sound: 32, kit: 128, global: 64 },
@@ -66,6 +68,11 @@ const DEVICES: Record<string, Spec> = {
 }
 
 export const supports = (devKey: string) => Object.hasOwn(DEVICES, devKey)
+
+/** The bits of core_lfo_dst on the device, 0 where the core keeps none. store.lock_dst_bits. */
+export function lockDstBits(devKey: string): number {
+  return spec(devKey).lockDst ?? 0
+}
 
 function spec(devKey: string): Spec {
   if (!Object.hasOwn(DEVICES, devKey)) throw new ModError(`the ${devKey} has no mod storage`)

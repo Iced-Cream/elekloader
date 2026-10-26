@@ -865,6 +865,24 @@ def test_analog_rytm_fixtures():
     assert run_rows('analog-rytm-mk2') == 7
 
 
+def test_the_lfo_destination_field_is_placed_only_with_a_lockable_field():
+    """core_lfo_dst (core-ar2 0.8): a core that imports it gets a 7-bit sound field of its own in a
+    build with a lockable field, and the symbol 0 (no field) in a build without one."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['imports'] = core['imports'] + ['core_lfo_dst']
+        core['collections']['core_lock_codes'] = {'entry': 8}
+        for lockable in (True, False):
+            mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': lockable}])
+            out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+            placed = [f for f in out.store['fields'] if f['sym'] == 'core_lfo_dst']
+            if lockable:
+                assert placed == [{'mod': 'core', 'sym': 'core_lfo_dst', 'scope': 'sound',
+                                   'offset': 0, 'bits': 7}], out.store['fields']
+            else:
+                assert placed == [], out.store['fields']
+
+
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():
     """The checks that refuse a write to a protected or kept range run before the link. With them
     made to say nothing (as a bug in them would), the image check refuses the same site, so it

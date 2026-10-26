@@ -79,6 +79,14 @@ a build has such a field:
 
 The core reads them from the table core_lock_ccs: {field descriptor, CC}.
 
+The LFO destination (core-ar2 0.8). Stock saves a sound's LFO destination as
+an index into a table of its own parameters, which has no entry for a lock
+code, so a core that keeps a mod parameter there imports the field
+core_lfo_dst: in a build with a lockable field the linker places it, as the
+core's own sound field of the device's `lock_dst` bits, and the core keeps
+the code in it; in a build without one it is not placed (its symbol is 0)
+and the mods have the whole room.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -98,6 +106,7 @@ GEN_SYMS = ('__store_gen', '__store_gen2')
 IDS_TABLE = 'core_store_ids'
 CODES_TABLE = 'core_lock_codes'
 CCS_TABLE = 'core_lock_ccs'
+LOCK_DST = 'core_lfo_dst'
 FIRST_CODE, LAST_CODE = 42, 127
 LOCK_SCOPES = ('sound',)
 
@@ -113,6 +122,7 @@ DEVICES = {
         # the CCs no table of stock's maps on a track's channel and that are not
         # the performances' (0x401de1f4), in the order fields get them
         'ccs': (8, 9) + tuple(range(48, 64)) + tuple(range(65, 70)) + (84, 85) + tuple(range(110, 117)) + (119,),
+        'lock_dst': 7,                              # core_lfo_dst: a code - 41, 0 for none
     },
     'analog-four-mk2': {                            # core-a4 (mods/core-a4/store.c)
         'fixed': {'sound': 32, 'kit': 128, 'global': 64},
@@ -126,6 +136,11 @@ DEVICES = {
 
 def supports(dev_key):
     return dev_key in DEVICES
+
+
+def lock_dst_bits(dev_key):
+    """The bits of core_lfo_dst on the device, 0 where the core keeps none."""
+    return _spec(dev_key).get('lock_dst', 0)
 
 
 def _spec(dev_key):
