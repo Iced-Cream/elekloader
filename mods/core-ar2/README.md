@@ -386,7 +386,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
 | reload | 0x400af32c (`jmp`) | RELOAD PAGE's copy: after stock's, each parameter's knob takes its value from the track's sound in the current kit's saved copy (live kits +0x4f180) |
 | knob label | 0x40037c1a, 0x40037d42, 0x400d37fa (`jsr`) | the calls of 0x400a9000 (a record's label, +0x30) in the page's two knob draws and the knob's pop-up: a parameter's page knob shows its short name |
-| knob name | 0x4003a1c6, 0x4003a8d6 (`jsr`) | the calls of 0x400a9022 (a record's name, +0x1c) in the header's pop-up as a knob turns: a parameter's page knob shows its name there, not the borrowed record's ERROR |
+| knob name | 0x4003a1c6, 0x4003a8d6 (`jsr`) | the calls of 0x400a9022 (a record's name, +0x28) in the header's pop-up as a knob turns: a parameter's page knob shows its name there, not the borrowed record's ERROR |
 
 The step, the validity check, page turns and RANDOMIZE on DST follow from
 the list, with no sites of their own. Flags need none: pseudo ids read
@@ -720,10 +720,12 @@ stock bytes, and that each covers whole instructions.
   stock DST (5) cleared it and modulated the stock slot. On the LOCK CHECK
   page four RANDOMIZE PAGEs set `lc_a` to 0, 92, 4 and 101, and RELOAD PAGE
   took it back to the saved kit's 0. On 25 Oct the page's knob A showed
-  LCA, its short name, and the SRC page kept stock's labels. Not checked: scrolling through the
-  menu (the emulator's turns did not move its cursor), RANDOMIZE on DST
-  landing on a mod parameter, a reload from a saved kit with a value other
-  than 0, and anything on a unit.
+  LCA, its short name, and the SRC page kept stock's labels. On 26 Oct, 80
+  RANDOMIZE PAGEs on the stock LFO page set DST to LCA, LCB or LCC 7 times
+  (3 of the list's 36 entries) and to stock destinations otherwise, with
+  the mod code in the sound's DST byte. Not checked: scrolling through the
+  menu (the emulator's turns did not move its cursor), a reload from a
+  saved kit with a value other than 0, and anything on a unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
