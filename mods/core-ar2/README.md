@@ -752,8 +752,8 @@ stock bytes, and that each covers whole instructions.
   to MOD:LOCK CHECK B and C and up to stock's AMP entries, and YES on
   C sets DST to LCC (the DST byte holds 44), but this emulator does the
   same with the build that stopped on MOD:LOCK CHECK A on a unit (T37), so
-  it does not show the menu works. Another emulator (elkbench's) stops on
-  A as the unit did.
+  it does not show the menu works; elkbench's emulator moves no DST menu,
+  stock's included.
   Not checked: anything on a unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
