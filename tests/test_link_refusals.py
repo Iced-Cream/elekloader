@@ -716,6 +716,17 @@ def _(B):
              [keeper(B), locking])], [codes, locking]
 
 
+@row('link', '<> give<> lockable parameters CCs, which <> does not keep (no table <>)', device='analog-rytm-mk2')
+def _(B):
+    cc = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'cc': True}])
+    codes = keeper(B)
+    codes['collections']['core_lock_codes'] = {'entry': 8}
+    both = keeper(B)
+    both['collections'].update({'core_lock_codes': {'entry': 8}, 'core_lock_ccs': {'entry': 8}})
+    return [('m gives lockable parameters CCs, which core 1 does not keep (no table core_lock_ccs)',
+             [codes, cc])], [both, cc]
+
+
 @row('link', '<> imports <> but declares no table <>', device='analog-rytm-mk2')
 def _(B):
     # check() refuses a core that imports the generation symbols without the table, unless a mod
@@ -851,7 +862,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 6
+    assert run_rows('analog-rytm-mk2') == 7
 
 
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():

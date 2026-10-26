@@ -9,7 +9,9 @@
 // no field has used, a scope that runs out is repacked under a new generation, and any change gives the lockfile its
 // new layout's ID (a hash of the layout) with the old one kept as an ancestor. A sound field declared with
 // "lock": true also gets a lock code, 42..127 (core-ar2 0.8), kept in "codes", "freed_codes" and "next_code", keys a
-// lockfile has only once a build had a lockable field. Nothing here is random.
+// lockfile has only once a build had a lockable field. A lockable field declared with "cc": true also gets a CC from the
+// device's pool, kept in "ccs" and "freed_ccs" by the field whatever its place or code, and not part of the layout ID.
+// Nothing here is random.
 import { sha } from './bytes.ts'
 import { ModError, cmpVersions, int } from './elemod.ts'
 import { dumps as pyDumps, repr, str } from './py.ts'
@@ -23,6 +25,7 @@ const MAX_BITS = 32
 export const GEN_SYMS = ['__store_gen', '__store_gen2']
 export const IDS_TABLE = 'core_store_ids'
 export const CODES_TABLE = 'core_lock_codes'
+export const CCS_TABLE = 'core_lock_ccs'
 const FIRST_CODE = 42, LAST_CODE = 127
 const LOCK_SCOPES = ['sound']
 
@@ -32,11 +35,14 @@ export type Lock = {
   split: { track: number; pattern: number }; generation: Record<string, number>; next: Record<string, number>
   fields: Field[]; freed: Field[]
   codes?: Code[]; freed_codes?: Code[]; next_code?: number
+  ccs?: Cc[]; freed_ccs?: Cc[]
 }
 export type Code = { mod: string; sym: string; code: number }
+export type Cc = { mod: string; sym: string; cc: number }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
 
-type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number } }
+type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number }; ccs?: number[] }
+const range = (a: number, b: number) => Array.from({ length: b - a }, (_, i) => a + i)
 const DEVICES: Record<string, Spec> = {
   'analog-rytm-mk2': {
     fixed: { sound: 24, kit: 64, global: 40 },
@@ -45,6 +51,9 @@ const DEVICES: Record<string, Spec> = {
     store: 4352 - 10,                           // bytes after the header
     items: { track: 129 * 13, pattern: 129 },
     split: { track: 2, pattern: 4 },            // a new lockfile's
+    // the CCs no table of stock's maps on a track's channel and that are not the performances' (0x401de1f4), in the
+    // order fields get them
+    ccs: [8, 9, ...range(48, 64), ...range(65, 70), 84, 85, ...range(110, 117), 119],
   },
   'analog-four-mk2': {                          // core-a4 (mods/core-a4/store.c)
     fixed: { sound: 32, kit: 128, global: 64 },
@@ -103,6 +112,12 @@ export function parseLocks(m: Record<string, any>): string[] {
   return st.filter((f: unknown) => isDict(f) && f.lock === true).map((f: Record<string, any>) => f.sym)
 }
 
+/** A mod document's "storage" -> the syms of its fields with a CC, in order. */
+export function parseCcs(m: Record<string, any>): string[] {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return st.filter((f: unknown) => isDict(f) && f.cc === true).map((f: Record<string, any>) => f.sym)
+}
+
 /** A mod document's "storage" -> [sym, scope, bits][]. */
 export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const out: [string, string, number][] = []
@@ -110,10 +125,13 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const st = Object.hasOwn(m, 'storage') ? m.storage : []
   if (!Array.isArray(st)) throw new ModError('"storage" is a list of fields')
   for (const f of st) {
-    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock'].includes(k)))
+    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc'].includes(k)))
       throw new ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-    if (Object.hasOwn(f, 'lock') && typeof f.lock !== 'boolean')
-      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: "lock" is true or false`)
+    for (const k of ['lock', 'cc'])
+      if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean')
+        throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: "${k}" is true or false`)
+    if (f.cc && !f.lock)
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can have a CC`)
     if (f.lock && !LOCK_SCOPES.includes(f.scope))
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only ${LOCK_SCOPES.join(' and ')} fields can be lockable`)
     const sym = Object.hasOwn(f, 'sym') ? f.sym : null
@@ -221,6 +239,22 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
     if ((lock.codes as Code[]).some(c => !placed.has(c.mod + '\0' + c.sym)))
       throw new ModError('lockfile: a code for a field that is not a placed sound field')
   }
+  if (Object.hasOwn(lock, 'ccs') || Object.hasOwn(lock, 'freed_ccs')) {
+    const pool = spec(devKey).ccs ?? [], seen = new Set<number>()
+    for (const k of ['ccs', 'freed_ccs']) {
+      const cs = lock[k]
+      if (!Array.isArray(cs)) throw new ModError(`lockfile: "${k}" is a list`)
+      for (const c of cs) {
+        if (!isDict(c) || !sameKeys(c, ['mod', 'sym', 'cc']) || typeof c.mod !== 'string' || typeof c.sym !== 'string'
+          || !whole(c.cc) || !pool.includes(c.cc) || seen.has(c.cc))
+          throw new ModError(`lockfile: a bad entry in "${k}"`)
+        seen.add(c.cc)
+      }
+    }
+    const coded = new Set(((lock.codes ?? []) as Code[]).map(c => c.mod + '\0' + c.sym))
+    if ((lock.ccs as Cc[]).some(c => !coded.has(c.mod + '\0' + c.sym)))
+      throw new ModError('lockfile: a CC for a field that has no lock code')
+  }
 }
 
 const bump = (g: number) => (g >= 255 ? 1 : g + 1)
@@ -229,9 +263,9 @@ const byModSym = (a: { mod: string; sym: string }, b: { mod: string; sym: string
 const ceilDiv = (a: number, b: number) => Math.floor((a + b - 1) / b)
 
 /** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]; locks: [mod id, sym] of the lockable
- * fields. -> [the new lockfile, notes]. The lockfile given is not changed. store.allocate. */
+ * fields; ccs: those of them with a CC. -> [the new lockfile, notes]. The lockfile given is not changed. store.allocate. */
 export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core: string | null = null,
-  locks: [string, string][] = []): [Lock, string[]] {
+  locks: [string, string][] = [], ccs: [string, string][] = []): [Lock, string[]] {
   const notes: string[] = []
   let lock: Lock
   let isNew: boolean
@@ -344,6 +378,7 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   lock.fields = fields.sort((a, b) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset)
   const recoded = setCodes(lock, new Set(locks.map(([m, sy]) => keyOf(m, sy))), new Set(kept.map(f => keyOf(f.mod, f.sym))),
     new Set(added.filter(f => back.has(keyOf(f.mod, f.sym))).map(f => keyOf(f.mod, f.sym))), notes)
+  setCcs(lock, new Set(ccs.map(([m, sy]) => keyOf(m, sy))), spec(devKey).ccs ?? [], notes)
   if (isNew) {
     lock.id = idStr(layoutId(lock))
     notes.unshift(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by builds with other layouts load their mod data at defaults`)
@@ -411,6 +446,49 @@ function setCodes(lock: Lock, want: Set<string>, kept: Set<string>, back: Set<st
   return changed
 }
 
+/** Give each field (keys mod\0sym in want) its CC from pool, in lock (changed in place). Not part of the layout ID: a
+ * CC says nothing of where data is. store._ccs. */
+function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[]): void {
+  const had = lock.ccs ?? [], hadFreed = lock.freed_ccs ?? []
+  if (!want.size && !had.length && !hadFreed.length) return
+  const key = (c: { mod: string; sym: string }) => c.mod + '\0' + c.sym
+  const ccs: Cc[] = [], freed: Cc[] = hadFreed.map(c => ({ ...c }))
+  for (const c of had) {
+    if (want.has(key(c))) ccs.push({ ...c })
+    else {
+      freed.push({ ...c })
+      notes.push(`${c.mod} ${c.sym}: CC ${c.cc} freed, and kept for it until the unused CCs run out`)
+    }
+  }
+  const used = new Set([...ccs, ...freed].map(c => c.cc))
+  const unused = pool.filter(cc => !used.has(cc))
+  const have = new Set(ccs.map(key))
+  const todo = [...want].filter(k => !have.has(k)).map(k => { const [mod, sym] = k.split('\0'); return { mod, sym } }).sort(byModSym)
+  for (const { mod, sym } of todo) {
+    const k = mod + '\0' + sym
+    const same = freed.filter(c => key(c) === k)
+    let c: Cc
+    if (same.length) {
+      c = same[same.length - 1]
+      freed.splice(freed.indexOf(c), 1)
+      notes.push(`${mod} ${sym}: back with CC ${c.cc}`)
+    } else if (unused.length) {
+      c = { mod, sym, cc: unused.shift()! }
+      notes.push(`${mod} ${sym}: CC ${c.cc}`)
+    } else if (freed.length) {                  // the never-used CCs are gone: the one freed longest ago
+      const old = freed.shift()!
+      c = { mod, sym, cc: old.cc }
+      notes.push(`${mod} ${sym}: CC ${c.cc} (was ${old.mod} ${old.sym}'s)`)
+    } else {
+      notes.push(`${mod} ${sym}: no CC left (all ${pool.length} are taken); it is on MIDI by its NRPN only`)
+      continue
+    }
+    ccs.push(c)
+  }
+  lock.ccs = ccs.sort((a, b) => a.cc - b.cc)
+  lock.freed_ccs = freed
+}
+
 /** -> [{name: value}, the IDs' table entries] for the linker. store.symbols. */
 export function symbols(lock: Lock): [Map<string, number>, Uint8Array[]] {
   const g = lock.generation, sp = lock.split
@@ -429,6 +507,17 @@ export function codeEntries(lock: Lock): Uint8Array[] {
     const out = new Uint8Array(8), dv = new DataView(out.buffer)
     dv.setUint32(0, desc.get(c.mod + '\0' + c.sym)!)
     dv.setUint32(4, c.code)
+    return out
+  })
+}
+
+/** -> the table core_lock_ccs' entries: {field descriptor, CC}, 8 bytes each, by CC. store.cc_entries. */
+export function ccEntries(lock: Lock): Uint8Array[] {
+  const desc = new Map(lock.fields.map(f => [f.mod + '\0' + f.sym, ((SCOPE_NUM[f.scope] << 28) | (f.bits << 22) | f.offset) >>> 0]))
+  return (lock.ccs ?? []).map(c => {
+    const out = new Uint8Array(8), dv = new DataView(out.buffer)
+    dv.setUint32(0, desc.get(c.mod + '\0' + c.sym)!)
+    dv.setUint32(4, c.cc)
     return out
   })
 }

@@ -229,7 +229,9 @@ Nothing is built unless all of these pass:
 ### Mod storage
 
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
-`global`, `track`, `pattern` or `project`) and `bits` (1-32). Only a core
+`global`, `track`, `pattern` or `project`) and `bits` (1-32), and on a
+sound field `"lock": true` for a lockable parameter (core-ar2 0.8), with
+`"cc": true` for one that also gets a MIDI CC. Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -246,7 +248,10 @@ linker:
   one byte each, high to low) and `__store_gen2` (the pattern and project
   generations, then T and P);
 - adds entries to `core_store_ids`: the layout's ID, then its ancestors,
-  newest first;
+  newest first; to `core_lock_codes`, `{field descriptor, code}` for each
+  lockable field; and to `core_lock_ccs`, `{field descriptor, CC}` for each
+  that has a CC (a lockable field or a CC with a core that has no such table
+  is refused);
 - appends the lockfile to the image, after the mods' image: `ELKSTORE`,
   its length (4 bytes, big-endian), then its text. Nothing reads it on the
   unit; `elekloader.patch --lockfile-from` takes it back out of a build;
@@ -263,7 +268,9 @@ place while its mod, `sym`, `scope` and `bits` stay the same. `id` is the
 first 4 bytes of a SHA-256 of the layout (`store.layout_id`: the format, the
 device, `split`, `generation`, `next`, `fields` and `freed`, not the ID or
 the ancestors), taken whenever the layout changes; a lockfile whose ID came
-from somewhere else keeps it until then. docs/ADAPTING.md ("Mod storage
+from somewhere else keeps it until then. Lockable fields add `codes`,
+`freed_codes` and `next_code` (part of the layout ID), and fields with a CC
+`ccs` and `freed_ccs` (`mod`, `sym`, `cc`; not part of it). docs/ADAPTING.md ("Mod storage
 (core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4 0.1, Analog
 Four MKII)") has the rest.
 

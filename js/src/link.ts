@@ -89,6 +89,7 @@ export class Mod2 implements AnyMod {
   copied: [number, number, number][]
   storage: [string, string, number][]
   locks: string[]
+  ccs: string[]
   regions: Region[]
   names: string[]
   needsCore: string | null
@@ -190,6 +191,7 @@ export class Mod2 implements AnyMod {
     try {
       this.storage = store.parseDecls(doc)
       this.locks = store.parseLocks(doc)
+      this.ccs = store.parseCcs(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
       throw e
@@ -590,11 +592,17 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(locks.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} declare${users.length === 1 ? 's' : ''} lockable parameters, which ${core.label()} does not keep (no table ${store.CODES_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks)
+    const ccs = order.flatMap(m => m.ccs.map(sym => [m.id, sym] as [string, string]))
+    if (ccs.length && !tables.has(store.CCS_TABLE)) {
+      const users = [...new Set(ccs.map(k => k[0]))].sort(cmp)
+      throw new ModError(`${users.join(', ')} give${users.length === 1 ? 's' : ''} lockable parameters CCs, which ${core.label()} does not keep (no table ${store.CCS_TABLE})`)
+    }
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
-    if (tables.has(store.CODES_TABLE))
-      store.codeEntries(newLock).forEach((data, i) => entries.get(store.CODES_TABLE)!.push([-1, '', i, core, { to: store.CODES_TABLE, order: -1, data, relocs: [], claims: [], i }]))
+    for (const [table, made] of [[store.CODES_TABLE, store.codeEntries], [store.CCS_TABLE, store.ccEntries]] as const)
+      if (tables.has(table))
+        made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))
     const taken = new Set(order.flatMap(m => m.exports))
     for (const nm of storeSyms.keys())
       if (taken.has(nm) || LINKER_SYMS.has(nm)) throw new ModError(`the storage field ${nm} has the name of a symbol a mod exports`)

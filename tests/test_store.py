@@ -235,6 +235,25 @@ def test_lockable_fields_get_codes_that_follow_them():
     store.check_lock(l3, DEV)
 
 
+def test_ccs_follow_their_fields_and_not_the_layout():
+    d = [('a', 'x', 'sound', 7), ('b', 'z', 'sound', 3)]
+    xz = [('a', 'x'), ('b', 'z')]
+    l1, _ = store.allocate(None, d, DEV, None, xz, xz)
+    assert [(c['sym'], c['cc']) for c in l1['ccs']] == [('x', 8), ('z', 9)]
+    assert store.cc_entries(l1)[1] == (1 << 28 | 3 << 22 | 7).to_bytes(4, 'big') + (9).to_bytes(4, 'big')
+    l0, _ = store.allocate(None, d, DEV, None, xz)
+    assert l1['id'] == l0['id']                     # a CC is not where data is
+    l2, notes = store.allocate(l1, [('a', 'x', 'sound', 9), d[1]], DEV, None, xz, xz)
+    assert l2['codes'][-1]['code'] == 44 and l2['ccs'] == l1['ccs']
+    l3, notes = store.allocate(l2, d[1:], DEV, None, xz[1:], xz[1:])
+    assert l3['freed_ccs'] == [{'mod': 'a', 'sym': 'x', 'cc': 8}]
+    store.check_lock(l3, DEV)
+    assert 'only a lockable field' in refused(store.parse_decls,
+                                              {'storage': [{'sym': 's', 'scope': 'sound', 'bits': 3, 'cc': True}]})
+    assert 'no lock code' in refused(store.check_lock, dict(store.fresh(DEV), ccs=[{'mod': 'a', 'sym': 'x', 'cc': 8}],
+                                                            freed_ccs=[]), DEV)
+
+
 def test_a_lockfile_without_lockable_fields_keeps_its_id():
     l1, _ = store.allocate(None, [('a', 'x', 'kit', 4)], DEV)
     l2, _ = store.allocate(l1, [('a', 'x', 'kit', 4)], DEV, None, [])

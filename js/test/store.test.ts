@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, codeEntries, dumps, fromImage, layoutId, parseDecls, parseLocks, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, codeEntries, dumps, fromImage, layoutId, parseCcs, parseDecls, parseLocks, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -54,6 +54,27 @@ test('lockable fields: the same lock codes, notes and table entries', () => {
   }
 })
 
+test('CCs: the same CCs, notes and table entries', () => {
+  for (const [name, run] of Object.entries<any>(V.cc_runs)) {
+    let lock: Lock | null = null
+    run.steps.forEach(([decls, locks, ccs]: [Decl[], [string, string][], [string, string][]], i: number) => {
+      const want = run.results[i]
+      if (want.error) {
+        assert.throws(() => allocate(lock, decls, DEV, null, locks, ccs), (e: Error) => e.message === want.error, `${name} step ${i}`)
+        return
+      }
+      const [l, notes] = allocate(lock, decls, DEV, null, locks, ccs)
+      lock = l
+      assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
+      assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
+      assert.deepEqual(codeEntries(l).map(hex), want.codes, `${name} step ${i}: codes`)
+      assert.deepEqual(ccEntries(l).map(hex), want.ccs, `${name} step ${i}: CCs`)
+      assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
+      assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
+    })
+  }
+})
+
 test('the lockfiles it refuses, with the same messages, and the ones it keeps as they are', () => {
   for (const [name, c] of Object.entries<any>(V.locks)) {
     if (c.error === null) assert.deepEqual(allocate(c.lock, [], DEV)[0], c.result, name)
@@ -67,6 +88,7 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
     else {
       assert.deepEqual(parseDecls(c.doc), c.ok, name)
       assert.deepEqual(parseLocks(c.doc), c.locks, name)
+      assert.deepEqual(parseCcs(c.doc), c.ccs, name)
     }
   }
 })

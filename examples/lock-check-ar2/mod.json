@@ -19,7 +19,8 @@
    "sym": "lc_a",
    "scope": "sound",
    "bits": 7,
-   "lock": true
+   "lock": true,
+   "cc": true
   },
   {
    "sym": "lc_b",
@@ -31,7 +32,8 @@
    "sym": "lc_c",
    "scope": "sound",
    "bits": 10,
-   "lock": true
+   "lock": true,
+   "cc": true
   }
  ],
  "contribute": [

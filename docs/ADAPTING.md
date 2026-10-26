@@ -1719,9 +1719,10 @@ Checked in the emulator only.
 
 A lockable parameter is NRPN MSB 4, LSB its lock code - 42, on its track's
 channel (or the auto channel, for the active track), with its value in the
-data entry MSB (above 127: the whole value, in the MSB and the LSB). The first 33 codes (42..74) also have a CC, from the 33 a
-track's channel leaves unused, in order: 8, 9, 48..63, 65..69, 84, 85,
-110..116, 119 (code 42 is CC 8, code 74 is CC 119). Core sets the parameter
+data entry MSB (above 127: the whole value, in the MSB and the LSB). A
+lockable field declared with `"cc": true` as well also gets a CC, from the
+33 a track's channel leaves unused: 8, 9, 48..63, 65..69, 84, 85,
+110..116, 119, given in that order. Core sets the parameter
 in the track's sound of the current kit when either comes in, clamped to
 the parameter's `min..max`, and sends it when the mod's page knob
 turns it, as stock sends a stock parameter: while PARAM OUTPUT is on, as an
@@ -1729,11 +1730,18 @@ NRPN or a CC as it is set (MIDI CONFIG > PORT CONFIG; a parameter with no
 CC sends nothing as CC), on the channel stock uses. The mod does nothing
 for this; its knob's `delta` turns the value, and core sends it after.
 
-Lock codes are a build's own (Lockable parameters, above), so a parameter's
-NRPN and CC numbers are too: a controller mapped to one build's numbers
-needs remapping after a build whose lockfile gave the parameter another
-code, and a parameter whose code is above 74 has no CC. Checked in the
-emulator only.
+The CC comes from the lockfile, apart from the code, and stays with the
+field (its mod and `sym`) from build to build, through a resize or a new
+code: a controller mapped to it keeps working. A field that leaves the
+build or drops `"cc"` keeps its CC reserved and gets it back; once the
+never-used CCs run out, the one freed longest ago goes to a new field, and
+when none is left a field gets no CC (the build says so) and is on MIDI by
+its NRPN only. The lockfile keeps them in `ccs` and `freed_ccs`, which are
+not part of the layout ID: CCs say nothing of where data sits. The linker
+writes `{field descriptor, CC}` for each into core's table `core_lock_ccs`.
+The NRPN follows the code, so it is a build's own (Lockable parameters,
+above): a controller mapped to it needs remapping after a build whose
+lockfile gave the parameter another code. Checked in the emulator only.
 
 ### Parameter pages (core-a4 0.2, Analog Four MKII)
 

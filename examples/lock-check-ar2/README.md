@@ -4,11 +4,11 @@ A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), fro
 It declares three sound fields with `"lock": true` and registers them in
 `core_lock_params`:
 
-| field | bits | code (from a new lockfile) | DST menu | DST value | range |
-|---|---|---|---|---|---|
-| `lc_a` | 7 | 42 | MOD:LOCK CHECK A | LCA | 0..127, page knob id 1 |
-| `lc_b` | 4 | 43 | MOD:LOCK CHECK B | LCB | 0..15 |
-| `lc_c` | 10 | 44 | MOD:LOCK CHECK C | LCC | 0..1000, page knob id 2 |
+| field | bits | code (from a new lockfile) | CC (`"cc": true`, from a new lockfile) | DST menu | DST value | range |
+|---|---|---|---|---|---|---|
+| `lc_a` | 7 | 42 | 8 | MOD:LOCK CHECK A | LCA | 0..127, page knob id 1 |
+| `lc_b` | 4 | 43 | none | MOD:LOCK CHECK B | LCB | 0..15 |
+| `lc_c` | 10 | 44 | 9 | MOD:LOCK CHECK C | LCC | 0..1000, page knob id 2 |
 
 A bar along the bottom edge shows the offset track 1's LFO gives either one
 (`core_lfo_offset`), from the middle, a pixel per stock knob step; a small

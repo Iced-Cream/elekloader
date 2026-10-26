@@ -7,8 +7,10 @@
  * data entry MSB (0..127; the LSB is ignored), or for a parameter above 127
  * in both (0..16383), as stock sends a fine parameter's. Stock leaves 33 CCs on a
  * track's channel unused (none of its tables maps them, and they are not the
- * performances' CCs, 0x401de1f4); the first 33 codes, 42..74, get them in
- * order (CC_POOL), so a parameter's CC, like its NRPN, follows its code:
+ * performances' CCs, 0x401de1f4); a parameter declared "cc": true gets one of
+ * them from the lockfile, which keeps it for the field from build to build
+ * whatever its code, and the linker gives core the table core_lock_ccs,
+ * {field descriptor, CC}:
  *
  *   - in: the track's NRPN in (0x400b2b26) and CC in (0x400b0544) give a mod
  *     parameter's to core (midi.s), which sets the parameter in the track's
@@ -32,17 +34,14 @@
 #define SEND_NRPN ((void (*)(int, int, int, int))0x40085962)     /* (channel, nrpn, value, 1) */
 #define SEND_CC ((void (*)(int, int, int))0x4008591a)            /* (channel, cc, value) */
 
-static const unsigned char CC_POOL[] = {
-    8, 9, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
-    63, 65, 66, 67, 68, 69, 84, 85, 110, 111, 112, 113, 114, 115, 116, 119,
-};
-#define CCS (sizeof CC_POOL)
+extern const unsigned core_lock_ccs[];                          /* {field, CC}..., {0, 0} */
 
 struct core_lock_param;
 const struct core_lock_param *core_lock_by_code(unsigned code);
 const struct core_lock_param *core_lock_knob(void *view, int id, int *track, unsigned *code,
                                              unsigned char **s);
 unsigned core_lock_field(const struct core_lock_param *p);
+int core_lock_code(unsigned field);
 int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
 int core_lock_shift(const struct core_lock_param *p);
@@ -82,17 +81,29 @@ int core_nrpn_in(int nrpn, int value, int track)
 /* 0x400b0544 (midi.s): a track's CC; 1 when it was a mod parameter's */
 int core_cc_in(int cc, int value, int track)
 {
-    unsigned i;
+    const unsigned *c;
+    unsigned code;
     if ((unsigned)track >= 12)
         return 0;
-    for (i = 0; i < CCS; i++)
-        if (CC_POOL[i] == cc) {
-            if (!core_lock_by_code(FIRST_CODE + i))
+    for (c = core_lock_ccs; c[0]; c += 2)
+        if (c[1] == (unsigned)cc) {
+            code = core_lock_code(c[0]);
+            if (!core_lock_by_code(code))
                 return 0;
-            set(FIRST_CODE + i, value & 127, 1, track);
+            set(code, value & 127, 1, track);
             return 1;
         }
     return 0;
+}
+
+/* a field's CC, or -1 */
+static int cc_of(unsigned field)
+{
+    const unsigned *c;
+    for (c = core_lock_ccs; c[0]; c += 2)
+        if (c[0] == field)
+            return c[1];
+    return -1;
 }
 
 /* pages.s: a mod's knob took a turn (view, id) */
@@ -100,7 +111,7 @@ void core_midi_knob(void *view, int id)
 {
     unsigned code, cfg;
     unsigned char *s;
-    int track, v, sh;
+    int track, v, sh, cc;
     const struct core_lock_param *p = core_lock_knob(view, id, &track, &code, &s);
     if (!p)
         return;
@@ -115,8 +126,8 @@ void core_midi_knob(void *view, int id)
         SEND_NRPN(OUT_CHANNEL(0), MSB << 7 | (code - FIRST_CODE), sh ? v : v << 7, 1);
         break;
     case 1:
-        if (code - FIRST_CODE < CCS)
-            SEND_CC(OUT_CHANNEL(0), CC_POOL[code - FIRST_CODE], v >> sh);
+        if ((cc = cc_of(core_lock_field(p))) >= 0)
+            SEND_CC(OUT_CHANNEL(0), cc, v >> sh);
         break;
     }
 }

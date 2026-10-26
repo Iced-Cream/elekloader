@@ -147,6 +147,6 @@
   {"addr": "0x4003ab86", "stock": "222a008c52814c4018022542008c2f0a4eb940078580", "op": "jmp", "target": "core_cycle"},
   {"addr": "0x400cbd3e", "stock": "6710", "op": "bytes", "new": "6010", "kind": "code"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_machines": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_machines": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8, "core_lock_ccs": 8},
  "resources": {"names": ["timer:DTIM0"]}
 }
