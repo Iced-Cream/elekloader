@@ -1684,8 +1684,9 @@ receiving build's own; a project of a layout the build doesn't read loads
 without them. Lock codes are a build's own, so a mod lock never lands on
 another build's parameter.
 
-Limits (0.8): an NRPN or CC received while live recording sets the
-parameter but records no p-lock. Checked in the emulator only.
+Live recording records a mod parameter as it records a stock one: its
+knob turned, or its NRPN or CC received, locks the value on the step the
+track plays (a lock trig where the step has no trig).
 
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 

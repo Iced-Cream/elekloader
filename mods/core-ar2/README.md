@@ -404,8 +404,10 @@ number: stock returns it in `%d0`, and gcc reads a returned pointer from
 
 The second part of the lock service (docs/ADAPTING.md, "Mod p-locks
 (core-ar2 0.8, Analog Rytm MKII)"): a lockable parameter is p-locked like a
-stock one, with a trig held and its page knob turned, and the mod reads the
-playing trig's value with `core_lock_value(track, field)`.
+stock one, with a trig held and its page knob turned, or by live
+recording (its knob turned, or its NRPN or CC received, while live
+recording runs), and the mod reads the playing trig's value with
+`core_lock_value(track, field)`.
 
 A pattern keeps its p-locks in a pool of 72 rows of 66 bytes, `[code]
 [track][64 step bytes]`; stock's codes are 0..41, a mod parameter's row
@@ -552,6 +554,7 @@ table `core_lock_ccs`, `{field descriptor, CC}`.
 |---|---|---|
 | NRPN in | 0x400b2b26 (`jmp`) | a track's NRPN in (obj, nrpn, value, track, flag), the track's channel's and the auto channel's: an NRPN of MSB 4 on a drum track is core's, which sets the parameter in the track's sound of the current kit, clamped to `min..max` (an LSB with no parameter is dropped); any other goes on to stock |
 | CC in | 0x400b0544 (`jmp`) | a track's CC in (obj, cc, value, track, flag): a CC in `core_lock_ccs` whose field has a parameter is core's, set as above; any other goes on to stock |
+| live record | `core_lock_record` (rows.c), from the NRPN and CC in above and `core_param_delta` | while live recording runs (0x40036370), the value a mod parameter's knob or MIDI gives the sound is locked on the step the track plays, as stock's live record (0x400af762) finds it, with a lock trig added to a step without a trig |
 | knob out | `core_param_delta` (pages.s) | after a mod's `delta` takes a turn of a lockable parameter's knob, core sends it as stock's parameter out (0x400a9754) sends a stock one: only while PARAM OUTPUT is on (MIDI CONFIG +160, 0x400b56c0), as an NRPN (+112 = 0, 0x40085962) or a CC (+112 = 1, 0x4008591a; none for a field without a CC), on the channel stock's 0x400a9844 gives |
 
 Checked in the emulator (dtboot, OS 1.74, `examples/lock-check-ar2` 1.2,
@@ -564,10 +567,16 @@ set to CC), three steps of knob A send `BD 63 04 BD 62 00 BD 06 65 BD 26 00`
 and the next two values as NRPN, as a stock LFO knob's turn sends `BD 63 01
 BD 62 20 BD 06 71 BD 26 00`, and `BD 08 65 BD 08 66 BD 08 67` as CC. With
 the CCs from the lockfile (lock-check 1.3: A CC 8, C CC 9), CC 9 value 100
-sets C to 800 (its coarse step) and knob B sends `BD 09 64` as CC. Not
-checked: the clamp of LOCK CHECK B (0..15) from MIDI, an NRPN or CC while
-live recording (core records no p-lock from it), what the knob sends with a
-trig held or in scene edit, a unit.
+sets C to 800 (its coarse step) and knob B sends `BD 09 64` as CC. On 26
+Oct (lock-check 1.3): NRPN 4:1 with 15, 100 or 127 sets B to 15, and NRPN
+4:2 with 16383 sets C to 1000; with a trig held, or a scene's or a
+performance's pad held, knob A sends nothing, as a stock knob sends
+nothing there. In live recording, 150 turns of knob A over a bar lock all
+16 steps, as a stock knob's do (stock's SRC TUN, the same turns), and CC 8
+and CC 9 lock A and C (two rows) on the steps playing as they arrive, as
+CC 16 locks stock's TUN; the same turns and CCs while playing without
+recording, or in grid recording, lock nothing. Not checked on a unit:
+live recording.
 
 Values above 127 (0.8) follow stock's fine parameters: a p-lock (two rows,
 above) and an NRPN (both data bytes) hold the whole value, up to 16383; a
@@ -759,7 +768,16 @@ stock bytes, and that each covers whole instructions.
   shows its lock's value (it showed ERR before 0.8's value text), and a
   stock knob its own. With DST on LCA, turning DST scrolls the menu down
   to MOD:LOCK CHECK B and C and up to stock's AMP entries, and YES on
-  C sets DST to LCC (the DST byte holds 44). On a unit (OS 1.74, 26 Oct
+  C sets DST to LCC (the DST byte holds 44). Also on 26 Oct: PAGE + RECORD,
+  PAGE + PLAY and PAGE + STOP (copy, clear, paste) take a page's mod locks
+  away and bring them back, both of C's rows included; a paste over a page
+  whose locks changed puts the copied ones back and drops the new; PAGE +
+  STOP again (undo) brings the changed ones back. A scene lock saved with
+  SAVE PROJECT, changed, and loaded back after another project, comes back
+  as saved. Track init (0x400118e8) writes only a track's settings
+  (length, scale, speed), so it moves no lock, stock's or a mod's; its
+  callers are pattern init and the pattern load (row load), checked above,
+  and a third (0x400c19dc) no code refers to. On a unit (OS 1.74, 26 Oct
   2026, core 0.8 with lock-check 1.3 and analoghealth) remote turns
   reached MOD:LOCK CHECK C and YES set LCC; an earlier unit run (T37)
   stopped on MOD:LOCK CHECK A because its turns were one count each, too
@@ -767,9 +785,9 @@ stock bytes, and that each covers whole instructions.
   copy, the lock rows through a power cycle, a scene lock and a
   performance depth on the knob and in the bar, pad pressure, RELOAD and
   RANDOMIZE PAGE, NRPN and CC, and 75 s of play with the LFO on LCA (CPU
-  75-85 %, no dropouts). Not checked on a unit: page copy and paste, track
-  init, a scene entry through a project's save and load, and MIDI's edge
-  cases.
+  75-85 %, no dropouts). Not checked on a unit: page copy and paste, a
+  scene entry through a project's save and load, MIDI's clamps, and live
+  recording.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES

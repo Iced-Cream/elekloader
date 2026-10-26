@@ -47,6 +47,7 @@ int core_lock_max(const struct core_lock_param *p);
 int core_lock_shift(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
+void core_lock_record(int track, int code, int value);
 
 /* the parameter of a code in the track's sound of the current kit, from an
  * NRPN's 14-bit value or a CC's 7, clamped to its range. A parameter up to
@@ -65,6 +66,7 @@ static void set(unsigned code, int value, int cc, int track)
     value = value < core_lock_min(p) ? core_lock_min(p) : value > core_lock_max(p) ? core_lock_max(p) : value;
     core_store_set(core_lock_field(p),
                    (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + 42 + 152 * track, 0, value);
+    core_lock_record(track, code, value);
 }
 
 /* 0x400b2b26 (midi.s): a track's NRPN (MSB << 7 | LSB) and its 14-bit
@@ -106,7 +108,8 @@ static int cc_of(unsigned field)
     return -1;
 }
 
-/* pages.s: a mod's knob took a turn (view, id) */
+/* pages.s: a mod's knob took a turn (view, id): live recording locks the
+ * value (rows.c), and PARAM OUTPUT sends it */
 void core_midi_knob(void *view, int id)
 {
     unsigned code, cfg;
@@ -115,11 +118,12 @@ void core_midi_knob(void *view, int id)
     const struct core_lock_param *p = core_lock_knob(view, id, &track, &code, &s);
     if (!p)
         return;
+    v = (int)core_store_get(core_lock_field(p), s, 0);
+    v = v < 0 ? 0 : v > core_lock_max(p) ? core_lock_max(p) : v;
+    core_lock_record(track, code, v);
     cfg = MIDI_CONFIG(APP());
     if (!PARAM_OUT(cfg))
         return;
-    v = (int)core_store_get(core_lock_field(p), s, 0);
-    v = v < 0 ? 0 : v > core_lock_max(p) ? core_lock_max(p) : v;
     sh = core_lock_shift(p);
     switch (PARAM_OUT_KIND(cfg)) {
     case 0:

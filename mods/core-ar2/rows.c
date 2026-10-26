@@ -33,6 +33,9 @@
  *   - the sound parameter set's lock calls (vtable +60 get, +64 set, +68
  *     clear, +72 turn) take a mod parameter's knob (its page id, lock.c)
  *     with a trig held;
+ *   - live recording: a mod parameter's knob turned and its NRPN or CC
+ *     received (pages.s, midi.c) lock the value on the step the track
+ *     plays, as stock's live record (0x400af762) locks its own;
  *   - playback (0x4009a954, a trig's locks): core notes the trig's mod
  *     locks per track, which mods read with core_lock_value.
  *
@@ -70,6 +73,17 @@
 #define STOCK_LOCK_SET ((int (*)(void *, int, int, int))0x400a9926)
 #define STOCK_LOCK_CLEAR ((int (*)(void *, int, int))0x400a99c2)
 #define STOCK_LOCK_TURN ((int (*)(void *, int, int, int))0x400a8560)
+#define REC_STATE ((unsigned (*)(void))0x401816f4)
+#define LIVE_RECORDING ((unsigned char (*)(unsigned))0x40036370)
+#define SEQUENCER ((unsigned (*)(void))0x40181790)
+#define PLAY_STEP ((int (*)(unsigned, int))0x4003532c)          /* (sequencer, track) */
+#define SCALED ((unsigned char (*)(unsigned))0x400c29f8)        /* the track's own scale */
+#define SCALED_STEP ((int (*)(unsigned, int))0x400c2a2c)
+#define QUANTIZED ((signed char (*)(unsigned))0x400c0e6e)
+#define QUANTIZED_STEP ((signed char (*)(unsigned, int))0x400c12ae)
+#define HAS_TRIG ((unsigned char (*)(unsigned, int))0x400bff7e)
+#define HAS_LOCK_TRIG ((unsigned char (*)(unsigned, int))0x400c000e)
+#define ADD_LOCK_TRIG ((void (*)(unsigned, int, int))0x400c2698)
 
 #define LIVE_PATTERNS 0x407c89e3u               /* the live project +24: 129 objects */
 #define PATTERN_SIZE 85760u
@@ -622,6 +636,31 @@ int core_rows_paste(unsigned rec, int step, int code, int value)
     value >>= 8;
     p = core_lock_by_code(code);
     return put(a, code, p ? clamp(p, value) : value < 0 ? 0 : value > 127 ? 127 : value);
+}
+
+/* ---- live recording ---- */
+
+/* the value (0..16383) a mod parameter's knob or MIDI gave the track's
+ * sound: while live recording runs, it is locked on the step the track
+ * plays, found as stock's live record finds it (0x400af762), which adds a
+ * lock trig to a step without a trig */
+void core_lock_record(int track, int code, int value)
+{
+    unsigned app, rec;
+    int step;
+    if ((unsigned)track >= 13 || !LIVE_RECORDING(REC_STATE()))
+        return;
+    step = PLAY_STEP(SEQUENCER(), track);
+    app = APP();
+    rec = TRACK_REC(CURRENT_PATTERN(app), track);
+    if (SCALED(rec))
+        step = SCALED_STEP(rec, step);
+    if (QUANTIZED(rec) == 1) {
+        if ((step = QUANTIZED_STEP(rec, step)) < 0)
+            return;
+    } else if (!HAS_TRIG(rec, step) && !HAS_LOCK_TRIG(rec, step))
+        ADD_LOCK_TRIG(rec, step, 1);
+    core_rows_paste(rec, step, code, value << 8);
 }
 
 /* ---- playback: the trig's locks (0x4009a954: track, out, the step's
