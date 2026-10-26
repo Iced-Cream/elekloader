@@ -808,7 +808,13 @@ stock bytes, and that each covers whole instructions.
   4:2 at 16383 setting C to 1000. Both flashes came back in 15 s. Then,
   on stock 1.74 on the unit, that project (DST LCA) loaded with DST None
   (`…`), and kept it through two rounds of SAVE PROJECT, another
-  project's load and a load back.
+  project's load and a load back. By hand on the unit (L8H9): the DST
+  list ends with MOD:LOCK CHECK A and C, without B; knob A with a trig held
+  sets that trig's lock, shown when held again and in the second bar as it
+  plays; a scene lock set with the scene's pad held shows on the knob in
+  scene edit only and in the third bar while the scene is active, as a stock
+  parameter's scene lock does; and Overbridge shows the LFO destination
+  LCA as None.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
