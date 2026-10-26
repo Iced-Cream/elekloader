@@ -215,15 +215,19 @@ static int known_id(unsigned id)
     return 0;
 }
 
+/* the image's layout ID: the store's bytes 0..3, which are 4 apart */
+static unsigned store_id(unsigned char *img)
+{
+    return (unsigned)B(store_byte(img, 0)) << 24 | (unsigned)B(store_byte(img, 1)) << 16 |
+           (unsigned)B(store_byte(img, 2)) << 8 | B(store_byte(img, 3));
+}
+
 /* does the image's store hold this scope's data in this layout? */
 static int store_ok(unsigned char *img, int scope)
 {
-    unsigned id;
     if (!img)
         return 0;
-    id = (unsigned)B(store_byte(img, 0)) << 24 | (unsigned)B(store_byte(img, 1)) << 16 |
-         (unsigned)B(store_byte(img, 2)) << 8 | B(store_byte(img, 3));
-    return known_id(id) && B(store_byte(img, 3 + scope)) == gen(scope);
+    return known_id(store_id(img)) && B(store_byte(img, 3 + scope)) == gen(scope);
 }
 
 static void store_header(unsigned char *img)
@@ -597,7 +601,7 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
     /* its mod p-locks' codes are its layout's (rows.c, 0.8) */
-    if (!from || !known_id(rd32(store_byte(from, 0))))
+    if (!from || !known_id(store_id(from)))
         core_rows_forget();
     for (s = SC_GLOBAL; s <= SC_PROJECT; s++)
         if (!store_ok(from, s))
