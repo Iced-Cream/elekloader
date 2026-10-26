@@ -750,8 +750,10 @@ stock bytes, and that each covers whole instructions.
   shows its lock's value (it showed ERR before 0.8's value text), and a
   stock knob its own. With DST on LCA, turning DST scrolls the menu down
   to MOD:LOCK CHECK B and C and up to stock's AMP entries, and YES on
-  C sets DST to LCC (the DST byte holds 44). In the emulator the menu
-  moves only on turns of eight encoder steps, stock 1.74's too.
+  C sets DST to LCC (the DST byte holds 44), but this emulator does the
+  same with the build that stopped on MOD:LOCK CHECK A on a unit (T37), so
+  it does not show the menu works. Another emulator (elkbench's) stops on
+  A as the unit did.
   Not checked: anything on a unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
