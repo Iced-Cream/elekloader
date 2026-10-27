@@ -48,6 +48,7 @@ int core_lock_shift(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 void core_lock_record(int track, int code, int value);
+void core_project_edited(void);
 
 /* the parameter of a code in the track's sound of the current kit, from an
  * NRPN's 14-bit value or a CC's 7, clamped to its range. A parameter up to
@@ -67,6 +68,7 @@ static void set(unsigned code, int value, int cc, int track)
     core_store_set(core_lock_field(p),
                    (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + 42 + 152 * track, 0, value);
     core_lock_record(track, code, value);
+    core_project_edited();
 }
 
 /* 0x400b2b26 (midi.s): a track's NRPN (MSB << 7 | LSB) and its 14-bit

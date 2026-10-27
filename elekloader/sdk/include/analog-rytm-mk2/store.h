@@ -55,4 +55,11 @@
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 
+/* core-ar2 0.8: after a mod's own keys, encoders or settings change a field
+ * of the live project, so that a project load asks first (ANY CHANGES WILL
+ * BE LOST), as after a stock edit. Any context; the mark is made on the next
+ * UI tick. Core calls it itself for a mod page's knob, a lockable
+ * parameter's CC or NRPN, and RANDOMIZE and RELOAD PAGE. */
+void core_project_edited(void);
+
 #endif

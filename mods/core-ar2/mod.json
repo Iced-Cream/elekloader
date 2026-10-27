@@ -7,7 +7,8 @@
  "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "route.s", "pages.s", "load.s", "machines.c", "lock.c", "lock.s", "rows.c", "rows.s", "scenes.c", "scenes.s", "midi.c", "midi.s", "finish.s"],
  "subscribe": [
   {"event": "ev_render_in", "fn": "core_load_in", "order": 0},
-  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}
+  {"event": "ev_render_out", "fn": "core_load_out", "order": 100},
+  {"event": "ev_tick", "fn": "core_edit_tick", "order": 0}
  ],
  "defsym": {
   "FINISH_PANEL": "0x413da6bc", "FINISH_UART": "0x413da6cc", "FINISH_DRAIN": "0x40001bce",

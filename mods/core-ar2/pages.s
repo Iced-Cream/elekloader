@@ -22,8 +22,9 @@
 |       1 and *value (8.8) when it answers, 0 to pass
 |   int delta(void *view, int32_t id, int32_t delta, int32_t func)
 |       delta in 8.8, func 1 while FUNC is held; 1 when it took the turn (core
-|       then sends a lockable parameter's NRPN or CC (0.8, midi.c) and
-|       redraws the view, and stock makes no lock), 0 to pass
+|       then marks the project modified (0.8, core_project_edited), sends a
+|       lockable parameter's NRPN or CC (0.8, midi.c) and redraws the view,
+|       and stock makes no lock), 0 to pass
 |   int text(struct core_text *t)
 |       t is the routine's own arguments {obj, id, value, buf}: 0 to pass, 1
 |       when it wrote buf, 2 when stock should go on with t's id and value,
@@ -150,7 +151,8 @@ core_param_delta:
         move.l  (%sp),%a1
         tst.l   %d0
         beq.s   1b
-        move.l  12(%sp),-(%sp)            | taken: a mod parameter's MIDI out (0.8)
+        jsr     core_project_edited       | taken: the project is modified (0.8)
+        move.l  12(%sp),-(%sp)            | and a mod parameter's MIDI out (0.8)
         move.l  12(%sp),-(%sp)
         jsr     core_midi_knob
         addq.l  #8,%sp

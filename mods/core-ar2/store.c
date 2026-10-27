@@ -942,3 +942,33 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
     write_through(scope, item, index);
     irq_restore(sr);
 }
+
+/* After an edit of the live project, a project load asks first (ANY CHANGES
+ * WILL BE LOST. PROCEED WITH LOADING?): stock marks the project modified
+ * (0x400aed98(project, 1), which keeps the mark in the settings block at
+ * 0x405c8e4e) from the UI task, on the project's change signal, and an edit
+ * of only mod fields sends none. core_project_edited asks for the mark from
+ * any task or the audio interrupt; core_edit_tick (ev_tick, the UI task)
+ * makes it, with the project model 0x4017fa0a keeps at 0x419f28a8. Core
+ * calls it for its own edits (a mod page's knob, a lockable parameter's CC
+ * or NRPN, RANDOMIZE PAGE and RELOAD PAGE); a mod calls it after its own
+ * keys or settings change a field. */
+#define PROJECT_MODEL (*(void *volatile *)0x419f28a8)
+#define SET_MODIFIED ((int (*)(void *, int))0x400aed98)
+
+static volatile unsigned char edited;
+
+void core_project_edited(void)
+{
+    edited = 1;
+}
+
+void core_edit_tick(void *ctrl)
+{
+    void *model = PROJECT_MODEL;
+    (void)ctrl;
+    if (!edited || !model)
+        return;
+    edited = 0;
+    SET_MODIFIED(model, 1);
+}

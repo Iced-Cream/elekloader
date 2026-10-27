@@ -47,6 +47,7 @@ extern const struct core_lock_param *const core_lock_params[]; /* zero-terminate
 
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
+void core_project_edited(void);
 
 /* the audio interrupt's view, per track: the LFO's mod code (0: a stock
  * destination) and the offset (lock.s writes both) */
@@ -291,6 +292,7 @@ int core_lock_rand(void *set, int id)
         return 0;
     span = p->max - p->min + 1;
     core_store_set(p->field, s, 0, p->min + (RANDOM() & 0x7fff) % span);
+    core_project_edited();
     return 1;
 }
 
@@ -310,8 +312,10 @@ int core_reload(void *view, int track, int **ids, int d)
         return r;
     s = (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + 42 + 152 * track;
     for (id = ids[0]; id && id < ids[1]; id++)
-        if ((p = by_id(*id)) != 0 && !core_lock_stock_takes(*id, s))
+        if ((p = by_id(*id)) != 0 && !core_lock_stock_takes(*id, s)) {
             core_store_set(p->field, s, 0, core_store_get(p->field, s + LIVE_KITS_SAVED, 0));
+            core_project_edited();
+        }
     return r;
 }
 

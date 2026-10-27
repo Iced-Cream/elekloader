@@ -195,6 +195,17 @@ After CREATE NEW and after every project load (the project init and
 project load sites), core calls the mods' `ev_project` handlers with what
 happened and which scopes came in as zeros.
 
+From 0.8 a project load asks first after an edit of only mod fields, as it
+does after a stock edit (ANY CHANGES WILL BE LOST from the project manager,
+SAVE ... BEFORE LOADING from LOAD PROJECT). Stock marks the project modified
+(0x400aed98(project, 1), kept at 0x405c8e4e) from the UI task on the
+project's change signal, which an edit of mod fields alone never sends.
+`core_project_edited()` asks for the mark from any context, and
+`core_edit_tick` (`ev_tick`) makes it with the project model at 0x419f28a8.
+Core calls it after a turn a mod's page knob takes, a lockable parameter's
+CC or NRPN, and RANDOMIZE PAGE and RELOAD PAGE on a mod's knob; a mod
+calls it after its own keys, encoders or settings change a field.
+
 What it does not do:
 
 - **Global SysEx dumps** have no room for a layout ID, so a global slot
@@ -830,6 +841,12 @@ stock bytes, and that each covers whole instructions.
   DST list with A, C and D; D's 200-character short name shows as LCDX and
   its name cut at the menu's width; RELOAD PAGE from kit 2 brings A back. A
   kit dump sent back is received, but C's value after it was not read.
+  The load prompt after a mod-only edit, in an emulator (27 Oct, OS 1.74,
+  lock-check 1.6): on the LOCK CHECK page a turn of A (0 to 30), CC 8 and
+  NRPN 4:0 each mark the project modified and LOAD PROJECT then asks SAVE
+  'PRESETS' BEFORE LOADING; the same turn on L8C3's core loads with no
+  question. With no edit the load still goes straight through. Not yet on a
+  unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES

@@ -1369,6 +1369,16 @@ bytes into the stored project. With 0.6 and older a field a mod set from
 its own page with no stock edit waited for the next of those saves, and a
 power cycle before it lost the field.
 
+**The PROCEED prompt.** A project load asks first (ANY CHANGES WILL BE
+LOST. PROCEED WITH LOADING?) only when the project is marked modified, and
+stock marks it only for its own edits. From core-ar2 0.8 core marks it for
+the edits it makes: a turn a mod's page knob takes, a lockable parameter's
+CC or NRPN, and RANDOMIZE PAGE and RELOAD PAGE on a mod's knob. A mod whose
+own keys, encoders or settings change a field calls `core_project_edited()`
+(`store.h`) after it; it may be called from any context, and the mark is
+made on the next UI tick. A mod's `ev_project` handler, or anything else
+that sets a field without an edit, does not call it.
+
 **The lockfile.** Where each field sits is decided once and then kept, in a
 JSON file: `elekloader.patch --lockfile FILE` (default:
 `analog-rytm-mk2.lock.json` in the output's folder, so every build written
