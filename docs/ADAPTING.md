@@ -1384,7 +1384,9 @@ so `track` is limited to 16 bits a track). P growing moves the patterns'
 and the project's regions, so their data in older projects loads as zeros;
 the pattern tracks come first and keep theirs. The stock OS does not keep these
 bytes in a project file, so core also hooks the file save and load
-(Transfer's `.arprj` and the card) and Total Recall's buffer.
+(Transfer's `.arprj` and the card), and the SysEx dump of the working project
+in the same routine, which OS 1.74 never reaches. A Total Recall take sends the stored project as it is, so it carries what
+the stored project holds.
 
 **When a field reaches the project.** A live item's fields go into the
 stored project when stock saves that item there. A sound's or kit's go with
@@ -1392,9 +1394,15 @@ the stock save of that sound or kit. Pattern-track and pattern fields go
 whenever stock saves any part of that pattern (from core-ar2 0.3: an edited
 track, the pattern's settings, its parameter locks; with 0.2, so on 1.73,
 only the whole pattern, at SAVE PROJECT or into a project file), and then the whole
-pattern's. A field a mod sets from its own page with no stock edit is
-kept by the next of those saves, as stock's own data is; until then a power
-cycle loses it, as it loses an unsaved stock edit.
+pattern's. From core-ar2 0.7 `core_store_set` also writes the field
+straight into the item's stored copy (the current kit and its sounds, the
+saved kits and theirs, the pool, the global slots, and the working
+pattern's and the 128 patterns' tracks and settings), as stock writes each
+parameter edit of the current kit: a field survives a power cycle without a
+save, and after SAVE PROJECT AS core copies what the save wrote of its own
+bytes into the stored project. With 0.6 and older a field a mod set from
+its own page with no stock edit waited for the next of those saves, and a
+power cycle before it lost the field.
 
 **The lockfile.** Where each field sits is decided once and then kept, in a
 JSON file: `elekloader.patch --lockfile FILE` (default:
@@ -1441,7 +1449,7 @@ save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c a
 and 0x4000863e (kits), 0x40007a5c and 0x4000763c (global slots), 0x40011ab8
 and 0x400118e8 (pattern and track init), 0x400122b6 (sound init),
 0x40011d38 (CREATE NEW and the project reset), 0x4000cd2e (every project
-load), 0x40034d86 (Total Recall's buffer save), the file save, and
+load), 0x40034d86 (the SysEx dump of the working project, unreachable on 1.74), the file save, and
 0x40035000 (the file load), and the three calls through which the SysEx
 project commands copy, write and swap whole stored songs (0x4018b6ec,
 0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)

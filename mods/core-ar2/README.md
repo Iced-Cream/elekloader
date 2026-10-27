@@ -5,7 +5,9 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`. On its own it changes nothing the unit does.
+with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, and from 0.7 with
+write-through storage (Write-through, below) and `finish.s` (The OS upgrade's restart, below). On
+its own it changes nothing the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -62,7 +64,7 @@ What differs from the Digitakt mk1 at these sites:
 - **No machines.** The Digitakt's SRC machine slots (`machines.s`) and its
   firmware exports (`fw.s`) are not ported.
 
-## Mod storage (0.2, 0.3)
+## Mod storage (0.2, 0.3, 0.7)
 
 Mods declare fields in their mod.json (`storage`) and read and write them
 with `core_store_get` and `core_store_set`, which mask interrupts while they
@@ -110,9 +112,54 @@ pattern was saved (SAVE PROJECT, a project file): a field a mod set was lost
 at a power cycle. From 0.3 each of those saves also writes the pattern's
 track and pattern fields into the store. No stock routine loads one of
 those parts by itself: a pattern comes back whole, through the pattern
-load. A field a mod sets from its own page reaches the stored project at
-the next stock save of that pattern's track, settings or locks, or the next
-whole save, as the stock data does.
+load. Up to 0.6 a field a mod set from its own page reached the stored
+project only at the next stock save of that pattern's track, settings or
+locks, or the next whole save.
+
+**Write-through (0.7).** Stock writes each parameter edit of the current
+kit both into the live kit and into the stored project's copy of it (the
+working kit, stored +0x19c9c5, the copy of the kit whose index is at
++0x19d3f7), which is what a power cycle brings back. Up to 0.6 a field set
+with `core_store_set` waited for a stock save of its part, and was lost at a
+power cycle before one. From 0.7 `core_store_set` writes the item's bytes
+straight into its stored copy, with the item's layout ID and generation
+where it carries its own:
+
+| item (live project 0x407c89cb +) | stored copy (stored project +) |
+|---|---|
+| the edited current kit (+0xa8cf18 + 2531 k), and its 12 sounds (+42 + 152 t) | the working kit (+0x19c9c5), its sounds at +46 + 162 t |
+| a saved kit (+0xadc098 + 2531 k), and its sounds | kit k of the 128 (+0x19d3fb + 2610 k) |
+| a pool sound (+0xb4b27c + 152 i) | pool sound i (+0x1f4397 + 162 i) |
+| a global slot | the stored slot (+0x1f9dee + 80 g, +0x4b) |
+| a track or the pattern of the working pattern (+24) or of pattern n (+85784 + 85760 n) | their slots in the tagged store (index 0, or n + 1) |
+
+An edited kit that is not the current one, and items outside the live
+project, reach the stored project by stock's saves, as their stock data
+does: a power cycle brings an edited kit back from its saved copy in
+stock too.
+
+**SAVE PROJECT AS (0.7).** SAVE PROJECT AS writes only the project's name
+into the stored project (the first of its two project saves, 0x400ae310,
+flags 0x40) and then the whole live project into the file's buffer
+(0x400b0870). After a save of the live project into another image, core
+copies its own bytes from that image into the stored project, by the parts
+the save wrote (flags 2 the global slots, 4 the kits and the working kit
+when the image's index is the stored project's, 8 the tagged store, 0x20
+the pool), so a power cycle straight after the save keeps the mods'
+fields. The same save routine also has a SysEx dump of the working project
+(0x40034d86, in the dump request handler 0x4008680c), but OS 1.74 never
+reaches it: the SysEx router above that handler (0x40085e44, code the Rytm
+shares with the Analog Four) has no caller, and the ID table sends its
+message ID, 0x20, to a routine that does nothing (checked 25 Oct 2026: in
+an emulator the request was dropped over USB and DIN and 0x40034d86 never
+ran; on a unit it got no reply over USB or DIN while a kit request was
+answered on both). Core hooks the site anyway, so the save routine behaves the same
+wherever it runs. A Total Recall take runs no
+serializer: it sends the stored project as it is (Overbridge command 0x20,
+type 0x1b), so it carries whatever mod fields the stored project holds, and
+saves nothing on the unit (checked on a unit, 25 Oct 2026: with
+write-through off, a take and a power cycle lost the same fields as no save
+at all; the take's image held exactly the stored project's bytes).
 
 The 32 sites, by `jmp` unless marked, each with its displaced instructions
 in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
@@ -128,7 +175,7 @@ in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
 | sound init | 0x400122b6 | 0x400122b6 | the same |
 | project init | 0x40011d38 | 0x40011d38 | CREATE NEW and the project reset: a fresh store |
 | project load | 0x4000cd2e | 0x4000cd2e | after any load: drop scopes another layout wrote, write this build's header |
-| buffer save (`keep2`) | 0x40034d86 | 0x40034d86 | which image is being saved |
+| SysEx dump of the working project (`keep2`) | 0x40034d86 | 0x40034d86 | which image is being saved; 1.74 never reaches it (above) |
 | file save (`keep2`) | 0x400b0870 | 0x400b0804 | the same, for a project file |
 | file load (`keep2`) | 0x40035000 | 0x40035000 | which image is being loaded |
 | SysEx song copy, write, swap (`keep2`) | 0x4018b8b8, 0x4018c266, 0x4018c488 | 0x4018b6ec, 0x4018c09a, 0x4018c2bc | copy whole stored songs but leave the target's store bytes |
@@ -280,6 +327,41 @@ as stock does for a machine its voice may not run (checked on a unit, below).
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
 
+## The OS upgrade's restart (0.7)
+
+When the unit has written a new OS (from Transfer, or any host's OS upgrade),
+stock 1.74 shows SUCCESS! REBOOTING, waits 3 s, masks every interrupt
+(`move #0x2700,sr` at 0x4009f4ec) and calls 0x40001bce, which waits for its
+serial output to drain: while bytes are pending behind the panel link's DMA
+(0x413da6bc), then while the UART queue holds bytes (0x413da6cc), then for
+the UART to be empty. Only the DMA's and the UART's interrupts move those
+counts on. If the panel task queued bytes while a panel DMA was still running,
+just before the mask, they are never sent and the unit stays on SUCCESS!
+REBOOTING until it is switched off. The new OS is already written, so it
+boots then. Nothing the host does or stops doing changes this: it happens
+with no traffic at all after the upgrade's last message.
+
+`finish.s` takes that site: `core_finish_drain` masks interrupts only once
+nothing is pending, unmasking again to let the interrupts send what was
+queued, then calls 0x40001bce as stock does, with interrupts masked. It runs
+only when a build on this core is the OS being replaced, so it protects the
+upgrade away from a custom build (to stock, or to another build), not one
+away from stock. The addresses come from `mod.json` (`FINISH_PANEL`,
+`FINISH_UART`, `FINISH_DRAIN`).
+
+Checked in analog-emu (25 Oct 2026; each flash a fresh headless emulator
+booted on the source OS, then `elkflash upgrade --no-confirm --wait` of a
+custom 1.74 build). From stock with only this routine patched in, 0 of 15
+hung; from the same build without it, 5 of 15 (one-sided Fisher p = 0.02).
+A source built on core 0.4 hung 0 of 15, so the race is rarer from core
+builds than from stock. With the emulator's panel link paced from its baud
+divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
+of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
+unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
+from builds on this core (to other builds and to stock, five flashes)
+restarted in 15 s; with a race this rare that is no
+proof the hang is gone, only that the routine does no harm.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -403,6 +485,35 @@ stock bytes, and that each covers whole instructions.
   power cycle and RELOAD. On the same build without the example (M5N4) that
   kit loaded with BD on DISABLE and the rest as saved.
 
+- **Write-through and SAVE PROJECT AS (0.7)**, in an emulator (OS 1.74,
+  24 Oct 2026), with store-check 1.1 on a fresh card: STORE CHECK, then a
+  power-off without a save and a cold boot: every column read back empty
+  (core 0.6 lost the pattern-track, pattern, kit-sound, pool-sound, kit and
+  global markers there). The SAVE PROJECT AS copy was checked by itself on
+  a build with the write-through call taken out: STORE CHECK, SAVE PROJECT
+  AS, a power-off and a cold boot read back empty, and the same build
+  powered off without the save lost those six columns.
+  On a unit (25 Oct 2026), with store-check 1.2.1 and analoghealth 1.2: on
+  core 0.7 (W07F) STORE CHECK then a power cycle with no save read back
+  empty. On a test build with the write-through call taken out (W07N) the
+  same lost the pattern-track, pattern, kit-sound, pool-sound, kit and global
+  markers (the project's stayed: they live in the stored project's tagged
+  store), and STORE CHECK, SAVE PROJECT AS and a power cycle read back empty.
+  A Total Recall take before the power cycle kept nothing (see SAVE PROJECT
+  AS above). On core 0.7 a take carries every marker, since write-through
+  keeps the stored project current: a take restored onto the unit brought
+  them back, and they survived a power cycle with no save; a take restored
+  onto a build with another layout ID loaded with the mods' fields at their
+  defaults. Before that, on core 0.8 with store-check 1.2 (which carries
+  this code unchanged), the same power cycle read back empty.
+  Cost: three STORE CHECKs (about 5,400 sets each) under audio gave no
+  dropout, and raised the 1 s CPU average by 1 to 4 points, the same as on
+  the build without write-through. Not measured on a unit: the time
+  core_store_set holds interrupts masked; in an emulator write-through adds
+  about 143 instructions to an average set (805 against 662), and the
+  longest masked stretch, about 1,130 instructions, is the field loop's, as
+  without write-through.
+
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
   for LP1 and HP1 and without FRQ and RES for TYP OFF, the empty knobs take
@@ -412,8 +523,8 @@ stock bytes, and that each covers whole instructions.
 
 ## Building
 
-Core 0.6 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.6.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.7 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.7.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -422,8 +533,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.6.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.7.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.6.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.7.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```
