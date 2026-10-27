@@ -818,7 +818,18 @@ stock bytes, and that each covers whole instructions.
   list ends with MOD:Lock Check A and LCHK:Lock Check C, without B, and
   picking C shows LCC. In an emulator, a 240-character short name, a
   7-character category and a 62-character name show as 4, 4 and the menu's
-  width, with no fault.
+  width, with no fault. Unit run T51 (27 Oct, L8C3: 1db9bfc, lock-check
+  1.6): a saved sound with DST LCA stores stock's None (41) in stock's byte
+  and the code in core's field, read back from slot 125; a performance's
+  depth on C follows its pad's pressure (lock-check's bar for C full at 127,
+  empty at 0); the velocity and aftertouch lists end with stock's AMP
+  entries; Euclid's convert leaves C's locks where it leaves a stock filter
+  lock on the same steps (TRO at either end moved neither, so the move seen
+  in an emulator on 26 Oct was not repeated); RANDOMIZE PAGE put a mod
+  destination in DST once in 12; every machine in BD's list (28) ends its
+  DST list with A, C and D; D's 200-character short name shows as LCDX and
+  its name cut at the menu's width; RELOAD PAGE from kit 2 brings A back. A
+  kit dump sent back is received, but C's value after it was not read.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
