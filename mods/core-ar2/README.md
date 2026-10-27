@@ -845,8 +845,11 @@ stock bytes, and that each covers whole instructions.
   lock-check 1.6): on the LOCK CHECK page a turn of A (0 to 30), CC 8 and
   NRPN 4:0 each mark the project modified and LOAD PROJECT then asks SAVE
   'PRESETS' BEFORE LOADING; the same turn on L8C3's core loads with no
-  question. With no edit the load still goes straight through. Not yet on a
-  unit.
+  question. With no edit the load still goes straight through. Unit run T52
+  (27 Oct, L8C4: 6b29f44, lock-check 1.6): after a save, LOAD FROM on the
+  same slot loads with no question; after only a turn of A, CC 8 or NRPN
+  4:0, LOAD FROM asks ANY CHANGES WILL BE LOST. PROCEED WITH LOADING?, as it
+  does after a stock knob's turn.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
