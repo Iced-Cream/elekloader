@@ -14,7 +14,9 @@ on the DSP).
 
 Core **0.2** adds the bridge for SHARC mods and keeps 0.1's control-side
 sites, tables and exports. A SHARC mod sets `resources.core: "0.2"`; mods
-made for 0.1 can keep asking for 0.1.
+made for 0.1 can keep asking for 0.1. The [machines-dn2](../machines-dn2)
+companion adds selectable synths and filters on top of it
+([MACHINES-DN2.md](../../docs/MACHINES-DN2.md)).
 
 `bridge.sharc.json` is the bridge, already compiled and linked from
 `sharc-bridge.s`, with the slot and pitch reader the

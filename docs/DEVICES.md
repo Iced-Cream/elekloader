@@ -481,7 +481,8 @@ a project load and a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the
-  page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`).
+  page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`); from
+  0.4, core-ar2 0.7's OS upgrade restart (`finish.s`).
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
@@ -533,7 +534,16 @@ smaller core-only CO02 build then flashed and booted successfully (below).
   assembly with `mise run build-c` or `mise run build-asm`; packaging a mod
   that is already compiled needs no SHARC compiler.
   [SHARC-DN2.md](SHARC-DN2.md) has where the memory comes from and what the
-  checks cannot show.
+  checks cannot show. The same 32 KiB can instead hold one custom synth and
+  one custom filter (machines-dn2), a half each with its own adapter: the
+  [track-synth](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
+  contracts. A build has either those or one master-output mod.
+- **Machine registration.** The `machines-dn2` companion owns the native
+  SYN/FLTR hooks. Mods use `mk2/machines.h` to register synths and filters
+  with independent saved IDs; the stock OS sees each custom synth as FM TONE
+  and each custom filter as LOWPASS 4. The external C workflow builds SINE
+  and LOWPASS with DigiHealth; see [machines](MACHINES-DN2.md) and
+  [filters](MACHINES-DN2-FILTER.md).
 - **Staging.** The bootstrap is the Digitakt II 1.17's code instruction for
   instruction, at the same addresses: the loader `0x80000596` reads section
   3 from flash at its container offset + `0x80000` to `0x40400000`, and the

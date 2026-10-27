@@ -49,6 +49,23 @@ same platform with its own addresses.
   0x400a8906 stops at 0x8000CAC0). Free only for a mod that serves CHORD
   its tables from elsewhere and points those pointers there (fast-audio).
   Model:Samples has no CHORD: it has neither area.
+- A second area for mods' large buffers, 'bulk': 0x42800000-0x47E00000
+  (86 MB), as the Digitone mk1's. It starts where the highest buffer the
+  OS names ends: the 4 MB buffer cleared at 0x400572bc (0x4A400000, length
+  0x400000) reaches 0x4A800000, the uncached view of 0x42800000. No
+  decoded operand of 1.13's code names anything from there to the mods'
+  own area, under any of the DDR's eight views in 0x40000000-0x7FFFFFFF.
+  A test mod that fills it at boot and reads it back on every tick found it
+  unchanged, in digiemu (after the boot, the parameter pages, playing and a
+  project save) and on a unit.
+  ACR0 (0x4007E020, set at 0x40000552) keeps 0x40000000-0x47FFFFFF
+  cacheable, so a buffer there is cached unless a mod reads it through
+  0x48000000 and up. Nothing places code or data there: a mod claims a
+  piece as a region (resources.regions, fixed addresses the linker keeps
+  apart) and uses it at run time. The OS never clears it, so its contents
+  at power-on are whatever the DDR holds: a mod clears what it reads before
+  it has written it. The Model:Samples keeps its sample pool there and has
+  no such area.
 """
 from . import Device, Release
 
@@ -78,6 +95,7 @@ DEVICE = Device(
         'sram-tail': (0x8000F700, 0x80010000),    # zeroed at reset, named by no instruction
         'sram-chord-a': (0x80001C5C, 0x800074B4),  # CHORD's tables: see above
         'sram-chord-b': (0x8000CAC0, 0x8000EAE0),
+        'bulk': (0x42800000, 0x47E00000),          # large buffers, claimed as regions (above)
     },
     ddr=(0x47E00000, 0x47E40000),
     recovery=('hold FUNC while powering on for the STARTUP MENU, press TRIG 4 (OS UPGRADE), '

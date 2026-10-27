@@ -1031,6 +1031,41 @@ that names it. The render's SRAM is where it was, and the RAM moved by
 0x1000. The values are in `mods/core-dn1/mod.json` and its port. The names
 are the Digitakt's (above) where they mean the same.
 
+### Firmware locations (core-mc 0.2, Model:Cycles)
+
+core-mc exports the firmware locations Model:Cycles mods use
+(`mods/core-mc/fw.s`). A mod that names them says it needs 0.2 with
+`"resources": {"core": "0.2"}`, and a build with 0.1 refuses it (*"needs
+core 0.2 or newer"*). 0.2 has 0.1's code, sites, tables and symbols, so a
+mod built for 0.1 links with it as it did with 0.1. In C,
+`#include "model-cycles/core.h"`; in assembly use the names as they are, with
+`model-cycles/core.inc` for the constants. `examples/track-marker-mc` is
+the smallest mod that uses them.
+
+| name | 1.13 | |
+|---|---|---|
+| `fw_project` | 0x400cf866 | `project()`: the Project singleton, or 0 |
+| `fw_project_tracks` | 0x4000eb90 | `project_tracks(project)`: its track selection |
+| `fw_selection_active` | 0x40012412 | `selection_active(selection)`: the active track, 0-5 (core.h's `fw_active_track()` walks the three) |
+| `fw_ui_states` | 0x400cf9a8 | `ui_states()`: the UIStates singleton |
+| `fw_value_shown`, `fw_trig_held` | 0x4006b704, 0x4006b736 | `(ui_states)`: a parameter's value is on screen; a trig is held, so knobs edit its locks |
+| `fw_key_held` | 0x4007faf4 | `key_held(code)`, logical codes: FUNC 1, TRACK 2, RETRIG 4 |
+| `fw_kits` | 0x409c9c80 | the 96 patterns' kits, 7094 bytes each: the six track sounds at +28, the pool of 64 at +694, 100 bytes a sound; a sound's machine is its byte +38 |
+| `fw_play_kit` | 0x800017e4 | -> the kit the audio side plays, the current pattern's working copy |
+| `fw_fill` | 0x400710c6 | `fill(bmp, x0, y0, x1, y1, colour, step)`; y = 0 is the bottom row |
+| `fw_text` | 0x40071a04 | `text(bmp, font, x, y, flags, fmt, ...)`: flags 0 from x on, 2 centred on x |
+| `fw_font_make`, `fw_font_drop` | 0x40072260, 0x40072080 | a font object from glyphs, and undoing it |
+| `fw_font_small`, `fw_font_medium` | 0x40140ab0, 0x4014120c | glyphs, 5 x 9 and 7 x 9 pixels |
+| `fw_view_redraw` | 0x40076bee | `view_redraw(view)`: the screen draws the view again |
+| `fw_fs_mounted`, `fw_fs_lock_word`, `fw_running_task` | 0x40f07cf4, 0x40fe6df0, 0x422fef30 | the +Drive's file system: mounted, its lock (+0 the task that holds it), the running task |
+| `fw_fs_lock`, `fw_fs_unlock` | 0x40001cc4, 0x40001df6 | `(&fw_fs_lock_word)`. The lock lets its holder in again but does not count, so an inner unlock frees it |
+| `fw_fs_entry` | 0x4007de78 | `fs_entry(inode, h)`: h = {inode, id, size, inode word 16}; 0 for a file, -1 otherwise |
+| `fw_fs_read` | 0x4007baaa | `fs_read(buf, len, fh)`: fh = {inode, position, -, open}; the bytes read, or -1 |
+| `fw_fs_find_id`, `fw_fs_ids` | 0x4007dc30, 0x401fb8a4 | the files by id: `{id, inode}` pairs sorted by id, and the index of an id's pair, or -1 |
+
+Call them from the UI task (`ev_tick`, `ev_draw`, `ev_key`, `ev_enc`), and
+the file system under its lock.
+
 ### Machine pages (core 3.0 and machine-pages, Digitakt mk1)
 
 Every machine mod used to hook the SRC page itself (its layout, labels,
@@ -1958,6 +1993,21 @@ root, so `pick` may open another list. NO closes a submenu like the menu, and
 holding a track key always opens the root. The machines mod's MACHINES
 entry opens one (below).
 
+### Synth and filter machines (machines-dn2 0.1, Digitone II)
+
+The experimental `machines-dn2` companion adds external synths in
+**FUNC+SYN** on OS 1.12, and filters in its FLTR category, independently of
+the synth. A mod contributes a stable ID and names, and its DSP code; the
+firmware hooks live in the companion, which shows the stock OS each custom
+machine as a fixed stock host type. See
+[Digitone II machines](MACHINES-DN2.md) for IDs, host types and missing
+mods, and the [track-synth contract](MACHINES-DN2-VOICE.md) or
+[filter contract](MACHINES-DN2-FILTER.md) for registration and custom DSP. One custom synth and one custom filter can share a
+build; their SDK helpers package the compiled code in separate regions.
+The producer's build handles compilation and placement. The external
+`digitone-2-mod-hack` example's `mise run build-c` builds SINE, LOWPASS and
+DigiHealth together. This interface is implemented only for Digitone II.
+
 ### Machines and stock parameters (core-dn1 3.1, Digitone mk1)
 
 On the Digitone mk1 the DSP (a second ColdFire) renders the eight FM voices,
@@ -2335,6 +2385,23 @@ gap between the pool's end (0x47BAF640 in 1.53, 0x47BBF640 in 1.54, which
 the OS compares against) and the ring at 0x47C00000. No instruction operand
 points into it, and in an emulator run nothing writes there. As on the
 Digitone, a build takes 4.0, the newest core, for every selection.
+
+### Large buffers on the Model:Cycles: the bulk area
+
+The mods' own area (0x47E00000, 256 KB) holds their code, tables and
+`.bss`. A buffer of megabytes, such as a sample pool, goes in `bulk`:
+0x42800000-0x47E00000 (86 MB), as on the Digitone mk1. A mod claims a piece
+of it as a region, which the linker keeps apart from every other mod's:
+
+    "resources": {"regions": [{"name": "sample pool", "lo": "0x43800000", "hi": "0x46700000"}]}
+
+It starts where the highest buffer the OS names ends (its 4 MB buffer at
+0x4A400000, the uncached view of 0x42400000), and no decoded operand of
+1.13's code names anything from there up to the mods' area, under any of
+the DDR's eight views. The area is cacheable through 0x40000000-0x47FFFFFF
+(ACR0) and uncached through the same addresses plus 0x08000000. The OS
+never clears it: a mod clears what it reads before it has written it. The
+Model:Samples keeps its sample pool there, so its profile has no `bulk`.
 
 ### The master output and the master pages (core 4.1, Digitakt mk1)
 
@@ -3335,13 +3402,18 @@ Some differences from an octabam build, by design:
 | `is a DSP reference to a ColdFire address` (or the reverse) | a `dsp24` relocation names a ColdFire symbol, or a ColdFire one a DSP label | name the right symbol; DSP labels are word addresses on the DSP |
 | `dsp_asm is not installed` | the SDK needs octabam's DSP assembler | build octabam's `vendor/dsp56300` and set `ELEKLOADER_DSP_ASM` |
 | `the label N is part of a longer word here` (SDK) | dsp_asm would put N's address inside that word | rename the label |
-| `SHARC ABI does not match the device profile` | a SHARC mod's `abi` is not `dn2-master-mono32-l2-v1` | set it; the other ABI is core's bridge's |
-| `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's 32 KiB exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
+| `SHARC ABI does not match the device profile` | the artifact does not name a supported master-output, track-synth or track-filter contract | build for the matching [SHARC contract](FORMAT.md#digitone-ii-sharc-mod); changing only the ABI string does not relocate code |
+| `SHARC voice machine_id must match its single native voice registration` / `DN2 voice registration requires a matching SHARC voice payload` | a voice descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [track-synth contract](MACHINES-DN2-VOICE.md) describes |
+| `SHARC filter machine_id must match its single native filter registration` / `DN2 filter registration requires a matching SHARC filter payload` | a filter descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [filter contract](MACHINES-DN2-FILTER.md) describes |
+| `SHARC voice stack exceeds the profile limit` | the callback declares more than 128 stack bytes | reduce its stack use and declaration, then qualify the real workload |
+| `SHARC filter stack exceeds the profile limit` | the callback declares more than 20 stack bytes | reduce its stack use and declaration, then qualify the real workload |
+| `DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127` | a filter descriptor's `g` has an empty, too long or non-printable label, or a default above 127 | give G a label of one to five printable ASCII characters and a default of 0..127, or leave `g` out ([filter contract](MACHINES-DN2-FILTER.md)) |
+| `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's owner exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
 | `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |
 | `SHARC entry is in the instruction read-ahead guard` / `SHARC entry is not in owned code` | a callback offset is in the guard, outside the code, or odd | link the callbacks inside a code segment, before its guard |
 | `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
 | `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
-| `only one SHARC mod may own the DN2 reservation` | two SHARC mods in one build | pick one |
+| `SHARC mods may combine only one DN2 voice and one DN2 filter` | the build has two mods of one kind, or mixes a master-output mod with a machine | use at most one synth and one filter, or one master-output mod |
 
 ## 6. Definition of done
 

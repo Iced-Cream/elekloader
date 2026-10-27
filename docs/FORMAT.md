@@ -74,9 +74,11 @@ A format-2 mod is a relocatable object:
 ### Digitone II SHARC mod
 
 On the Digitone II 1.12 a format-2 mod may also carry code for the DSP, an
-ADSP-21569 SHARC+, in a top-level `sharc` object. This is experimental. The
-[callback contract](SHARC-DN2-ABI.md) says what the code must do, and
-[SHARC-DN2.md](SHARC-DN2.md) what has been checked.
+ADSP-21569 SHARC+, in a top-level `sharc` object. This is experimental. Use
+the callback contract for a [master-output mod](SHARC-DN2-ABI.md), a
+[track synth](MACHINES-DN2-VOICE.md) or a
+[track filter](MACHINES-DN2-FILTER.md); [SHARC-DN2.md](SHARC-DN2.md) says what
+has been checked.
 
 **In mod.json**, `"sharc": {"artifact": "sine.sharc.json"}` names a file in
 the mod's folder; the SDK refuses a path outside it. The SDK copies the file
@@ -86,7 +88,25 @@ so no SHARC compiler runs during build, lint or patch. Any compiler or
 assembler can make one; the [sine example](../examples/sharc-sine/README.md)
 makes one from C or assembly.
 
-**The object** has exactly these fields:
+**A selectable synth or filter object** uses the fields below, plus
+`machine_id`; `entries` contains only `render_offset_bytes` and cannot be
+`null`. The same mod must contribute one matching descriptor to its table:
+
+| `abi` | `machine_id` | native table |
+|---|---|---|
+| `dn2-voice-mono32-l2-v1` | 5..31 | `mk2_voice_synths` |
+| `dn2-filter-mono32-l2-v1` | 6..31 | `mk2_voice_filters` |
+
+Each kind has its own ID namespace. A build accepts at most one of
+each kind, with separate 16 KiB owners, and cannot mix them with a
+master-output mod. Each machine artifact starts with the profiled 2 KiB
+adapter and ends with exactly 1 KiB of zeroed adapter state. Author bytes
+and the render entry must stay outside those reservations. The linker
+writes each callback's address and ID into its adapter state and patches
+that kind's stock hook. It leaves the master hook and L1 bridge untouched.
+The callback references above define the memory bounds and stack limits.
+
+**The master-output object** has exactly these fields:
 
 | field | value |
 |---|---|
@@ -103,13 +123,13 @@ example's at 176 and 238; both declare 128 bytes of stack.
 
 **The checks.** elekloader refuses the mod when it loads it, unless:
 - the segments and zero ranges are 4-byte aligned, do not overlap, and
-  together cover all 32 KiB, with no gap;
+  together cover the entire owner, with no gap;
 - each entry is 2-byte aligned and inside a code segment;
 - in a mod with entries, each code segment ends in 64 bytes of NOPs (`0100`
   repeated), with no entry inside them, because the DSP fetches instructions
   ahead.
 
-When it links the mods, it also refuses unless:
+For master-output mods, linking also refuses unless:
 - only one mod in the build has `sharc`;
 - a mod with entries has a core whose bridge is the one the device profile
   pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
@@ -119,7 +139,7 @@ When it links the mods, it also refuses unless:
 
 **What the linker does.** It checks the stock DSP section (section 7) by
 its hash. Then it adds the mod's segments and zero ranges as new load and
-fill records, before the stream's FINAL record. For a mod with entries it
+fill records, before the stream's FINAL record. For a master-output mod with entries it
 also adds:
 - core's 1 KiB bridge, with the two callback addresses in its first 12
   bytes. The linker writes those; a mod cannot;
@@ -133,9 +153,10 @@ right, and that every other section is stock. Without a SHARC mod, section 7
 stays stock, with core 0.2 too.
 
 A mod's code, data and callback offsets may change from build to build with
-no change to elekloader: only the bridge is pinned. These checks cover the
-packaging. They cannot prove what the instructions do, how much stack they
-really use, or that they finish in time, so test each program on its own.
+no change to elekloader: only its core bridge or machine adapter is pinned.
+These checks cover the packaging. They cannot prove what the instructions
+do, how much stack they really use, or that they finish in time, so test
+each program on its own.
 
 ### The linker
 

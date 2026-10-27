@@ -7,6 +7,9 @@ maintainers. Mod authors start with the
 [sine example](../examples/sharc-sine/README.md); the
 [callback contract](SHARC-DN2-ABI.md) says what a mod's code must do, and
 [FORMAT](FORMAT.md#digitone-ii-sharc-mod) what the file holds.
+Selectable synths and filters (machines-dn2) use the same 32 KiB, split in
+two, with the [voice](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
+contracts; a build has either those or one master-output mod.
 
 ## The stock file and the writer
 

@@ -1,0 +1,16 @@
+{
+ "id": "track-marker",
+ "version": "1.0",
+ "title": "Track marker",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "Draws a small square in the bottom row under the active track: the smallest mod that uses core-mc 0.2's firmware locations, with no address of its own.",
+ "device": "model-cycles",
+ "os": "1.13",
+ "sources": ["track.c"],
+ "subscribe": [
+  {"event": "ev_draw", "fn": "track_draw", "order": 60}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.2"}
+}

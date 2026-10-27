@@ -11,7 +11,8 @@ and how they were found) with its own addresses. Measured on OS 1.13:
   0x4A2DD490 + 0x4000050 (0x422DD490-0x462DD4E0 cached), a 0x160-byte
   block at 0x4E2DD4E0 and a 4 MB buffer at 0x4E400000 (0x46400000), so
   DDR is used up to 0x46800000. The linker's area is the Model:Cycles one,
-  0x47E00000-0x47E40000.
+  0x47E00000-0x47E40000. The Model:Cycles' 'bulk' area is not one here: the
+  sample pool and the buffer above it are in it.
 """
 from . import Device, Release
 from .model_cycles import DEVICE as _MC
@@ -37,7 +38,7 @@ DEVICE = Device(
     isa='coldfire',
     version_at=0x0C,
     version_optional=True,
-    areas={k: v for k, v in _MC.areas.items() if not k.startswith('sram-chord')},
+    areas={k: v for k, v in _MC.areas.items() if not k.startswith('sram-chord') and k != 'bulk'},
     ddr=_MC.ddr,
     recovery=_MC.recovery,
     toolchain=_MC.toolchain,
