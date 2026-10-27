@@ -2122,6 +2122,23 @@ the OS compares against) and the ring at 0x47C00000. No instruction operand
 points into it, and in an emulator run nothing writes there. As on the
 Digitone, a build takes 4.0, the newest core, for every selection.
 
+### Large buffers on the Model:Cycles: the bulk area
+
+The mods' own area (0x47E00000, 256 KB) holds their code, tables and
+`.bss`. A buffer of megabytes, such as a sample pool, goes in `bulk`:
+0x42800000-0x47E00000 (86 MB), as on the Digitone mk1. A mod claims a piece
+of it as a region, which the linker keeps apart from every other mod's:
+
+    "resources": {"regions": [{"name": "sample pool", "lo": "0x43800000", "hi": "0x46700000"}]}
+
+It starts where the highest buffer the OS names ends (its 4 MB buffer at
+0x4A400000, the uncached view of 0x42400000), and no decoded operand of
+1.13's code names anything from there up to the mods' area, under any of
+the DDR's eight views. The area is cacheable through 0x40000000-0x47FFFFFF
+(ACR0) and uncached through the same addresses plus 0x08000000. The OS
+never clears it: a mod clears what it reads before it has written it. The
+Model:Samples keeps its sample pool there, so its profile has no `bulk`.
+
 ### The master output and the master pages (core 4.1, Digitakt mk1)
 
 Mods that work on the whole mix (a master EQ, a master effect suite) used to

@@ -944,6 +944,30 @@ def test_sharc_suite():
     assert result.wasSuccessful(), 'SHARC suite failed'
 
 
+def test_model_cycles_bulk_area():
+    """The Model:Cycles' bulk area, 0x42800000-0x47E00000: a region inside it passes (a sample pool,
+    0x43800000-0x46700000), one below it or across into the linker's area does not, and the Model:Samples, whose
+    sample pool is there, has no such area."""
+    mc, ms = ([d for d in devices.devices() if d.key == k][0] for k in ('model-cycles', 'model-samples'))
+    assert mc.areas['bulk'] == (0x42800000, 0x47E00000)
+    pool = {'resources': {'regions': [{'name': 'pool', 'lo': '0x43800000', 'hi': '0x46700000'}]}}
+    regions, _names = elemod.parse_resources(pool, 'x', mc)
+    assert regions == [{'name': 'pool', 'lo': 0x43800000, 'hi': 0x46700000, 'area': 'bulk'}]
+    for lo, hi in ((0x42700000, 0x42900000), (0x47D00000, 0x47E10000)):
+        try:
+            elemod.parse_resources({'resources': {'regions': [{'name': 'r', 'lo': hex(lo), 'hi': hex(hi)}]}},
+                                   'x', mc)
+            raise AssertionError('region 0x%08x-0x%08x passed' % (lo, hi))
+        except elemod.ModError as e:
+            assert 'outside every free area' in str(e)
+    assert 'bulk' not in ms.areas and ms.areas['ddr'] == mc.areas['ddr']
+    try:
+        elemod.parse_resources(pool, 'x', ms)
+        raise AssertionError('the pool passed on the Model:Samples')
+    except elemod.ModError as e:
+        assert 'outside every free area' in str(e)
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

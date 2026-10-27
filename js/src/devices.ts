@@ -172,7 +172,8 @@ export const MODEL_CYCLES: Device = {
   stage: 0x40200000, flashAt: 0x20000, flashLimit: 0x1e0000, trailer: 'hmac', hmacKeyFrom: [2, 'REVERB SEND'],
   versionAt: 0x0c, versionOptional: true,
   areas: { ddr: [0x47e00000, 0x47e40000], 'sram-tail': [0x8000f700, 0x80010000],
-    'sram-chord-a': [0x80001c5c, 0x800074b4], 'sram-chord-b': [0x8000cac0, 0x8000eae0] },
+    'sram-chord-a': [0x80001c5c, 0x800074b4], 'sram-chord-b': [0x8000cac0, 0x8000eae0],
+    bulk: [0x42800000, 0x47e00000] },
   ddr: [0x47e00000, 0x47e40000],
   recovery: 'hold FUNC while powering on for the STARTUP MENU, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over 5-pin MIDI (not USB)',
