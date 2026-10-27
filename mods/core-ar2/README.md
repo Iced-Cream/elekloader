@@ -834,9 +834,8 @@ stock bytes, and that each covers whole instructions.
   and the code in core's field, read back from slot 125; a performance's
   depth on C follows its pad's pressure (lock-check's bar for C full at 127,
   empty at 0); the velocity and aftertouch lists end with stock's AMP
-  entries; Euclid's convert leaves C's locks where it leaves a stock filter
-  lock on the same steps (TRO at either end moved neither, so the move seen
-  in an emulator on 26 Oct was not repeated); RANDOMIZE PAGE put a mod
+  entries (its Euclid step never turned Euclid on, so it checked nothing);
+  RANDOMIZE PAGE put a mod
   destination in DST once in 12; every machine in BD's list (28) ends its
   DST list with A, C and D; D's 200-character short name shows as LCDX and
   its name cut at the menu's width; RELOAD PAGE from kit 2 brings A back. A
@@ -844,6 +843,9 @@ stock bytes, and that each covers whole instructions.
   Unit run T53 (27 Oct, L8C4): kit dumps of the saved kit with C at 800
   and at 0 differ in one data byte and the checksum; the 800 dump sent back
   brings C back to 800, and a fresh dump then equals the first.
+  Unit run T54 (27 Oct, L8C4): with Euclid on (PL1 4) and C and the
+  filter's FRQ locked on hit step 5, TRO -15 and FREEZE TRACK move both
+  locks to step 6 and leave step 5 with neither.
   The load prompt after a mod-only edit, in an emulator (27 Oct, OS 1.74,
   lock-check 1.6): on the LOCK CHECK page a turn of A (0 to 30), CC 8 and
   NRPN 4:0 each mark the project modified and LOAD PROJECT then asks SAVE
