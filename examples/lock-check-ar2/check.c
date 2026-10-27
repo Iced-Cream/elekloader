@@ -34,12 +34,20 @@ typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour
 STORE_FIELD(lc_a);
 STORE_FIELD(lc_b);
 STORE_FIELD(lc_c);
+STORE_FIELD(lc_d);
 
 /* 1.5: A takes core's category (MOD), C its own (LCHK) */
 const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "Lock Check A", 0};
 const struct core_lock_param lc_param_b = {STORE(lc_b), 0, 0, 15, "LCB", "Lock Check B", 0};
 const struct core_lock_param lc_param_c = {STORE(lc_c), 2, 0, 1000, "LCC", "Lock Check C",
                                            CORE_LOCK_CATEGORY("LCHK")};
+/* 1.6: D's strings are longer than core shows (4, 32 and 4 characters), so
+ * the DST value, the menu and the category show core's cut; the category is
+ * given without CORE_LOCK_CATEGORY, which would refuse it */
+#define X10 "LCDXLCDXLC"
+const struct core_lock_param lc_param_d = {
+    STORE(lc_d), 0, 0, 1, X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10 X10,
+    "Lock Check D, a name longer than core shows in the menu", "LCHKXYZ"};
 
 /* track 1's sound of the current kit: the live kits as edited, the stored
  * project's working kit index */
@@ -91,6 +99,21 @@ void lc_draw(void *bmp, void *ctrl)
         v += p / 256;
         v = v < 0 ? 0 : v > 127 ? 127 : v;
         FILLRECT(bmp, 0, 8, v / 2, 9, 1);
+    }
+    /* 1.6: the same two for C in the right half, from x 64, a pixel per
+     * 16 steps (drawn above A's would cover the knobs' labels): the lock of
+     * the trig track 1 plays, and C as the active scene and the performances
+     * leave it */
+    if ((v = core_lock_value(0, STORE(lc_c))) >= 0)
+        FILLRECT(bmp, 64, 5, 64 + v / 16, 6, 1);
+    v = core_scene_value(0, STORE(lc_c));
+    p = core_perf_offset(0, STORE(lc_c));
+    if (v >= 0 || p) {
+        if (v < 0)
+            v = (s = sound1()) ? (int)core_store_get(STORE(lc_c), s, 0) : 0;
+        v += p / 256;
+        v = v < 0 ? 0 : v > 1000 ? 1000 : v;
+        FILLRECT(bmp, 64, 8, 64 + v / 16, 9, 1);
     }
 }
 
