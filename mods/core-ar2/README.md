@@ -841,6 +841,9 @@ stock bytes, and that each covers whole instructions.
   DST list with A, C and D; D's 200-character short name shows as LCDX and
   its name cut at the menu's width; RELOAD PAGE from kit 2 brings A back. A
   kit dump sent back is received, but C's value after it was not read.
+  Unit run T53 (27 Oct, L8C4): kit dumps of the saved kit with C at 800
+  and at 0 differ in one data byte and the checksum; the 800 dump sent back
+  brings C back to 800, and a fresh dump then equals the first.
   The load prompt after a mod-only edit, in an emulator (27 Oct, OS 1.74,
   lock-check 1.6): on the LOCK CHECK page a turn of A (0 to 30), CC 8 and
   NRPN 4:0 each mark the project modified and LOAD PROJECT then asks SAVE
