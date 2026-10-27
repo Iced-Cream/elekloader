@@ -1031,6 +1031,41 @@ that names it. The render's SRAM is where it was, and the RAM moved by
 0x1000. The values are in `mods/core-dn1/mod.json` and its port. The names
 are the Digitakt's (above) where they mean the same.
 
+### Firmware locations (core-mc 0.2, Model:Cycles)
+
+core-mc exports the firmware locations Model:Cycles mods use
+(`mods/core-mc/fw.s`). A mod that names them says it needs 0.2 with
+`"resources": {"core": "0.2"}`, and a build with 0.1 refuses it (*"needs
+core 0.2 or newer"*). 0.2 has 0.1's code, sites, tables and symbols, so a
+mod built for 0.1 links with it as it did with 0.1. In C,
+`#include "model-cycles/core.h"`; in assembly use the names as they are, with
+`model-cycles/core.inc` for the constants. `examples/track-marker-mc` is
+the smallest mod that uses them.
+
+| name | 1.13 | |
+|---|---|---|
+| `fw_project` | 0x400cf866 | `project()`: the Project singleton, or 0 |
+| `fw_project_tracks` | 0x4000eb90 | `project_tracks(project)`: its track selection |
+| `fw_selection_active` | 0x40012412 | `selection_active(selection)`: the active track, 0-5 (core.h's `fw_active_track()` walks the three) |
+| `fw_ui_states` | 0x400cf9a8 | `ui_states()`: the UIStates singleton |
+| `fw_value_shown`, `fw_trig_held` | 0x4006b704, 0x4006b736 | `(ui_states)`: a parameter's value is on screen; a trig is held, so knobs edit its locks |
+| `fw_key_held` | 0x4007faf4 | `key_held(code)`, logical codes: FUNC 1, TRACK 2, RETRIG 4 |
+| `fw_kits` | 0x409c9c80 | the 96 patterns' kits, 7094 bytes each: the six track sounds at +28, the pool of 64 at +694, 100 bytes a sound; a sound's machine is its byte +38 |
+| `fw_play_kit` | 0x800017e4 | -> the kit the audio side plays, the current pattern's working copy |
+| `fw_fill` | 0x400710c6 | `fill(bmp, x0, y0, x1, y1, colour, step)`; y = 0 is the bottom row |
+| `fw_text` | 0x40071a04 | `text(bmp, font, x, y, flags, fmt, ...)`: flags 0 from x on, 2 centred on x |
+| `fw_font_make`, `fw_font_drop` | 0x40072260, 0x40072080 | a font object from glyphs, and undoing it |
+| `fw_font_small`, `fw_font_medium` | 0x40140ab0, 0x4014120c | glyphs, 5 x 9 and 7 x 9 pixels |
+| `fw_view_redraw` | 0x40076bee | `view_redraw(view)`: the screen draws the view again |
+| `fw_fs_mounted`, `fw_fs_lock_word`, `fw_running_task` | 0x40f07cf4, 0x40fe6df0, 0x422fef30 | the +Drive's file system: mounted, its lock (+0 the task that holds it), the running task |
+| `fw_fs_lock`, `fw_fs_unlock` | 0x40001cc4, 0x40001df6 | `(&fw_fs_lock_word)`. The lock lets its holder in again but does not count, so an inner unlock frees it |
+| `fw_fs_entry` | 0x4007de78 | `fs_entry(inode, h)`: h = {inode, id, size, inode word 16}; 0 for a file, -1 otherwise |
+| `fw_fs_read` | 0x4007baaa | `fs_read(buf, len, fh)`: fh = {inode, position, -, open}; the bytes read, or -1 |
+| `fw_fs_find_id`, `fw_fs_ids` | 0x4007dc30, 0x401fb8a4 | the files by id: `{id, inode}` pairs sorted by id, and the index of an id's pair, or -1 |
+
+Call them from the UI task (`ev_tick`, `ev_draw`, `ev_key`, `ev_enc`), and
+the file system under its lock.
+
 ### Machine pages (core 3.0 and machine-pages, Digitakt mk1)
 
 Every machine mod used to hook the SRC page itself (its layout, labels,
