@@ -1,6 +1,6 @@
 # lock-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination from 1.5 a category of its own and from 1.6 core's cut of strings longer than it shows (core 0.8).
+A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination, from 1.5 a category of its own and from 1.6 core's cut of strings longer than it shows (core 0.8).
 It declares three sound fields with `"lock": true` and registers them in
 `core_lock_params` (1.6: four); `lc_a`, `lc_c` and `lc_d` are also `"lfo": true`:
 
