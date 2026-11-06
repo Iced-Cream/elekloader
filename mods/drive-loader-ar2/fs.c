@@ -26,12 +26,15 @@
 unsigned dl_mutex[3];                     /* {owner, wait head, wait tail} */
 volatile int dl_staging_owner;            /* 1: a loader part holds the staging buffer */
 
+extern int dl_last_io[4];
+
 int dl_fs_open(dl_file *f, const char *path, int write)
 {
     void *s;
     STR_NEW(&s, path, 0);
     FILE_NEW(f, &s, write ? 1 : 0);
     STR_DEL(&s);
+    dl_last_io[0] = f->raw[F_OPEN] | f->raw[7] << 8 | write << 16;
     return f->raw[F_OPEN] ? 0 : -1;
 }
 
@@ -46,6 +49,7 @@ int dl_fs_write(dl_file *f, const void *buf, unsigned n)
     while (n) {
         unsigned k = n > 0x8000 ? 0x8000 : n;
         int r = FILE_WRITE(f, p, k);
+        dl_last_io[1] = r;
         if (r < 0 || (unsigned)r != k)
             return -1;
         p += k;
@@ -54,13 +58,29 @@ int dl_fs_write(dl_file *f, const void *buf, unsigned n)
     return 0;
 }
 
+/* stock's node size (0x4007d9ec) is the node's length less 16, never below
+ * 0: FsSample's files start with a 16-byte header of their own. The loader's
+ * files have none, so a file is that plus 16, and one of 16 bytes or less
+ * is counted by reading it. Read mode only. */
 int dl_fs_size(dl_file *f)
 {
     void *node;
+    int n;
     if (!f->raw[F_OPEN])
         return -1;
     node = FILE_NODE(f);
-    return node ? NODE_SIZE(node) : -1;
+    dl_last_io[2] = (int)node;
+    if (!node)
+        return -1;
+    n = NODE_SIZE(node);
+    dl_last_io[3] = n;
+    if (n <= 0) {
+        unsigned char b[32];
+        n = FILE_READ(f, b, sizeof b) - 16;
+        if (n < -16)
+            return -1;
+    }
+    return n + 16;
 }
 
 void dl_fs_close(dl_file *f)

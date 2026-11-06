@@ -63,7 +63,7 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | pattern compile (a route's entry is 0x1c bytes: the pattern's segments, a std::function; the route grows a table itself) | `0x4002f1d0` |
 | std::string ctor, dtor, the empty string | `0x401bcff0`, `0x401bb540`, `0x419f2a0c` |
 | operator new, delete | `0x40082a40`, `0x40082a4c` |
-| ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |
+| ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size (less 16, for FsSample's own header) | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |
 | ekFS delete, rename | `0x4007da78`, `0x4007da8c` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |

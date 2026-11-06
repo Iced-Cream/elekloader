@@ -77,7 +77,8 @@ extern int dl_status_n __attribute__((weak));
 extern unsigned char dl_skip_reason __attribute__((weak));
 extern char dl_detail[][32] __attribute__((weak));      /* a refusal's name argument */
 
-static char dl_note[64];                       /* the route's last commit or delete */
+static char dl_note[64];
+int dl_last_io[4];                             /* the last commit's raw results, for .status */                       /* the route's last commit or delete */
 static char dl_status_text[2048];
 static unsigned dl_dir_obj[0x130 / 4];         /* under dl_lock */
 
@@ -251,8 +252,8 @@ void dl_fill(void **f)
         return;
     path_of(path, c->name, "");
     dl_lock();
+    want = dl_fs_file_size(path);         /* its own open: a small file's size is read */
     if (dl_fs_open(&fl, path, 0) == 0) {
-        want = dl_fs_size(&fl);
         if (want > DL_STAGING_SIZE)
             want = DL_STAGING_SIZE;
         if (want > 0)
@@ -320,18 +321,24 @@ void dl_change(void **f, const unsigned char *h)
         return;
     }
     path_of(tmp, c->name, ".tmp");
-    r = dl_fs_open(&fl, tmp, 1);
-    if (r == 0)
-        r = dl_fs_write(&fl, drive_staging, n);
+    r = dl_fs_open(&fl, tmp, 1) ? 1 : 0;      /* 1 open, 2 write, 3 size, 4 rename */
+    if (!r && dl_fs_write(&fl, drive_staging, n))
+        r = 2;
     dl_fs_close(&fl);
-    if (r == 0 && dl_fs_file_size(tmp) != (int)n)
-        r = -1;
-    if (r) {
-        dl_fs_delete(tmp);
-        note("write failed:", c->name);
-    } else {
+    if (!r && dl_fs_file_size(tmp) != (int)n)
+        r = 3;
+    if (!r) {
         dl_fs_delete(path);
-        note(dl_fs_rename(tmp, path) ? "rename failed:" : "saved", c->name);
+        if (dl_fs_rename(tmp, path))
+            r = 4;
+    }
+    if (r && r != 4)
+        dl_fs_delete(tmp);
+    if (r) {
+        static const char *const what[] = {"", "open failed:", "write failed:", "size differs:", "rename failed:"};
+        note(what[r], c->name);
+    } else {
+        note("saved", c->name);
     }
     dl_unlock();
 }
@@ -349,6 +356,11 @@ static void status_text(void)
     int i, n;
     at = cat(at, end, "drive-loader route\nfolder " DL_DIR "\nlast: ");
     at = cat(at, end, dl_note[0] ? dl_note : "-");
+    at = cat(at, end, "\nio:");
+    for (i = 0; i < 4; i++) {
+        at = cat(at, end, " ");
+        at = num(at, end, (unsigned)dl_last_io[i]);
+    }
     at = cat(at, end, "\n");
     if (&dl_skip_reason && dl_skip_reason) {
         at = cat(at, end, "skipped: ");
