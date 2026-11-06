@@ -112,6 +112,8 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its tags and mirrors
+    drive_area=(0x47D00000, 0x47FFF000),          # the +Drive mods' area: the top 3 MB of core_ddr's
+    data_family=2,                                # the data container's family id (stock checks it)
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     slot_claims=(('core_machines', 0, 53, 'machine'),),   # a machine's descriptor names its slot at +0
