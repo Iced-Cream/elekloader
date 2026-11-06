@@ -178,8 +178,25 @@ static void set_str(unsigned char *slot, const char *msg)
 enum { C_FILE = 1, C_BUILD, C_STATUS };
 struct clo {
     int what;
+    int reading;                          /* set by the fill: counted in dl_reads */
     char name[DL_NAME_MAX + 1];
 };
+
+/* A read's reader copies the entry, closures and all, after the fill, and destroys the
+ * copies at the read's close or drop (ReadClose 0x4008b716, or the next transfer's open,
+ * 0x4008af8e). The fill marks its own closure, so the copies of it that live count the
+ * open reads: while any does, the MODS page keeps off the staging buffer
+ * (dl_staging_take_idle). An upload's entry stays in the Data handler until the next
+ * upload, so only reads are counted. The router never calls a manager with dl_lock
+ * held. */
+static void count(const struct clo *c, int by)
+{
+    if (!c->reading)
+        return;
+    dl_lock();
+    dl_reads += by;
+    dl_unlock();
+}
 
 /* the manager of every closure here: 0 type, 1 pointer, 2 clone, 3 destroy */
 static const int dl_typeinfo[2];
@@ -196,9 +213,11 @@ int dl_clo_mgr(void **dest, void *const *src, int op)
         struct clo *c = NEW(sizeof *c);
         copy(c, *src, sizeof *c);
         *dest = c;
+        count(c, 1);
         break;
     }
     case 3:
+        count(*dest, -1);
         DELETE(*dest);
         break;
     }
@@ -229,15 +248,9 @@ static void set_fn(unsigned char *slot, const struct clo *proto, void *inv)
  * {u8 ok, string msg} */
 unsigned dl_pre(unsigned char *res, void **f, const unsigned char *entry)
 {
-    int busy;
     (void)f, (void)entry;
     zero(res, 8);
-    dl_lock();                            /* the page's take sees one or the other */
-    busy = dl_staging_owner;
-    if (!busy)
-        dl_read_at = dl_ticks + 1;        /* the page keeps off the buffer a while */
-    dl_unlock();
-    if (busy) {
+    if (dl_staging_owner) {
         set_str(res + 4, "Busy: the loader is using /mods");
         return (unsigned)res;
     }
@@ -259,8 +272,11 @@ void dl_fill(void **f)
         return;
     path_of(path, c->name, "");
     dl_lock();
-    dl_read_at = dl_ticks + 1;
-    if (dl_staging_owner) {               /* the boot holds it: dl_pre answers busy then */
+    if (!c->reading) {
+        c->reading = 1;                   /* this read is open until its copies go */
+        dl_reads++;
+    }
+    if (dl_staging_owner) {               /* not while the entry lives (dl_staging_take_idle) */
         note("read during a check:", c->name);
         dl_unlock();
         return;

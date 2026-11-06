@@ -118,13 +118,16 @@ A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) op
   while it reads: at its opening and at each change. The route answers `busy` then, and only
   then. A separate buffer for the UI task would cost another 512 KB, or limit what the page
   can check. Every ekFS call is made under `dl_lock`.
-- **Keeping off transfers.** Stock streams a read out of the buffer after the route fills it,
-  and makes no call at its end, so the page can't see when a read is over. The route stamps
-  the time of each transfer's start (`dl_pre` sets `dl_read_at` under `dl_lock`), and the page
-  doesn't take the buffer for 10 s after one (`dl_staging_take_quiet`, 200 `ev_tick`s): it
-  shows `BUSY: TRY AGAIN` and saves nothing. A page check that overlapped a read would hand the
-  client the page's bytes under a good CRC (in the emulator, 6 of 90 reads during repeated
-  ticks before this rule; none of 90 after it).
+- **Keeping off reads.** Stock streams a read out of the buffer after the route fills it, so
+  a page check during a read would hand the client the page's bytes under a good CRC (in the
+  emulator, 6 of 90 reads while ticking). ReadOpen (`0x4008b4a0`) makes a reader that copies
+  the entry, its functions included, after the fill, and the reader goes at ReadClose
+  (`0x4008b716`) or when the next transfer's open drops it (`0x4008af8e`). The fill marks its
+  own closure, and the route's function manager counts the marked copies alive
+  (`dl_reads`), so the count is the open reads. The page takes the buffer only at a count of
+  0 (`dl_staging_take_idle`); otherwise it shows `BUSY: TRY AGAIN` and saves nothing. Uploads
+  aren't counted: stock keeps an upload's entry in the Data handler (`+0x44`) until the next
+  upload, and the epoch below covers them.
 - **An upload that met a check.** The route counts each time a loader part takes the buffer
   (`dl_staging_epoch`, `fs.c`). An upload whose body went to the buffer while the page held it
   is refused at the commit, so a file is never written from bytes the page overwrote.
@@ -133,7 +136,8 @@ What the page doesn't see:
 
 - Pass 2's refusals (a `pc16` out of range) are only found by the boot's link: the page saves
   such a set, and the row shows `BOOT:` and the reason after the restart.
-- A transfer longer than 10 s (a large file over a slow link) can still meet a page check.
+- A read the client abandons without a close keeps the page `BUSY` until the next transfer
+  opens.
 
 | what | address |
 |---|---|
@@ -141,6 +145,7 @@ What the page doesn't see:
 | std::function manager for a plain pointer | `0x4019411a` |
 | VerticalSettingsMenuView ctor `(this, name, rows, &title, icon, height, width)`, 0x194 bytes, its View at `+0x38` | `0x400780e8` |
 | the view's `shared_ptr<View>` `(parent, view + 0x38)`, returned in `%a0` | `0x4007762c` |
+| Data handler: ReadOpen, ReadClose, a job's drop, WritePartial, WriteClose | `0x4008b4a0`, `0x4008b716`, `0x4008af8e`, `0x4008c1c6`, `0x4008c5ce` |
 | show a child `(parent, &shared_ptr)`: kept in the parent's slot `+0x84`, which releases the one before | `0x40077a16` |
 | text `(canvas, font, x, y, align, box, clear, fmt, ...)`, the font | `0x4007154c`, `0x40279e24` |
 

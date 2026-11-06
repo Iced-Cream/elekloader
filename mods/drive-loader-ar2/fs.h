@@ -53,9 +53,9 @@ void dl_staging_give(void);
 /* bumped by each dl_staging_take: an upload whose header arrived under another epoch had
  * its staged bytes overwritten by a loader part, and is dropped at its commit */
 extern volatile unsigned dl_staging_epoch;
-/* ev_tick's count (page.c), and dl_ticks + 1 at the route's last read fill (0: none) */
-extern volatile unsigned dl_ticks, dl_read_at;
-/* dl_staging_take, also refused within `hold` ticks of a read's fill (the MODS page) */
-int dl_staging_take_quiet(unsigned hold);
+/* live copies of open reads' fill closures: nonzero while a read of a file is open */
+extern volatile int dl_reads;
+/* dl_staging_take, also refused while a read is open (the MODS page) */
+int dl_staging_take_idle(void);
 
 #endif

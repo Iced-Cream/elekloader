@@ -124,16 +124,16 @@ void dl_unlock(void)
     MUTEX_UNLOCK(dl_mutex);
 }
 
-volatile unsigned dl_read_at;                 /* dl_ticks + 1 at the route's last read fill; 0 none */
+volatile int dl_reads;                /* live copies of open reads' fill closures (route.c) */
 
-/* dl_staging_take, but also refused within `hold` ticks of a read's fill: the router streams
- * a read out of the buffer after the fill, with no call at its end, so a page check in that
- * time would hand the client the page's bytes */
-int dl_staging_take_quiet(unsigned hold)
+/* dl_staging_take, but also refused while a read of a /mods file is open: the router
+ * streams a read out of the buffer after the fill, so a page check during one would hand
+ * the client the page's bytes (route.c, count). */
+int dl_staging_take_idle(void)
 {
     int ok;
     dl_lock();
-    ok = !dl_staging_owner && !(dl_read_at && dl_ticks + 1 - dl_read_at < hold);
+    ok = !dl_staging_owner && dl_reads == 0;
     if (ok) {
         dl_staging_owner = 1;
         dl_staging_epoch++;
