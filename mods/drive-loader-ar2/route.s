@@ -50,6 +50,8 @@ dl_name_slot:
         rts
 
 dl_nop:
+        moveq   #0,%d0
+        suba.l  %a0,%a0
         rts
 
 | dl_call_a0(fn, result, a, b): call a stock routine that returns a struct
@@ -69,9 +71,10 @@ dl_call_a0:
 | register_route}; stock never destroys a handler
 dl_vtable:
         .long   dl_nop, dl_nop, dl_name_slot, dl_register_route
+        .long   dl_nop, dl_nop, dl_nop, dl_nop  | probe: slots stock might have past +0xc
 dl_handler:
         .long   dl_vtable
-        .long   0, 0, 0
+        .space  0x44                            | probe: ProjectHandler is 0x44 bytes, all zero here
 
         .bss
         .align  16
