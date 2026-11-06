@@ -28,7 +28,7 @@ typedef struct dl_file {
 int dl_fs_open(dl_file *f, const char *path, int write);
 int dl_fs_read(dl_file *f, void *buf, unsigned n);        /* bytes read, or < 0 */
 int dl_fs_write(dl_file *f, const void *buf, unsigned n); /* 0, or < 0 */
-int dl_fs_size(dl_file *f);              /* the data size, without ekFS's 16-byte header */
+int dl_fs_size(dl_file *f);              /* the file's size; read mode, before any read */
 void dl_fs_close(dl_file *f);
 int dl_fs_delete(const char *path);      /* 0, or < 0 (also when the file isn't there) */
 int dl_fs_rename(const char *from, const char *to);   /* 0, or < 0; delete `to` first */

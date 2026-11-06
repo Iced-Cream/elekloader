@@ -58,15 +58,29 @@ int dl_fs_write(dl_file *f, const void *buf, unsigned n)
     return 0;
 }
 
+/* stock's node size (0x4007d9ec) is the node's length less 16, never below
+ * 0: FsSample's files start with a 16-byte header of their own. The loader's
+ * files have none, so a file is that plus 16, and one of 16 bytes or less
+ * is counted by reading it. Read mode only. */
 int dl_fs_size(dl_file *f)
 {
     void *node;
+    int n;
     if (!f->raw[F_OPEN])
         return -1;
     node = FILE_NODE(f);
     dl_last_io[2] = (int)node;
-    dl_last_io[3] = node ? NODE_SIZE(node) : -1;
-    return dl_last_io[3];
+    if (!node)
+        return -1;
+    n = NODE_SIZE(node);
+    dl_last_io[3] = n;
+    if (n <= 0) {
+        unsigned char b[32];
+        n = FILE_READ(f, b, sizeof b) - 16;
+        if (n < -16)
+            return -1;
+    }
+    return n + 16;
 }
 
 void dl_fs_close(dl_file *f)
