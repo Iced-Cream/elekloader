@@ -77,6 +77,7 @@ struct dl_status_rec {
 extern struct dl_status_rec dl_status[] __attribute__((weak));
 extern int dl_status_n __attribute__((weak));
 extern unsigned char dl_skip_reason __attribute__((weak));
+extern char dl_detail[][32] __attribute__((weak));      /* a refusal's name argument */
 
 static char dl_note[64];                       /* the route's last commit or delete */
 static char dl_status_text[2048];
@@ -339,7 +340,10 @@ void dl_change(void **f, const unsigned char *h)
 
 /* ---- .status ---- */
 
-static const char *const dl_state_names[] = {"-", "loaded", "dropped", "refused", "skipped"};
+static const char *const dl_state_names[] = {"-", "loaded", "refused", "dropped"};
+static const char *const dl_skip_names[] = {
+    "-", "key held", "after a failed start", "drive not ready", "descriptor ABI",
+    "unstable", "more than 32 lines"};
 
 static void status_text(void)
 {
@@ -348,9 +352,12 @@ static void status_text(void)
     at = cat(at, end, "drive-loader route\nfolder " DL_DIR "\nlast: ");
     at = cat(at, end, dl_note[0] ? dl_note : "-");
     at = cat(at, end, "\n");
-    if (&dl_skip_reason) {
-        at = cat(at, end, "skip: ");
-        at = num(at, end, dl_skip_reason);
+    if (&dl_skip_reason && dl_skip_reason) {
+        at = cat(at, end, "skipped: ");
+        if (dl_skip_reason < 7)
+            at = cat(at, end, dl_skip_names[dl_skip_reason]);
+        else
+            at = num(at, end, dl_skip_reason);
         at = cat(at, end, "\n");
     }
     n = &dl_status_n ? dl_status_n : 0;
@@ -363,11 +370,17 @@ static void status_text(void)
         id[28] = 0;
         at = cat(at, end, id[0] ? id : "?");
         at = cat(at, end, " ");
-        at = cat(at, end, s->state < 5 ? dl_state_names[s->state] : "?");
+        at = cat(at, end, s->state < 4 ? dl_state_names[s->state] : "?");
         at = cat(at, end, " ");
         at = num(at, end, s->code);
         at = cat(at, end, " ");
         at = num(at, end, s->arg);
+        if (&dl_detail && dl_detail[i][0]) {
+            char d[33];
+            copy(d, dl_detail[i], 32);
+            d[32] = 0;
+            at = cat(cat(at, end, " "), end, d);
+        }
         at = cat(at, end, "\n");
     }
 }

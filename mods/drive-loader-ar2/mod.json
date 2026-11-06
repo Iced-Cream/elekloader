@@ -12,7 +12,7 @@
  "sites": [
   {"addr": "0x400a005e", "stock": "700113c0419438c8", "op": "jsr", "target": "dl_route_site"}
  ],
- "weak": ["dl_status", "dl_status_n", "dl_skip_reason"],
+ "weak": ["dl_status", "dl_status_n", "dl_skip_reason", "dl_detail"],
  "resources": {"core": "0.11", "names": ["data-route:mods"]},
  "requires": ["core"]
 }
