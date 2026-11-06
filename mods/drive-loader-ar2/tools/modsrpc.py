@@ -168,6 +168,8 @@ class Rpc:
 
 def main(argv):
     port, cmd = argv[1], argv[2]
+    if any(a == '' for a in argv[3:]):
+        raise RuntimeError('an empty path: stock 1.74 stops answering SysEx after one (seen in rytm-emu)')
     rpc = Rpc(port)
     if cmd == 'ls':
         m = rpc.ls(argv[3])
