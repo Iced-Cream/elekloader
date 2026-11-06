@@ -31,8 +31,6 @@
 
 /* the resolver's route tables and their vector calls (move-construct, realloc-insert) */
 #define PATTERN ((int (*)(void *, void *))0x4002f1d0)     /* (&pattern, &segments) */
-#define SEGS_DEL ((void (*)(void *))0x4017da4a)
-#define FN_DEL ((void (*)(void *))0x40170b92)
 #define STR_DEL ((void (*)(void *))0x401bb540)
 #define LIST_TABLE 0x0c
 #define ENTRY_TABLE 0x18
@@ -552,28 +550,35 @@ unsigned dl_name(unsigned char *res)
     return (unsigned)res;
 }
 
-/* add one route: a pattern and a function without a closure, as stock's
- * register_route does (move-construct at the end, or realloc-insert) */
-static void add(unsigned char *table, const char *pattern, void *inv,
-                unsigned move, unsigned grow)
+/* add one route: a pattern and a function without a closure. The entry
+ * {segments vector, std::function} is 0x1c bytes, and nothing in it points
+ * into itself (the strings and any closure are on the heap), so it moves
+ * bitwise: the table grows into a new block here, without stock's
+ * template calls. */
+static void add(unsigned char *table, const char *pattern, void *inv)
 {
     unsigned pat;
     unsigned e[7];                      /* {segments begin, end, cap; functor[2], manager, invoker} */
-    unsigned *vec = (unsigned *)table;
+    unsigned *vec = (unsigned *)table;  /* {begin, end, cap} */
+    unsigned used = vec[1] - vec[0];
     zero(e, sizeof e);
     STR_NEW(&pat, pattern, 0);
     PATTERN(&pat, e);
+    STR_DEL(&pat);
     e[5] = (unsigned)dl_static_mgr;
     e[6] = (unsigned)inv;
     if (vec[1] == vec[2]) {
-        ((void (*)(void *, void *))grow)(vec, e);
-    } else {
-        ((void (*)(unsigned, void *))move)(vec[1], e);
-        vec[1] += 0x1c;
+        unsigned room = used + 4 * 0x1c;
+        unsigned char *b = NEW(room);
+        copy(b, (void *)vec[0], used);
+        if (vec[0])
+            DELETE((void *)vec[0]);
+        vec[0] = (unsigned)b;
+        vec[1] = (unsigned)b + used;
+        vec[2] = (unsigned)b + room;
     }
-    FN_DEL(&e[3]);
-    SEGS_DEL(e);
-    STR_DEL(&pat);
+    copy((void *)vec[1], e, 0x1c);
+    vec[1] += 0x1c;
 }
 
 /* the handler's register_route (vtable +0xc), called once by stock's add
@@ -581,6 +586,6 @@ static void add(unsigned char *table, const char *pattern, void *inv,
 void dl_register_route(void *self, unsigned char *resolver)
 {
     (void)self;
-    add(resolver + LIST_TABLE, "/mods", dl_list_inv, 0x4017de50, 0x4017dfbe);
-    add(resolver + ENTRY_TABLE, "/mods/*", dl_entry_inv, 0x4017de9e, 0x4017e1e6);
+    add(resolver + LIST_TABLE, "/mods", dl_list_inv);
+    add(resolver + ENTRY_TABLE, "/mods/*", dl_entry_inv);
 }

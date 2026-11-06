@@ -59,7 +59,7 @@ All addresses are OS 1.74's. They were read in Ghidra.
 |---|---|
 | resolver, its getter's guard | `0x419438cc`, `0x419438c8` |
 | add a handler | `0x4002da4a` |
-| pattern compile; list table move / grow; entry table move / grow | `0x4002f1d0`; `0x4017de50` / `0x4017dfbe`; `0x4017de9e` / `0x4017e1e6` |
+| pattern compile (a route's entry is 0x1c bytes: the pattern's segments, a std::function; the route grows a table itself) | `0x4002f1d0` |
 | std::string ctor, dtor, the empty string | `0x401bcff0`, `0x401bb540`, `0x419f2a0c` |
 | operator new, delete | `0x40082a40`, `0x40082a4c` |
 | ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |

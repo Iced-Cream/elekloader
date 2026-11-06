@@ -71,10 +71,10 @@ dl_call_a0:
 | register_route}; stock never destroys a handler
 dl_vtable:
         .long   dl_nop, dl_nop, dl_name_slot, dl_register_route
-        .long   dl_nop, dl_nop, dl_nop, dl_nop  | probe: slots stock might have past +0xc
+        .long   dl_nop, dl_nop, dl_nop, dl_nop  | spare slots that return 0
 dl_handler:
         .long   dl_vtable
-        .space  0x44                            | probe: ProjectHandler is 0x44 bytes, all zero here
+        .space  0x44                            | zeros, as large as stock's ProjectHandler
 
         .bss
         .align  16
