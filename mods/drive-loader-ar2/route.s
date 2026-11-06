@@ -18,9 +18,9 @@
 dl_route_site:
         moveq   #1,%d0                          | the displaced guard set
         move.b  %d0,0x419438c8
-        pea     dl_handler
+        pea     dl_holder
         pea     0x419438cc                      | the resolver
-        jsr     0x4002da4a                      | add: register_route, then into the handler list
+        jsr     0x4002da4a                      | add(resolver, &shared_ptr): register_route, then a copy into the handler list
         addq.l  #8,%sp
         rts
 
@@ -50,6 +50,8 @@ dl_name_slot:
         rts
 
 dl_nop:
+        moveq   #0,%d0
+        suba.l  %a0,%a0
         rts
 
 | dl_call_a0(fn, result, a, b): call a stock routine that returns a struct
@@ -69,9 +71,14 @@ dl_call_a0:
 | register_route}; stock never destroys a handler
 dl_vtable:
         .long   dl_nop, dl_nop, dl_name_slot, dl_register_route
+        .long   dl_nop, dl_nop, dl_nop, dl_nop  | spare slots that return 0
+| stock's add takes a shared_ptr<RouteTypeHandler> {object, control block};
+| this one owns nothing (no control block), as the handler lives forever
+dl_holder:
+        .long   dl_handler, 0
 dl_handler:
         .long   dl_vtable
-        .long   0, 0, 0
+        .space  0x44                            | zeros, as large as stock's ProjectHandler
 
         .bss
         .align  16
