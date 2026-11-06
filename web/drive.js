@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// The +Drive mods page: a unit's /mods folder over Web MIDI (docs/WEB.md, "The +Drive mods page"). The engine is
+// The +Drive mods view (#drive): a unit's /mods folder over Web MIDI (docs/WEB.md, "The +Drive mods view"). app.js
+// imports this module the first time the view opens, and calls open() each time it does. The engine is
 // js/'s TypeScript as the site serves it (engine/): the build-checker (drive.js), the data container (container.js)
 // and the Data router's requests (datarpc.js), each the Python's, byte for byte. Every write goes through
 // datarpc.Mods, whose paths are inside /mods; an upload and the set are checked against the unit's build first.
@@ -63,12 +64,10 @@ const S = {
 async function busy(f) {
   if (S.busy) return;
   S.busy = true;
-  document.body.classList.add('busy');
-  for (const b of document.querySelectorAll('button')) b.disabled = true;
+  for (const b of $('view-drive').querySelectorAll('button')) b.disabled = true;
   try { return await f(); } finally {
     S.busy = false;
-    document.body.classList.remove('busy');
-    for (const b of document.querySelectorAll('button')) b.disabled = false;
+    for (const b of $('view-drive').querySelectorAll('button')) b.disabled = false;
     renderSet();
   }
 }
@@ -76,23 +75,23 @@ async function busy(f) {
 // ---- connect ---------------------------------------------------------------------------------------------------
 
 async function listPorts() {
-  const sel = $('port');
+  const sel = $('dm-port');
   if (!navigator.requestMIDIAccess) {
-    say('conn', 'This browser has no Web MIDI. Chrome, Edge, Opera and Firefox have it.', 'bad');
-    $('connect-btn').disabled = true;
+    say('dm-conn', 'This browser has no Web MIDI. Chrome, Edge, Opera and Firefox have it.', 'bad');
+    $('dm-connect-btn').disabled = true;
     return;
   }
   try {
     S.access = await navigator.requestMIDIAccess({ sysex: true });
   } catch (e) {
-    say('conn', `MIDI with SysEx was not allowed (${e.message || e}).`, 'bad');
+    say('dm-conn', `MIDI with SysEx was not allowed (${e.message || e}).`, 'bad');
     return;
   }
   const outs = [...S.access.outputs.values()], ins = [...S.access.inputs.values()];
   sel.replaceChildren(...outs.map(o => el('option', { value: o.id }, o.name)));
   const rytm = outs.find(o => /rytm/i.test(o.name));
   if (rytm) sel.value = rytm.id;
-  if (!outs.length) say('conn', 'No MIDI ports. Connect the unit over USB, with USB CONFIG set to a mode with MIDI.', 'warn');
+  if (!outs.length) say('dm-conn', 'No MIDI ports. Connect the unit over USB, with USB CONFIG set to a mode with MIDI.', 'warn');
   S.access.onstatechange = () => { if (!S.port) listPorts(); };
   return ins;
 }
@@ -103,25 +102,25 @@ function inputFor(out) {
 }
 
 async function connect() {
-  const out = S.access && S.access.outputs.get($('port').value);
+  const out = S.access && S.access.outputs.get($('dm-port').value);
   if (!out) return;
   const input = inputFor(out);
-  if (!input) { say('conn', `No input port goes with ${out.name}.`, 'bad'); return; }
+  if (!input) { say('dm-conn', `No input port goes with ${out.name}.`, 'bad'); return; }
   if (S.port) S.port.close();
   S.port = new MidiPort(input, out);
   S.mods = new datarpc.Mods(new datarpc.Client(S.port, 5000));
   await busy(async () => {
-    say('conn', `Reading ${out.name}…`);
+    say('dm-conn', `Reading ${out.name}…`);
     try {
       const [head, body] = await S.mods.get('.build');
       S.head = head;
       S.build = drive.loadBuild(body);
     } catch (e) {
       S.build = null;
-      say('conn', `${out.name}: ${e.message}. Is a build with the Drive Loader running on it?`, 'bad');
+      say('dm-conn', `${out.name}: ${e.message}. Is a build with the Drive Loader running on it?`, 'bad');
       return;
     }
-    say('conn', `Connected: ${out.name}`, 'ok');
+    say('dm-conn', `Connected: ${out.name}`, 'ok');
     renderBuild();
     await refresh();
     catalog();
@@ -132,21 +131,21 @@ async function connect() {
 
 function renderBuild() {
   const b = S.build;
-  $('build').hidden = false;
-  $('build-label').textContent = b.label();
-  $('modules').replaceChildren(el('tr', {}, el('th', {}, 'Module'), el('th', {}, 'Version'), el('th', {}, 'Kind'), el('th', { class: 'num' }, 'Exports')),
+  $('dm-build').hidden = false;
+  $('dm-build-label').textContent = b.label();
+  $('dm-modules').replaceChildren(el('tr', {}, el('th', {}, 'Module'), el('th', {}, 'Version'), el('th', {}, 'Kind'), el('th', { class: 'dm-num' }, 'Exports')),
     ...b.modules.map(m => el('tr', {}, el('td', {}, m.name), el('td', {}, m.version), el('td', {}, KINDS[m.kind] || m.kind),
-      el('td', { class: 'num' }, m.exports.length))));
+      el('td', { class: 'dm-num' }, m.exports.length))));
   const more = b.tables.filter(t => t.flags & 1 && !(t.flags & 4));
-  $('tables').replaceChildren(el('tr', {}, el('th', {}, 'Table'), el('th', { class: 'num' }, 'Entries'), el('th', { class: 'num' }, 'Spare')),
-    ...more.map(t => el('tr', {}, el('td', {}, el('code', {}, t.name)), el('td', { class: 'num' }, `${t.count} of ${t.capacity}`),
-      el('td', { class: 'num' }, t.capacity - t.count))));
+  $('dm-tables').replaceChildren(el('tr', {}, el('th', {}, 'Table'), el('th', { class: 'dm-num' }, 'Entries'), el('th', { class: 'dm-num' }, 'Spare')),
+    ...more.map(t => el('tr', {}, el('td', {}, el('code', {}, t.name)), el('td', { class: 'dm-num' }, `${t.count} of ${t.capacity}`),
+      el('td', { class: 'dm-num' }, t.capacity - t.count))));
   renderRoom();
 }
 
 function renderRoom(r = null) {
   const b = S.build, used = r ? r.end - b.lo : 0;
-  $('room').replaceChildren(
+  $('dm-room').replaceChildren(
     el('dt', {}, '+Drive area'), el('dd', {}, `${hex8(b.lo)}..${hex8(b.hi)} (${kb(b.hi - b.lo)})`),
     el('dt', {}, 'The chosen set'), el('dd', {}, `${kb(used)} used, ${kb(b.hi - b.lo - used)} free`),
     el('dt', {}, 'Largest file'), el('dd', {}, b.stagingSize ? kb(b.stagingSize) : 'no limit given'));
@@ -183,25 +182,25 @@ async function refresh() {
   S.stale = active.filter(([n, crc]) => { const f = files.find(x => x.name === n); return !f || !f.raw || drive.fileCrc(f.raw) !== crc; }).map(([n]) => n);
   let status = '';
   try { status = new TextDecoder().decode((await S.mods.get('.status'))[1]); } catch (e) { if (!(e instanceof datarpc.RpcError)) throw e; }
-  $('status').hidden = false;
-  $('status-text').textContent = status.trim() || 'Nothing loaded at the last boot.';
-  $('files').hidden = false;
+  $('dm-status').hidden = false;
+  $('dm-status-text').textContent = status.trim() || 'Nothing loaded at the last boot.';
+  $('dm-files').hidden = false;
   renderFiles();
 }
 
 function renderFiles() {
-  $('file-list').replaceChildren(
-    el('tr', {}, el('th', {}, 'Load'), el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'num' }, 'Size'), el('th', {}, 'Alone on this build'), el('th', {}, '')),
+  $('dm-file-list').replaceChildren(
+    el('tr', {}, el('th', {}, 'Load'), el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, 'Alone on this build'), el('th', {}, '')),
     ...S.files.map(f => el('tr', {},
       el('td', {}, el('input', { type: 'checkbox', 'aria-label': `Load ${f.name}`, checked: S.chosen.has(f.name), disabled: !f.raw,
         onchange: e => { if (e.target.checked) { S.chosen.add(f.name); if (!S.order.includes(f.name)) S.order.push(f.name); } else S.chosen.delete(f.name); renderSet(); } })),
       el('td', {}, el('code', {}, f.name)),
       el('td', {}, f.id ? `${f.id} ${f.version ?? ''}` : ''),
-      el('td', { class: 'num' }, kb(f.size)),
+      el('td', { class: 'dm-num' }, kb(f.size)),
       el('td', { class: f.error ? 'bad' : f.alone.state === drive.LOADED ? 'ok' : 'warn' }, f.error || (f.alone.state === drive.LOADED ? 'loads' : f.alone.why())),
-      el('td', {}, el('button', { type: 'button', class: 'mini', disabled: !f.raw, onclick: () => download(f.name, f.raw) }, 'Download'), ' ',
-        el('button', { type: 'button', class: 'mini danger', onclick: e => remove(f, e.target) }, 'Delete')))));
-  if (!S.files.length) $('file-list').append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, 'No mods in /mods yet.')));
+      el('td', {}, el('button', { type: 'button', class: 'dm-mini', disabled: !f.raw, onclick: () => download(f.name, f.raw) }, 'Download'), ' ',
+        el('button', { type: 'button', class: 'dm-mini dm-danger', onclick: e => remove(f, e.target) }, 'Delete')))));
+  if (!S.files.length) $('dm-file-list').append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, 'No mods in /mods yet.')));
   renderSet();
 }
 
@@ -210,15 +209,15 @@ function chosenFiles() {
 }
 
 function renderSet() {
-  if (!S.build || $('files').hidden) return;
+  if (!S.build || $('dm-files').hidden) return;
   const set = chosenFiles();
   const r = drive.check(S.build, set.map(f => [f.name, f.raw]));
   const lines = drive.resultLines(r);
   if (S.stale && S.stale.length) lines.push(`/mods/active names ${S.stale.join(', ')}, which the unit will drop (missing or changed)`);
-  $('set-check').textContent = lines.join('\n');
+  $('dm-set-check').textContent = lines.join('\n');
   renderRoom(r);
   const ok = r.choices.every(c => c.state === drive.LOADED);
-  $('save-set').disabled = S.busy || !ok;
+  $('dm-save-set').disabled = S.busy || !ok;
   return r;
 }
 
@@ -226,12 +225,12 @@ async function saveSet() {
   await busy(async () => {
     const set = chosenFiles();
     const r = drive.check(S.build, set.map(f => [f.name, f.raw]));
-    if (!r.choices.every(c => c.state === drive.LOADED)) { say('set-msg', 'REFUSED: /mods/active is unchanged', 'bad'); return; }
+    if (!r.choices.every(c => c.state === drive.LOADED)) { say('dm-set-msg', 'REFUSED: /mods/active is unchanged', 'bad'); return; }
     const text = drive.activeText(set.map(f => [f.name, f.raw]));
     try {
       await S.mods.put('active', new TextEncoder().encode(text), S.head);
-    } catch (e) { say('set-msg', e.message, 'bad'); return; }
-    say('set-msg', `Saved: ${set.length} mod${set.length === 1 ? '' : 's'} at the next boot.`, 'ok');
+    } catch (e) { say('dm-set-msg', e.message, 'bad'); return; }
+    say('dm-set-msg', `Saved: ${set.length} mod${set.length === 1 ? '' : 's'} at the next boot.`, 'ok');
     await refresh();
   });
 }
@@ -251,8 +250,8 @@ async function remove(f, button) {
     return;
   }
   await busy(async () => {
-    try { await S.mods.rm(f.name); } catch (e) { say('upload-msg', e.message, 'bad'); return; }
-    say('upload-msg', `Deleted ${S.mods.path(f.name)}.`, 'ok');
+    try { await S.mods.rm(f.name); } catch (e) { say('dm-upload-msg', e.message, 'bad'); return; }
+    say('dm-upload-msg', `Deleted ${S.mods.path(f.name)}.`, 'ok');
     await refresh();
   });
 }
@@ -277,7 +276,7 @@ async function upload(files) {
   if (!S.build) return;
   await busy(async () => {
     for (const f of files) {
-      if (!/\.elemod$/.test(f.name)) { say('upload-msg', `REFUSED: ${f.name} is not an .elemod file; nothing was uploaded`, 'bad'); return; }
+      if (!/\.elemod$/.test(f.name)) { say('dm-upload-msg', `REFUSED: ${f.name} is not an .elemod file; nothing was uploaded`, 'bad'); return; }
       const c = drive.check(S.build, [[f.name, f.raw]]).choices[0];
       f.id = c.id;
       f.requires = c.mod ? c.mod.requires : [];
@@ -286,15 +285,15 @@ async function upload(files) {
     const r = drive.check(S.build, set.map(f => [f.name, f.raw]));
     const bad = r.choices.filter(c => files.some(f => f.name === c.name) && c.state !== drive.LOADED);
     if (bad.length) {
-      say('upload-msg', `REFUSED: nothing was uploaded. ${bad.map(c => `${c.name}: ${c.why()}`).join('; ')}`, 'bad');
+      say('dm-upload-msg', `REFUSED: nothing was uploaded. ${bad.map(c => `${c.name}: ${c.why()}`).join('; ')}`, 'bad');
       return;
     }
     for (const f of files) {
       try {
-        await S.mods.put(f.name, f.raw, S.head, (sent, total) => say('upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`));
-      } catch (e) { say('upload-msg', `${f.name}: ${e.message}`, 'bad'); await refresh(); return; }
+        await S.mods.put(f.name, f.raw, S.head, (sent, total) => say('dm-upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`));
+      } catch (e) { say('dm-upload-msg', `${f.name}: ${e.message}`, 'bad'); await refresh(); return; }
     }
-    say('upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Tick ${files.length === 1 ? 'it' : 'them'} to load at the next boot.`, 'ok');
+    say('dm-upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Tick ${files.length === 1 ? 'it' : 'them'} to load at the next boot.`, 'ok');
     for (const f of files) if (!S.order.includes(f.name)) S.order.push(f.name);
     await refresh();
   });
@@ -326,23 +325,29 @@ async function catalog() {
     const c = kind === '+Drive' ? drive.check(S.build, [[e.file, raw]]).choices[0] : null;
     rows.push(el('tr', {},
       el('td', {}, e.title || e.id, el('div', { class: 'muted small' }, `${e.id} ${e.version}`)),
-      el('td', {}, el('span', { class: `tag ${kind === '+Drive' ? 'drive' : ''}` }, kind), why ? el('div', { class: 'muted small' }, why) : ''),
+      el('td', {}, el('span', { class: `dm-tag ${kind === '+Drive' ? 'dm-drive' : ''}` }, kind), why ? el('div', { class: 'muted small' }, why) : ''),
       el('td', { class: c ? (c.state === drive.LOADED ? 'ok' : 'warn') : 'muted' }, c ? (c.state === drive.LOADED ? 'loads alone' : c.why()) : ''),
-      el('td', {}, kind === '+Drive' ? el('button', { type: 'button', class: 'mini', onclick: () => upload([{ name: e.file, raw }]) },
+      el('td', {}, kind === '+Drive' ? el('button', { type: 'button', class: 'dm-mini', onclick: () => upload([{ name: e.file, raw }]) },
         S.files.some(f => f.name === e.file) ? 'Upload again' : 'Upload') : '')));
   }
-  $('catalog').hidden = false;
-  $('catalog-list').replaceChildren(el('tr', {}, el('th', {}, 'Mod'), el('th', {}, 'Where'), el('th', {}, 'On this build'), el('th', {}, '')), ...rows);
+  $('dm-catalog').hidden = false;
+  $('dm-catalog-list').replaceChildren(el('tr', {}, el('th', {}, 'Mod'), el('th', {}, 'Where'), el('th', {}, 'On this build'), el('th', {}, '')), ...rows);
 }
 
 // ---- wiring ----------------------------------------------------------------------------------------------------
 
-$('connect-btn').addEventListener('click', connect);
-$('save-set').addEventListener('click', saveSet);
-$('pick').addEventListener('change', async e => { const f = await readFiles(e.target.files); e.target.value = ''; upload(f); });
-const drop = $('drop');
-drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
-drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', async e => { e.preventDefault(); drop.classList.remove('over'); upload(await readFiles(e.dataTransfer.files)); });
-drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('pick').click(); } });
-listPorts();
+$('dm-connect-btn').addEventListener('click', connect);
+$('dm-save-set').addEventListener('click', saveSet);
+$('dm-pick').addEventListener('change', async e => { const f = await readFiles(e.target.files); e.target.value = ''; upload(f); });
+const drop = $('dm-drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dm-over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dm-over'));
+drop.addEventListener('drop', async e => { e.preventDefault(); drop.classList.remove('dm-over'); upload(await readFiles(e.dataTransfer.files)); });
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('dm-pick').click(); } });
+let started = false;
+/** The view is open: ask for MIDI the first time (the browser's prompt comes then, not when the page loads). */
+export function open() {
+  if (started) return;
+  started = true;
+  listPorts();
+}

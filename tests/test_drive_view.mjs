@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// The +Drive mods page (web/mods.html) in a browser, against a mocked Web MIDI port, needing no firmware and no unit.
+// The patcher page's +Drive mods view (web/index.html#drive, web/drive.js) in a browser, against a mocked Web MIDI port, needing no firmware and no unit.
 // The mock is a fake unit (tests/test_drive.py's FakeUnit, in JavaScript) holding the made-up build of
 // js/test/drive-vectors.json, whose replies are the ones js/tools/drive_vectors.py recorded from `elekloader mods`.
-// The page connects, reads the build, lists /mods, refuses an upload the checker refuses (nothing is sent), uploads
+// The patcher's own engine (Pyodide) is not on this test's site: only the view is tested. It connects, reads the build, lists /mods, refuses an upload the checker refuses (nothing is sent), uploads
 // the two example mods with the very requests the CLI sent, saves the set, reads it back, and deletes a file.
 //
-//   node tests/test_mods_page.mjs       (Playwright with its Chromium; it skips without them)
-//   MODS_PAGE_SHOT=page.png node tests/test_mods_page.mjs     (and a screenshot, once the set is saved)
+//   node tests/test_drive_view.mjs      (Playwright with its Chromium; it skips without them)
+//   DRIVE_VIEW_SHOT=page.png node tests/test_drive_view.mjs    (and a screenshot, once the set is saved)
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
@@ -31,7 +31,7 @@ function check(what, ok, detail = '') {
 
 // ---- the site: the page and its engine, as packaging/build_web.py lays them out --------------------------------
 const site = mkdtempSync(join(tmpdir(), 'mods-page-'));
-for (const n of ['mods.html', 'mods.css', 'mods.js']) copyFileSync(join(ROOT, 'web', n), join(site, n));
+for (const n of ['index.html', 'style.css', 'app.js', 'worker.js', 'drive.js']) copyFileSync(join(ROOT, 'web', n), join(site, n));
 execFileSync('node', [join(ROOT, 'js', 'tools', 'build.ts'), join(site, 'engine')], { stdio: 'ignore' });
 // the vectors' build is a made-up release of the Rytm: the engine learns it as the JS tests do
 writeFileSync(join(site, 'engine', 'devices.js'), readFileSync(join(site, 'engine', 'devices.js'), 'utf8')
@@ -59,7 +59,7 @@ const server = createServer((req, res) => {
     res.end(b);
   } catch { res.writeHead(404); res.end(); }
 }).listen(0);
-const url = `http://127.0.0.1:${server.address().port}/mods.html`;
+const url = `http://127.0.0.1:${server.address().port}/index.html#drive`;
 
 // ---- the mocked unit, in the page ------------------------------------------------------------------------------
 function mock(buildHex) {
@@ -134,37 +134,38 @@ const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
   const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  // the patcher's engine is not here, so only the view's own errors count
+  page.on('pageerror', e => { if (/drive|engine/.test(e.stack || '')) errors.push(e.message); });
+  page.on('console', m => { if (m.type() === 'error' && /drive|engine/.test(m.location().url || '')) errors.push(m.text()); });
   await page.addInitScript(mock, V.build);
   await page.goto(url);
-  await page.waitForFunction(() => document.getElementById('port').options.length > 0);
+  await page.waitForFunction(() => document.getElementById('dm-port').options.length > 0);
   check('the page asks for MIDI with SysEx', await page.evaluate(() => window.__sysex));
-  await page.click('#connect-btn');
-  await page.waitForSelector('#build:not([hidden])');
-  await page.waitForSelector('#files:not([hidden])');
-  check('the build reads as the Python labels it', (await page.textContent('#build-label')) === V.label, await page.textContent('#build-label'));
-  const tables = await page.textContent('#tables');
+  await page.click('#dm-connect-btn');
+  await page.waitForSelector('#dm-build:not([hidden])');
+  await page.waitForSelector('#dm-files:not([hidden])');
+  check('the build reads as the Python labels it', (await page.textContent('#dm-build-label')) === V.label, await page.textContent('#dm-build-label'));
+  const tables = await page.textContent('#dm-tables');
   check('the spare entries per event table', /ev_x.*0 of 1.*1/s.test(tables) && /ev_draw/.test(tables), tables.replace(/\s+/g, ' '));
-  check('the last boot\'s /mods/.status', (await page.textContent('#status-text')).includes('drive-hello.elemod loaded'));
-  check('an empty /mods', (await page.textContent('#file-list')).includes('No mods in /mods yet'));
-  await page.waitForSelector('#catalog:not([hidden])');
-  const cat = await page.textContent('#catalog-list');
+  check('the last boot\'s /mods/.status', (await page.textContent('#dm-status-text')).includes('drive-hello.elemod loaded'));
+  check('an empty /mods', (await page.textContent('#dm-file-list')).includes('No mods in /mods yet'));
+  await page.waitForSelector('#dm-catalog:not([hidden])');
+  const cat = await page.textContent('#dm-catalog-list');
   check('the shop marks each mod +Drive or flash', /\+Drive/.test(cat) && /flash\s*uses sites/.test(cat), cat.replace(/\s+/g, ' '));
 
   // an upload the checker refuses: nothing goes to the unit
   const before = await page.evaluate(() => window.__unit.sent.length);
-  await page.setInputFiles('#pick', [{ name: user.name, mimeType: 'application/json', buffer: user.raw }]);
-  await page.waitForFunction(() => /REFUSED/.test(document.getElementById('upload-msg').textContent));
-  check('an upload that would not load is refused', (await page.textContent('#upload-msg')).includes('requires drive-hello'),
-    await page.textContent('#upload-msg'));
+  await page.setInputFiles('#dm-pick', [{ name: user.name, mimeType: 'application/json', buffer: user.raw }]);
+  await page.waitForFunction(() => /REFUSED/.test(document.getElementById('dm-upload-msg').textContent));
+  check('an upload that would not load is refused', (await page.textContent('#dm-upload-msg')).includes('requires drive-hello'),
+    await page.textContent('#dm-upload-msg'));
   check('... and nothing was sent', (await page.evaluate(() => window.__unit.sent.length)) === before);
 
   // the two examples: the same requests as the CLI's, sequence numbers aside
   const start = await page.evaluate(() => window.__unit.sent.length);
-  await page.setInputFiles('#pick', [{ name: hello.name, mimeType: 'application/json', buffer: hello.raw },
+  await page.setInputFiles('#dm-pick', [{ name: hello.name, mimeType: 'application/json', buffer: hello.raw },
     { name: user.name, mimeType: 'application/json', buffer: user.raw }]);
-  await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('upload-msg').textContent), null, { timeout: 15000 });
+  await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
   const msgs = (await page.evaluate(() => window.__unit.sent)).slice(start);
   const cli = put.flatMap(s => s.log.filter(([k]) => k === 'send').map(([, h]) => h));
   const unframe = h => {
@@ -178,38 +179,38 @@ try {
   check('the uploads are the CLI\'s requests, byte for byte (but the job id)', want.length > 0 && JSON.stringify(got) === JSON.stringify(want),
     `${got.length} of ${want.length} requests, first difference at ${got.findIndex((m, i) => m !== want[i])}`);
   check('the unit holds the files', await page.evaluate(([a, b]) => a in window.__unit.files && b in window.__unit.files, [hello.name, user.name]));
-  await page.waitForFunction(() => document.querySelectorAll('#file-list input[type=checkbox]').length === 2);
-  const list = await page.textContent('#file-list');
+  await page.waitForFunction(() => document.querySelectorAll('#dm-file-list input[type=checkbox]').length === 2);
+  const list = await page.textContent('#dm-file-list');
   check('/mods lists both, each checked alone', /drive-hello\.elemod.*loads/s.test(list) && /requires drive-hello/.test(list), list.replace(/\s+/g, ' '));
 
   // the set: only the user ticked is refused; both are saved
-  await page.check(`#file-list input[aria-label="Load ${user.name}"]`);
-  check('a set that would not load cannot be saved', await page.isDisabled('#save-set'), await page.textContent('#set-check'));
-  await page.check(`#file-list input[aria-label="Load ${hello.name}"]`);
-  check('a set that loads can', !(await page.isDisabled('#save-set')), await page.textContent('#set-check'));
-  await page.click('#save-set');
-  await page.waitForFunction(() => /^Saved/.test(document.getElementById('set-msg').textContent));
+  await page.check(`#dm-file-list input[aria-label="Load ${user.name}"]`);
+  check('a set that would not load cannot be saved', await page.isDisabled('#dm-save-set'), await page.textContent('#dm-set-check'));
+  await page.check(`#dm-file-list input[aria-label="Load ${hello.name}"]`);
+  check('a set that loads can', !(await page.isDisabled('#dm-save-set')), await page.textContent('#dm-set-check'));
+  await page.click('#dm-save-set');
+  await page.waitForFunction(() => /^Saved/.test(document.getElementById('dm-set-msg').textContent));
   const active = await page.evaluate(() => new TextDecoder().decode(Uint8Array.from(window.__unit.files.active)));
   const want2 = V.exchanges.find(s => s.op === 'put' && s.args[0] === 'active').args[1];
   check('/mods/active is the CLI\'s for the same set', Buffer.from(active).toString('hex') === want2, JSON.stringify(active));
-  await page.waitForFunction(() => document.querySelectorAll('#file-list input:checked').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('#dm-file-list input:checked').length === 2);
   check('the set reads back from the unit', true);
-  if (process.env.MODS_PAGE_SHOT) await page.screenshot({ path: process.env.MODS_PAGE_SHOT, fullPage: true });
+  if (process.env.DRIVE_VIEW_SHOT) await page.screenshot({ path: process.env.DRIVE_VIEW_SHOT, fullPage: true });
 
   // delete: two presses
-  const del = page.locator('#file-list tr', { hasText: user.name }).locator('button.danger');
+  const del = page.locator('#dm-file-list tr', { hasText: user.name }).locator('button.dm-danger');
   await del.click();
   check('delete asks once more', /delete\?/i.test(await del.textContent()));
   await del.click();
   await page.waitForFunction(n => !(n in window.__unit.files), user.name);
   check('the file is deleted on the unit', true);
-  await page.waitForFunction(() => /drop/.test(document.getElementById('set-check').textContent));
+  await page.waitForFunction(() => /drop/.test(document.getElementById('dm-set-check').textContent));
   check('the set says the unit will drop it', true);
 
   const writes = (await page.evaluate(() => window.__unit.sent)).filter(m => [0x57, 0x5c].includes(m[4]));
   const paths = writes.map(m => { const a = m.slice(m[4] === 0x57 ? 9 : 5); return Buffer.from(a.slice(0, a.indexOf(0))).toString(); });
   check('every write is inside /mods', paths.length > 0 && paths.every(p => p.startsWith('/mods/')), paths.join(' '));
-  check('no errors on the page', !errors.length, errors.join(' | '));
+  check('no errors from the view', !errors.length, errors.join(' | '));
 } finally {
   await browser.close();
   server.close();
