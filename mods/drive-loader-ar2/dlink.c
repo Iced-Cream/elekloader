@@ -1457,6 +1457,7 @@ static s32 load(struct dmod *m, const struct dl_choice *ch)
 int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
 {
     int i, k, rounds, loaded = 0;
+    u32 dirty_hi = 0;                    /* the highest end any pass 2 wrote to */
     const char *what;
     u32 e;
 
@@ -1551,8 +1552,10 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
         if (!layout())
             continue;
         L.nent = L.edata_n = L.nerel = 0;
-        if (dl_used_hi > dl_used_lo)
-            dl_memset(DL_MEM(dl_used_lo), 0, dl_used_hi - dl_used_lo);
+        if (dirty_hi < dl_used_hi)       /* an earlier round's pass 2 may have written past */
+            dirty_hi = dl_used_hi;       /* this layout's end: zero that too */
+        if (dirty_hi > dl_used_lo)
+            dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
         for (i = 0; i < L.nmods && !restart; i++) {
             struct dmod *m = &L.mods[L.order[i]];
             s32 len;
@@ -1579,8 +1582,9 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
         for (i = 0; i < L.nmods; i++)
             if (L.mods[i].alive)
                 refuse(&L.mods[i], DL_R_LIMIT, 0, 0);
-        if (dl_used_hi > dl_used_lo)
-            dl_memset(DL_MEM(dl_used_lo), 0, dl_used_hi - dl_used_lo);
+        if (dirty_hi > dl_used_lo)
+            dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
+        dl_used_hi = dl_used_lo;
         return 0;
     }
     bind(1);
@@ -1593,7 +1597,10 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
         if (m->init_sec != 0xFF)
             dl_inits[dl_inits_n++] = (m->init_sec == SEC_RUN ? m->run_base : m->bss_base) + m->init_off;
     }
-    if (!loaded)
+    if (!loaded) {                       /* a pass 2 that refused the last mod left its bytes */
+        if (dirty_hi > dl_used_lo)
+            dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
         dl_used_hi = dl_used_lo;
+    }
     return loaded;
 }

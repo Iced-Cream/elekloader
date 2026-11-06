@@ -258,6 +258,10 @@ def main():
         check('pass-2 refusal drops its dependant', st['base']['code'] == 18 and st['dep']['code'] == 10
               and st['good']['state'] == 1, s)
         check('after a restart the survivor sits at the area start', area(F, ram, 8) == bytes.fromhex('4e714e714e714e75'))
+        check('a restart leaves no bytes of the refused mod', not any(area(F, ram, 4096)[8:]))
+        s, ram = run(exe, F, [base], work)
+        check('a pass-2 refusal with nothing loaded leaves the area zero',
+              s['loaded'] == 0 and not any(area(F, ram, 4096)), s)
 
     if fails:
         print('%d failed' % len(fails))
