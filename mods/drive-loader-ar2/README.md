@@ -114,11 +114,17 @@ A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) op
   the next boot links the saved set.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
-- **Reading files.** The page reads each file into the staging buffer, which it takes with
-  `dl_staging_take` only while it reads: at its opening and at each change. The route answers
-  `busy` then, and only then. A separate buffer for the UI task would cost another 512 KB, or
-  limit what the page can check. Every ekFS call is made under `dl_lock`. When the buffer is
-  busy (an upload or read in progress), the page shows `BUSY: TRY AGAIN` and saves nothing.
+- **Reading files.** The page reads each file into the staging buffer, which it takes only
+  while it reads: at its opening and at each change. The route answers `busy` then, and only
+  then. A separate buffer for the UI task would cost another 512 KB, or limit what the page
+  can check. Every ekFS call is made under `dl_lock`.
+- **Keeping off transfers.** Stock streams a read out of the buffer after the route fills it,
+  and makes no call at its end, so the page can't see when a read is over. The route stamps
+  the time of each transfer's start (`dl_pre` sets `dl_read_at` under `dl_lock`), and the page
+  doesn't take the buffer for 10 s after one (`dl_staging_take_quiet`, 200 `ev_tick`s): it
+  shows `BUSY: TRY AGAIN` and saves nothing. A page check that overlapped a read would hand the
+  client the page's bytes under a good CRC (in the emulator, 6 of 90 reads during repeated
+  ticks before this rule; none of 90 after it).
 - **An upload that met a check.** The route counts each time a loader part takes the buffer
   (`dl_staging_epoch`, `fs.c`). An upload whose body went to the buffer while the page held it
   is refused at the commit, so a file is never written from bytes the page overwrote.
@@ -127,9 +133,7 @@ What the page doesn't see:
 
 - Pass 2's refusals (a `pc16` out of range) are only found by the boot's link: the page saves
   such a set, and the row shows `BOOT:` and the reason after the restart.
-- A read of a file through the route that overlaps a page check can return the page's bytes
-  instead of the file's: the route holds the buffer while it fills it, not while stock streams
-  it out. Read the file again.
+- A transfer longer than 10 s (a large file over a slow link) can still meet a page check.
 
 | what | address |
 |---|---|

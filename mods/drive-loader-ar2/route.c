@@ -229,9 +229,15 @@ static void set_fn(unsigned char *slot, const struct clo *proto, void *inv)
  * {u8 ok, string msg} */
 unsigned dl_pre(unsigned char *res, void **f, const unsigned char *entry)
 {
+    int busy;
     (void)f, (void)entry;
     zero(res, 8);
-    if (dl_staging_owner) {
+    dl_lock();                            /* the page's take sees one or the other */
+    busy = dl_staging_owner;
+    if (!busy)
+        dl_read_at = dl_ticks + 1;        /* the page keeps off the buffer a while */
+    dl_unlock();
+    if (busy) {
         set_str(res + 4, "Busy: the loader is using /mods");
         return (unsigned)res;
     }
@@ -253,6 +259,12 @@ void dl_fill(void **f)
         return;
     path_of(path, c->name, "");
     dl_lock();
+    dl_read_at = dl_ticks + 1;
+    if (dl_staging_owner) {               /* the boot holds it: dl_pre answers busy then */
+        note("read during a check:", c->name);
+        dl_unlock();
+        return;
+    }
     want = dl_fs_file_size(path);         /* its own open: a small file's size is read */
     if (dl_fs_open(&fl, path, 0) == 0) {
         if (want > DL_STAGING_SIZE)

@@ -9,9 +9,10 @@
  * refused row says why. The page never loads or unloads code.
  *
  * Everything here runs in the UI task. The route runs in the SysEx tasks: the page takes
- * the staging buffer (dl_staging_take) only while it reads files, at the page's opening
- * and at each change, so the route answers "busy" then and only then, and every ekFS call
- * is made under dl_lock. All addresses are OS 1.74's (README, "Firmware calls"). */
+ * the staging buffer only while it reads files, at the page's opening and at each change,
+ * and not within READ_HOLD ticks of a transfer's start (dl_staging_take_quiet), since stock
+ * streams a read out of the buffer with no call at its end. The route answers "busy" while
+ * the page holds it, and every ekFS call is made under dl_lock. All addresses are OS 1.74's (README, "Firmware calls"). */
 
 #include "dl.h"
 #include "fs.h"
@@ -39,6 +40,7 @@ extern void dl_call_a0(unsigned fn, void *res, void *a, unsigned b);   /* route.
 int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max);           /* route.c */
 
 #define ROWS DL_MAX_MODS
+#define READ_HOLD 200                    /* ev_ticks (10 s) the page keeps off the buffer after a read */
 #define LABEL_FITS 12                    /* characters left of the value column */
 #define ACTIVE_MAX (DL_MAX_MODS * (DL_LINE_NAME_MAX + 12) + 64)
 
@@ -70,7 +72,8 @@ static char label[48], value[8];
 enum { H_BOOT, H_BUSY, H_SAVED, H_NOT_SAVED, H_SAVE_FAILED, H_EMPTY };
 static u8 head;                          /* what the first row says */
 static u8 redraw;                        /* ask the next ev_tick for a frame */
-static volatile u32 ticks, drawn_at;     /* the page's rows were drawn at this tick */
+volatile unsigned dl_ticks;                   /* ev_tick's count */
+static volatile u32 drawn_at;            /* the page's rows were drawn at this tick */
 
 /* ---- text ---- */
 
@@ -223,7 +226,7 @@ static int scan(void)
 {
     int i, k, n, m;
     s32 len;
-    if (!dl_staging_take())
+    if (!dl_staging_take_quiet(READ_HOLD))
         return -1;
     dl_memset(rows, 0, sizeof rows);
     nrows = 0;
@@ -338,7 +341,7 @@ unsigned dl_row_text(int i)
     }
     if (i < 1 || i > nrows)
         return (unsigned)label;
-    if ((ticks / 30) & 1)
+    if ((dl_ticks / 30) & 1)
         say(at, end, &rows[i - 1]);
     else
         cat(at, end, rows[i - 1].id[0] ? rows[i - 1].id : rows[i - 1].name);
@@ -350,7 +353,7 @@ void dl_row_draw(void **f, void *item, void *canvas, int x, int y)
 {
     int i = (int)*f;
     (void)item;
-    drawn_at = ticks;
+    drawn_at = dl_ticks;
     if (i < 1 || i > nrows)
         return;
     if (dl_strlen((const char *)dl_row_text(i)) > LABEL_FITS)
@@ -373,7 +376,7 @@ void dl_row_select(void **f)
         return;
     }
     n = chosen(i);
-    if (!dl_staging_take()) {
+    if (!dl_staging_take_quiet(READ_HOLD)) {
         head = H_BUSY;
         return;
     }
@@ -465,8 +468,8 @@ void dl_settings(void *menu)
  * and one after a change */
 void dl_page_tick(void *ctrl)
 {
-    ticks++;
-    if (redraw || (ticks - drawn_at < 40 && ticks % 30 == 0)) {
+    dl_ticks++;
+    if (redraw || (dl_ticks - drawn_at < 40 && dl_ticks % 30 == 0)) {
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;
     }
