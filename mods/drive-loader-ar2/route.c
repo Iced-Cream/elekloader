@@ -189,12 +189,23 @@ struct clo {
  * (dl_staging_take_idle). An upload's entry stays in the Data handler until the next
  * upload, so only reads are counted. The router never calls a manager with dl_lock
  * held. */
-static void count(const struct clo *c, int by)
+/* stock's reader (ctor 0x4002beba): its vtable, and where it keeps its copy of the
+ * entry's fill function */
+#define READER_VT 0x401ca970u
+#define READER_FILL 0x30
+unsigned dl_page_now(void);                   /* page.c */
+
+static void count(const struct clo *c, void *const *where, int by)
 {
+    unsigned char *r = (unsigned char *)where - READER_FILL;
     if (!c->reading)
         return;
     dl_lock();
     dl_reads += by;
+    if (by < 0)
+        dl_reader_remove(r);
+    else if (*(unsigned *)r == READER_VT)
+        dl_reader_add(r, dl_page_now());
     dl_unlock();
 }
 
@@ -213,11 +224,11 @@ int dl_clo_mgr(void **dest, void *const *src, int op)
         struct clo *c = NEW(sizeof *c);
         copy(c, *src, sizeof *c);
         *dest = c;
-        count(c, 1);
+        count(c, (void *const *)dest, 1);
         break;
     }
     case 3:
-        count(*dest, -1);
+        count(*dest, (void *const *)dest, -1);
         DELETE(*dest);
         break;
     }

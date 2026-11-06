@@ -128,6 +128,12 @@ A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) op
   0 (`dl_staging_take_idle`); otherwise it shows `BUSY: TRY AGAIN` and saves nothing. Uploads
   aren't counted: stock keeps an upload's entry in the Data handler (`+0x44`) until the next
   upload, and the epoch below covers them.
+- **A read left open.** A client that stops partway through a read (a crash, a closed tab,
+  a pulled cable) never sends the close, and stock keeps the reader until the next transfer
+  opens: a USB disconnect and re-enumeration don't drop it. The route keeps each open
+  reader's address (the copy's place, less `0x30`, when the reader's vtable `0x401ca970` is
+  there), the page's tick notes its progress (`+0xb0` the body's running CRC, `+0xb4` its
+  bytes served), and a reader that hasn't moved for 30 s (600 `ev_tick`s) no longer counts.
 - **An upload that met a check.** The route counts each time a loader part takes the buffer
   (`dl_staging_epoch`, `fs.c`). An upload whose body went to the buffer while the page held it
   is refused at the commit, so a file is never written from bytes the page overwrote.
@@ -136,8 +142,8 @@ What the page doesn't see:
 
 - Pass 2's refusals (a `pc16` out of range) are only found by the boot's link: the page saves
   such a set, and the row shows `BOOT:` and the reason after the restart.
-- A read the client abandons without a close keeps the page `BUSY` until the next transfer
-  opens.
+- A read the client leaves open keeps the page `BUSY` for 30 s. If that client takes the read
+  up again after a page check, it can get the page's bytes.
 
 | what | address |
 |---|---|
@@ -146,6 +152,7 @@ What the page doesn't see:
 | VerticalSettingsMenuView ctor `(this, name, rows, &title, icon, height, width)`, 0x194 bytes, its View at `+0x38` | `0x400780e8` |
 | the view's `shared_ptr<View>` `(parent, view + 0x38)`, returned in `%a0` | `0x4007762c` |
 | Data handler: ReadOpen, ReadClose, a job's drop, WritePartial, WriteClose | `0x4008b4a0`, `0x4008b716`, `0x4008af8e`, `0x4008c1c6`, `0x4008c5ce` |
+| reader: ctor (0xd8 bytes), vtable, its read | `0x4002beba`, `0x401ca970`, `0x4002bab0` |
 | show a child `(parent, &shared_ptr)`: kept in the parent's slot `+0x84`, which releases the one before | `0x40077a16` |
 | text `(canvas, font, x, y, align, box, clear, fmt, ...)`, the font | `0x4007154c`, `0x40279e24` |
 

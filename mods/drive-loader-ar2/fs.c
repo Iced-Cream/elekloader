@@ -126,14 +126,67 @@ void dl_unlock(void)
 
 volatile int dl_reads;                /* live copies of open reads' fill closures (route.c) */
 
+/* the open reads' readers (stock's, 0xd8 bytes; route.c adds and removes them under
+ * dl_lock), each with its progress (+0xb0 the body's running CRC, +0xb4 its bytes
+ * served) and the tick that progress last changed */
+#define READERS 4
+static unsigned char *readers[READERS];
+static unsigned reader_pos[READERS], reader_at[READERS];
+
+void dl_reader_add(unsigned char *r, unsigned now)
+{
+    int i;
+    for (i = 0; i < READERS; i++)
+        if (!readers[i]) {
+            readers[i] = r;
+            reader_pos[i] = ~0u;
+            reader_at[i] = now;
+            return;
+        }
+}
+
+void dl_reader_remove(unsigned char *r)
+{
+    int i;
+    for (i = 0; i < READERS; i++)
+        if (readers[i] == r)
+            readers[i] = 0;
+}
+
+static unsigned progress(const unsigned char *r)
+{
+    return *(const unsigned *)(r + 0xb0) ^ *(const unsigned *)(r + 0xb4);
+}
+
+/* from the UI tick while a read is open: note each reader's progress */
+void dl_readers_poll(unsigned now)
+{
+    int i;
+    unsigned p;
+    if (!dl_reads)
+        return;
+    dl_lock();
+    for (i = 0; i < READERS; i++)
+        if (readers[i] && (p = progress(readers[i])) != reader_pos[i]) {
+            reader_pos[i] = p;
+            reader_at[i] = now;
+        }
+    dl_unlock();
+}
+
 /* dl_staging_take, but also refused while a read of a /mods file is open: the router
  * streams a read out of the buffer after the fill, so a page check during one would hand
- * the client the page's bytes (route.c, count). */
-int dl_staging_take_idle(void)
+ * the client the page's bytes (route.c, count). A read whose reader hasn't moved for
+ * `stall` ticks was left by its client (stock keeps it until the next transfer opens,
+ * through a USB disconnect too), and doesn't count. */
+int dl_staging_take_idle(unsigned now, unsigned stall)
 {
-    int ok;
+    int ok, i, stalled = 0;
     dl_lock();
-    ok = !dl_staging_owner && dl_reads == 0;
+    for (i = 0; i < READERS; i++)
+        if (readers[i] && now - reader_at[i] >= stall)
+            stalled++;
+    ok = !dl_staging_owner && dl_reads == stalled;
     if (ok) {
         dl_staging_owner = 1;
         dl_staging_epoch++;

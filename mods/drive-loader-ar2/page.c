@@ -11,8 +11,10 @@
  * Everything here runs in the UI task. The route runs in the SysEx tasks: the page takes
  * the staging buffer only while it reads files, at the page's opening and at each change,
  * and not while a read of a file is open (dl_staging_take_idle), since stock streams a read
- * out of the buffer after the fill. The route answers "busy" while
- * the page holds it, and every ekFS call is made under dl_lock. All addresses are OS 1.74's (README, "Firmware calls"). */
+ * out of the buffer after the fill; a read that hasn't moved for READ_STALL ticks was left
+ * by its client and doesn't count. The route answers "busy" while the page holds it, and
+ * every ekFS call is made under dl_lock. All addresses are OS 1.74's (README, "Firmware
+ * calls"). */
 
 #include "dl.h"
 #include "fs.h"
@@ -40,6 +42,7 @@ extern void dl_call_a0(unsigned fn, void *res, void *a, unsigned b);   /* route.
 int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max);           /* route.c */
 
 #define ROWS DL_MAX_MODS
+#define READ_STALL 600                   /* ev_ticks (30 s) a read may stand still and count */
 #define LABEL_FITS 12                    /* characters left of the value column */
 #define ACTIVE_MAX (DL_MAX_MODS * (DL_LINE_NAME_MAX + 12) + 64)
 
@@ -224,7 +227,7 @@ static int scan(void)
 {
     int i, k, n, m;
     s32 len;
-    if (!dl_staging_take_idle())
+    if (!dl_staging_take_idle(ticks, READ_STALL))
         return -1;
     dl_memset(rows, 0, sizeof rows);
     nrows = 0;
@@ -374,7 +377,7 @@ void dl_row_select(void **f)
         return;
     }
     n = chosen(i);
-    if (!dl_staging_take_idle()) {
+    if (!dl_staging_take_idle(ticks, READ_STALL)) {
         head = H_BUSY;
         return;
     }
@@ -464,9 +467,15 @@ void dl_settings(void *menu)
 
 /* from dl_tick: a frame now and then while the page shows, so the labels alternate,
  * and one after a change */
+unsigned dl_page_now(void)
+{
+    return ticks;
+}
+
 void dl_page_tick(void *ctrl)
 {
     ticks++;
+    dl_readers_poll(ticks);
     if (redraw || (ticks - drawn_at < 40 && ticks % 30 == 0)) {
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;
