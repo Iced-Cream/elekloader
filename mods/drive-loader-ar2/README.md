@@ -34,7 +34,7 @@ A build for a unit test run sets `-DDL_TEST_DIR` (mod.json `cflags`), which make
 
 - One site, `0x400a005e`, in the resolver's getter (`0x4009febc`): after stock adds its two
   handlers, `dl_route_site` sets the getter's guard (the instruction it displaces) and adds the
-  loader's handler with stock's `0x4002da4a`. That calls the handler's `register_route`, which
+  loader's handler with stock's `0x4002da4a`, which takes a `shared_ptr` to it (one with no control block: the handler is never freed). That calls the handler's `register_route`, which
   adds `/mods` to the list table and `/mods/*` to the entry table.
 - `/mods/*` resolves to a RAM entry (kind 1) over the staging buffer. Its functions do the rest:
   `+0x1c` refuses with "busy" while a loader part holds the buffer (`dl_staging_take`); `+0x2c`
@@ -66,6 +66,9 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | ekFS delete, rename | `0x4007da78`, `0x4007da8c` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |
+
+`tools/modsrpc.py` is a small Data RPC client (list, get, put, rm) for checking the route in an
+emulator through its `--usb-midi-tcp` port.
 
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
