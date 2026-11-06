@@ -1,0 +1,18 @@
+{
+ "id": "drive-loader",
+ "version": "0.1",
+ "title": "Drive Loader",
+ "category": "Framework",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "The +Drive mods loader's flashed part (core-ar2 0.11 and newer, OS 1.74). From 0.1 the /mods route: a top-level /mods in the unit's Data root listing, holding the .elemod files in the +Drive's /mods folder, which a client such as elekloader lists, reads, uploads and deletes over USB; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["fs.c", "route.c", "route.s"],
+ "sites": [
+  {"addr": "0x400a005e", "stock": "700113c0419438c8", "op": "jsr", "target": "dl_route_site"}
+ ],
+ "weak": ["dl_status", "dl_status_n", "dl_skip_reason"],
+ "resources": {"core": "0.11", "names": ["data-route:mods"]},
+ "requires": ["core"]
+}

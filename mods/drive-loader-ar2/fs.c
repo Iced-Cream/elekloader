@@ -1,0 +1,121 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* drive-loader (Analog Rytm MKII, OS 1.74): ekFS calls and the loader mutex
+ * (fs.h). Every ekFS call takes stock's ekFS mutex (0x419f5320) itself and
+ * returns an error while ekFS isn't mounted. */
+
+#include "fs.h"
+
+/* std::string (copy-on-write, one pointer): ctor from a C string, dtor */
+#define STR_NEW ((void (*)(void *, const char *, void *))0x401bcff0)
+#define STR_DEL ((void (*)(void *))0x401bb540)
+
+#define FILE_NEW ((void (*)(void *, void *, int))0x4007dcfa)    /* (file, &path, 0 read / 1 write) */
+#define FILE_DEL ((void (*)(void *))0x4007d956)                 /* closes when open */
+#define FILE_READ ((int (*)(void *, void *, unsigned))0x4007d822)
+#define FILE_WRITE ((int (*)(void *, const void *, unsigned))0x4007d860)
+#define FILE_NODE ((void *(*)(void *))0x4007d9d2)
+#define NODE_SIZE ((int (*)(void *))0x4007d9ec)                 /* data size, without the header */
+#define FS_DELETE ((int (*)(const char *))0x4007da78)
+#define FS_RENAME ((int (*)(const char *, const char *))0x4007da8c)  /* true on success */
+
+#define MUTEX_LOCK ((void (*)(void *))0x400010bc)
+#define MUTEX_UNLOCK ((void (*)(void *))0x400011ee)
+
+#define F_OPEN 0x18                       /* u8: the open succeeded */
+
+unsigned dl_mutex[3];                     /* {owner, wait head, wait tail} */
+volatile int dl_staging_owner;            /* 1: a loader part holds the staging buffer */
+
+int dl_fs_open(dl_file *f, const char *path, int write)
+{
+    void *s;
+    STR_NEW(&s, path, 0);
+    FILE_NEW(f, &s, write ? 1 : 0);
+    STR_DEL(&s);
+    return f->raw[F_OPEN] ? 0 : -1;
+}
+
+int dl_fs_read(dl_file *f, void *buf, unsigned n)
+{
+    return FILE_READ(f, buf, n);
+}
+
+int dl_fs_write(dl_file *f, const void *buf, unsigned n)
+{
+    const unsigned char *p = buf;
+    while (n) {
+        unsigned k = n > 0x8000 ? 0x8000 : n;
+        int r = FILE_WRITE(f, p, k);
+        if (r < 0 || (unsigned)r != k)
+            return -1;
+        p += k;
+        n -= k;
+    }
+    return 0;
+}
+
+int dl_fs_size(dl_file *f)
+{
+    void *node;
+    if (!f->raw[F_OPEN])
+        return -1;
+    node = FILE_NODE(f);
+    return node ? NODE_SIZE(node) : -1;
+}
+
+void dl_fs_close(dl_file *f)
+{
+    FILE_DEL(f);
+}
+
+/* stock's delete gives no result worth trusting (not traced): the file
+ * being gone afterwards is the result */
+int dl_fs_delete(const char *path)
+{
+    if (dl_fs_file_size(path) < 0)
+        return -1;
+    FS_DELETE(path);
+    return dl_fs_file_size(path) < 0 ? 0 : -1;
+}
+
+int dl_fs_rename(const char *from, const char *to)
+{
+    return FS_RENAME(from, to) & 0xff ? 0 : -1;
+}
+
+int dl_fs_file_size(const char *path)
+{
+    dl_file f;
+    int n = -1;
+    if (dl_fs_open(&f, path, 0) == 0)
+        n = dl_fs_size(&f);
+    dl_fs_close(&f);
+    return n;
+}
+
+void dl_lock(void)
+{
+    MUTEX_LOCK(dl_mutex);
+}
+
+void dl_unlock(void)
+{
+    MUTEX_UNLOCK(dl_mutex);
+}
+
+int dl_staging_take(void)
+{
+    int ok;
+    dl_lock();
+    ok = !dl_staging_owner;
+    dl_staging_owner = 1;
+    dl_unlock();
+    return ok;
+}
+
+void dl_staging_give(void)
+{
+    dl_lock();
+    dl_staging_owner = 0;
+    dl_unlock();
+}
