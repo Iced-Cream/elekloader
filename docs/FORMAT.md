@@ -456,8 +456,10 @@ compressed.
 `.status`), `put FILES...` (checked against the unit's `.build` first;
 nothing is uploaded if one is refused), `rm NAME` and `active NAMES...`
 (writes `/mods/active` when the set loads). `--folder` names the route's
-folder (`/mods`). The TypeScript engine has no +Drive tools yet; the web
-page will need `check` there.
+folder (`/mods`). The TypeScript engine has `check` (`js/src/drive.ts`),
+the container and the same requests (`container.ts`, `datarpc.ts`, over any
+port: Web MIDI on a page), with the same results and bytes
+(`js/test/drive.test.ts`).
 
 ### Mod storage
 
