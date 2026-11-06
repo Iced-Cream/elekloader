@@ -252,8 +252,8 @@ void dl_fill(void **f)
         return;
     path_of(path, c->name, "");
     dl_lock();
+    want = dl_fs_file_size(path);         /* its own open: a small file's size is read */
     if (dl_fs_open(&fl, path, 0) == 0) {
-        want = dl_fs_size(&fl);
         if (want > DL_STAGING_SIZE)
             want = DL_STAGING_SIZE;
         if (want > 0)
