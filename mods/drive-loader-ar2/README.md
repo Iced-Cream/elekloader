@@ -5,8 +5,9 @@ The +Drive mods loader's flashed part, for core-ar2 0.11 and newer on OS 1.74. I
 (docs/FORMAT.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
 
-From 0.1 it holds the `/mods` route and links the mods `/mods/active` names into the +Drive
-mods' area at boot. The rules (what a +Drive mod may hold, the checks, the order, the refusal
+From 0.1 it holds the `/mods` route, links the mods `/mods/active` names into the +Drive
+mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
+The rules (what a +Drive mod may hold, the checks, the order, the refusal
 codes and skip reasons) are docs/FORMAT.md's, "+Drive mods".
 
 ## The /mods route
@@ -87,11 +88,57 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
   id order, and deletes `.armed` 200 `ev_tick`s (about 10 s) later.
 
 `tests/drive_link_host.c` builds the same linker for the computer, and
-`tests/test_drive_link.py` checks it on a made-up Rytm build.
+`tests/test_drive_link.py` checks it on a made-up Rytm build, and checks that the MODS page's
+`dl_check` gives the same verdicts without writing RAM.
 
 | what | address |
 |---|---|
 | panel lock, send, unlock; sleep (µs); key held | `0x40001bf6`, `0x400019e4`, `0x40001c06`; `0x40098c84`; `0x40081c28` |
+
+## The MODS page
+
+A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) opens a page
+(`page.c`, `page.s`) listing the `.elemod` files in the folder, one row each, with a tick.
+
+- **The rows.** The first row is the state: how many mods the boot loaded, or why it skipped;
+  after a change, `SAVED: REBOOT`, `NOT SAVED`, `SAVE FAILED` or `BUSY: TRY AGAIN`; with no
+  files, `NO MODS ON +DRIVE`. Each file's row shows its id, alternating every half second with
+  what applies first: why the set on the page is refused for it, why the file itself is (a bad
+  file, another device, a newer core), `LOADED`, `BOOT:` and why the boot refused it,
+  `ON NEXT BOOT`, `OFF NEXT BOOT`, or its version and size.
+- **A change.** [YES] on a row toggles it, and the page runs the boot's own pass 1, checks and
+  layout (`dl_check`, `dlink.c`) on the new set against `core_desc`, without writing RAM. A
+  set where every ticked mod would load is written to `active` (`active.tmp`, then the old
+  file deleted and the tmp renamed), one line per file, its name and CRC-32. A set that
+  wouldn't is not saved, and the refused row says why. The page never loads or unloads code:
+  the next boot links the saved set.
+- **The boot's verdicts** come from the boot's own records, matched by file name
+  (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
+- **Reading files.** The page reads each file into the staging buffer, which it takes with
+  `dl_staging_take` only while it reads: at its opening and at each change. The route answers
+  `busy` then, and only then. A separate buffer for the UI task would cost another 512 KB, or
+  limit what the page can check. Every ekFS call is made under `dl_lock`. When the buffer is
+  busy (an upload or read in progress), the page shows `BUSY: TRY AGAIN` and saves nothing.
+- **An upload that met a check.** The route counts each time a loader part takes the buffer
+  (`dl_staging_epoch`, `fs.c`). An upload whose body went to the buffer while the page held it
+  is refused at the commit, so a file is never written from bytes the page overwrote.
+
+What the page doesn't see:
+
+- Pass 2's refusals (a `pc16` out of range) are only found by the boot's link: the page saves
+  such a set, and the row shows `BOOT:` and the reason after the restart.
+- A read of a file through the route that overlaps a page check can return the page's bytes
+  instead of the file's: the route holds the buffer while it fills it, not while stock streams
+  it out. Read the file again.
+
+| what | address |
+|---|---|
+| MenuItem ctor (0x54 bytes), `Menu::addItem` | `0x40072fbc`, `0x400727f2` |
+| std::function manager for a plain pointer | `0x4019411a` |
+| VerticalSettingsMenuView ctor `(this, name, rows, &title, icon, height, width)`, 0x194 bytes, its View at `+0x38` | `0x400780e8` |
+| the view's `shared_ptr<View>` `(parent, view + 0x38)`, returned in `%a0` | `0x4007762c` |
+| show a child `(parent, &shared_ptr)`: kept in the parent's slot `+0x84`, which releases the one before | `0x40077a16` |
+| text `(canvas, font, x, y, align, box, clear, fmt, ...)`, the font | `0x4007154c`, `0x40279e24` |
 
 `tools/modsrpc.py` is a small Data RPC client (list, get, put, rm) for checking the route in an
 emulator through its `--usb-midi-tcp` port.

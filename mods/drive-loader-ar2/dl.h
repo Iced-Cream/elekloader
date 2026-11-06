@@ -16,6 +16,7 @@ typedef int s32;
 #define DL_MAX_MODS 32
 #define DL_ID_MAX 28                     /* a mod id, NUL included, as the status keeps it */
 #define DL_LINE_NAME_MAX 64                   /* a file name in /mods/active, NUL included */
+#define DL_VER_MAX 12                        /* a version as dl_check reports it, NUL included */
 
 /* ---- status records: /mods/.status and the MODS page (32 x 32 bytes) ---------------- */
 struct dl_status {
@@ -100,6 +101,17 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max);
 extern u32 dl_inits[DL_MAX_MODS];
 extern u32 dl_inits_n;
 extern u32 dl_used_lo, dl_used_hi;
+
+/* The MODS page's check of a set (design steps 4 to 6: pass 1, the checks, the layout),
+ * which writes nothing but its own records: st and det (DL_MAX_MODS each) as dl_status
+ * and dl_detail, with DL_ST_LOADED for a mod that would load, and each file's version
+ * (ver may be 0). Pass 2's own refusals aren't seen. -> how many would load, -1 when the
+ * descriptor isn't one the loader reads. */
+int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
+             struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX]);
+
+/* The set the boot linked, in /mods/active order: dl_status[i] is dl_boot_choice[i]'s. */
+extern struct dl_choice dl_boot_choice[DL_MAX_MODS];
 
 /* /mods/active -> choices. -> the count, or -1 past 32 lines. */
 int dl_parse_active(const char *text, u32 len, struct dl_choice *out);

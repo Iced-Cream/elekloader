@@ -78,6 +78,7 @@ extern unsigned char dl_skip_reason __attribute__((weak));
 extern char dl_detail[][32] __attribute__((weak));      /* a refusal's name argument */
 
 static char dl_note[64];
+static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
 int dl_last_io[4];                             /* the last commit's raw results, for .status */                       /* the route's last commit or delete */
 static char dl_status_text[2048];
 static unsigned dl_dir_obj[0x130 / 4];         /* under dl_lock */
@@ -289,6 +290,7 @@ unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
         set_str(res + 4, why);
         return (unsigned)res;
     }
+    dl_upload_epoch = dl_staging_epoch;
     res[0] = 1;
     put32(res + 4, STR_EMPTY);
     res[8] = 1;
@@ -315,7 +317,7 @@ void dl_change(void **f, const unsigned char *h)
         return;
     }
     n = be32(h + H_PAYLOAD);
-    if (dl_staging_owner || n > DL_STAGING_SIZE) {
+    if (dl_staging_owner || n > DL_STAGING_SIZE || dl_upload_epoch != dl_staging_epoch) {
         note("upload dropped:", c->name);
         dl_unlock();
         return;
@@ -520,6 +522,33 @@ static int walk(unsigned char *at, int max)
                      P_READ | P_CLEAR | (writable(nm) ? P_WRITE : 0));
             }
             k++;
+        }
+        if (sp[1])
+            SP_RELEASE(&sp[1]);
+    }
+    DIR_DEL(dl_dir_obj);
+    return k;
+}
+
+/* the names of DL_DIR's files (not its folders), up to `max`, for the MODS page;
+ * the caller holds dl_lock. -> how many */
+int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max)
+{
+    int i, n, k = 0;
+    DIR_NEW(dl_dir_obj, DL_DIR, 0);
+    n = DIR_COUNT(dl_dir_obj);
+    for (i = 0; i < n && k < max; i++) {
+        unsigned sp[2] = {0, 0};
+        const unsigned char *node;
+        dl_call_a0(DIR_CHILD, sp, dl_dir_obj, i);
+        node = (const unsigned char *)sp[0];
+        if (node && *(const unsigned short *)(node + NODE_KIND) != 1) {
+            const char *nm = (const char *)node + NODE_NAME;
+            unsigned q = len(nm);
+            if (q <= DL_NAME_MAX) {
+                copy(names[k], nm, q + 1);
+                k++;
+            }
         }
         if (sp[1])
             SP_RELEASE(&sp[1]);

@@ -25,6 +25,7 @@
 
 unsigned dl_mutex[3];                     /* {owner, wait head, wait tail} */
 volatile int dl_staging_owner;            /* 1: a loader part holds the staging buffer */
+volatile unsigned dl_staging_epoch;       /* counts each take: an upload staged across one is stale */
 
 extern int dl_last_io[4];
 
@@ -129,6 +130,8 @@ int dl_staging_take(void)
     dl_lock();
     ok = !dl_staging_owner;
     dl_staging_owner = 1;
+    if (ok)
+        dl_staging_epoch++;
     dl_unlock();
     return ok;
 }

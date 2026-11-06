@@ -29,7 +29,7 @@ typedef u32 (*held_fn)(u32 code);
 extern char core_desc[];
 void dl_flush(void);
 
-static struct dl_choice choices[DL_MAX_MODS];
+struct dl_choice dl_boot_choice[DL_MAX_MODS];     /* the boot's set: dl_status[i] is line i's */
 static char active[DL_MAX_MODS * (DL_LINE_NAME_MAX + 12) + 64];
 static u32 armed_ticks;
 static u8 armed;
@@ -153,14 +153,14 @@ void dl_boot(void)
     len = dl_read_file("active", (u8 *)active, sizeof active - 1);
     if (len <= 0)
         return;                          /* no set chosen */
-    n = dl_parse_active(active, (u32)len, choices);
+    n = dl_parse_active(active, (u32)len, dl_boot_choice);
     if (n < 0) {
         dl_skip_reason = DL_SKIP_COUNT;
         return;
     }
     if (!n)
         return;
-    loaded = dl_link((u32)core_desc, choices, n, (u8 *)drive_staging, DL_STAGING_SIZE);
+    loaded = dl_link((u32)core_desc, dl_boot_choice, n, (u8 *)drive_staging, DL_STAGING_SIZE);
     dl_flush();
     if (loaded <= 0)
         return;
@@ -172,10 +172,13 @@ void dl_boot(void)
             ((v_fn)dl_inits[i])();
 }
 
-/* ev_tick: the crash guard comes off 10 s into ticking. */
+/* ev_tick: the MODS page's frames (page.c), and the crash guard comes off 10 s into
+ * ticking. */
+void dl_page_tick(void *ctrl);
+
 void dl_tick(void *ctrl)
 {
-    (void)ctrl;
+    dl_page_tick(ctrl);
     if (!armed || ++armed_ticks < CRASH_TICKS)
         return;
     armed = 0;

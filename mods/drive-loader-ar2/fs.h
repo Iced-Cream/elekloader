@@ -50,5 +50,8 @@ extern unsigned char drive_staging[];
  * answers every /mods transfer "busy" until dl_staging_give. 1 taken, 0 not. */
 int dl_staging_take(void);
 void dl_staging_give(void);
+/* bumped by each dl_staging_take: an upload whose header arrived under another epoch had
+ * its staged bytes overwritten by a loader part, and is dropped at its commit */
+extern volatile unsigned dl_staging_epoch;
 
 #endif
