@@ -720,11 +720,11 @@ def _(B):
 
 external('link.place', '<>: <> is a <> reference to a <> address', 'tests/test_octatrack.py',
          ('is a DSP reference to a ', 'is a ColdFire reference to a DSP address'))
-external('link.put', '<>: a DSP address out of range (0x<>)', 'tests/test_octatrack.py',
+external('put_reloc', '<>: a DSP address out of range (0x<>)', 'tests/test_octatrack.py',
          'a DSP address out of range (0x1000000)')
 
 
-@row('link.put', '<>: a 16-bit PC-relative reference spans <> bytes')
+@row('put_reloc', '<>: a 16-bit PC-relative reference spans <> bytes')
 def _(B):
     def far(at):
         def f(d):
