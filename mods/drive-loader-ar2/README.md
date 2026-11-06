@@ -5,8 +5,9 @@ The +Drive mods loader's flashed part, for core-ar2 0.11 and newer on OS 1.74. I
 (docs/FORMAT.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
 
-From 0.1 it holds the `/mods` route. Linking the chosen mods at boot comes later, in this
-mod's own files.
+From 0.1 it holds the `/mods` route and links the mods `/mods/active` names into the +Drive
+mods' area at boot. The rules (what a +Drive mod may hold, the checks, the order, the refusal
+codes and skip reasons) are docs/FORMAT.md's, "+Drive mods".
 
 ## The /mods route
 
@@ -66,6 +67,31 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | ekFS delete, rename | `0x4007da78`, `0x4007da8c` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |
+
+## Linking at boot
+
+One more site, `0x401009e0` in `main()` (`0x401006ee`), stock `jsr 0x4009da0e`: `drive_boot`
+(`flush.s`) makes that call, then runs `dl_boot` (`boot.c`). There ekFS is mounted and the audio
+start and the UI task haven't run, so nothing reads the tables the link rewrites.
+
+- **Skip.** Nothing links when the eMMC (`0x419ae2c0`) or ekFS (`0x419ae2bc`) didn't come up;
+  when [NO] is held (the panel query `61 01`, 20 ms, the key bitmap `0x418d1340` through
+  `0x40081c28`, then `60 00` again); or when `/mods/.armed` is there, which it deletes.
+- **The link** (`dlink.c`, with the JSON reader `json.c`) reads one file at a time into the
+  staging buffer and works from `core_desc` only: pass 1, the checks in id order, the layout,
+  pass 2 and the tables' merge. A pass-2 refusal starts the checks again without that mod. It
+  writes the status records `/mods/.status` shows.
+- **The cache.** `dl_flush` pushes every data-cache line by set and way (the V4's CPUSHL takes
+  an index, not an address), then sets CACR to `0xA40CE100`: stock's value without DCINVA.
+- **The crash guard.** With a mod loaded, it writes `/mods/.armed`, calls each `drive_init` in
+  id order, and deletes `.armed` 200 `ev_tick`s (about 10 s) later.
+
+`tests/drive_link_host.c` builds the same linker for the computer, and
+`tests/test_drive_link.py` checks it on a made-up Rytm build.
+
+| what | address |
+|---|---|
+| panel lock, send, unlock; sleep (µs); key held | `0x40001bf6`, `0x400019e4`, `0x40001c06`; `0x40098c84`; `0x40081c28` |
 
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
