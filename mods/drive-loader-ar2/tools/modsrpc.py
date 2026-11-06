@@ -13,6 +13,7 @@ Data commands: 0x53 list, 0x54 read open, 0x55 read partial, 0x56 read close, 0x
     modsrpc.py PORT rm PATH
     modsrpc.py PORT overlap FILE_A PATH_A FILE_B PATH_B   (A's upload left open while B uploads)
 
+From Git Bash on Windows, set MSYS_NO_PATHCONV=1, or "/mods" arrives as a Windows path.
 Exit status 0 on success, 1 when the unit refused (the message is printed).
 """
 import socket
@@ -206,7 +207,7 @@ def main(argv):
 
 def listing(m):
     """A list reply as text: one line per entry (name, kind, then index and size for a file)."""
-    out, p = [], 6
+    out, p = [], 6 + 12                 # after the reply's start, end and count words
     while p < len(m):
         end = m.index(0, p)
         name = m[p:end].decode('latin-1')
