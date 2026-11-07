@@ -441,6 +441,10 @@ static void status_text(void)
 static int name_ok(const char *s)
 {
     unsigned n = len(s), i;
+#ifdef DL_TEST_ARMED
+    if (same(s, ".armed"))               /* test builds only: plant the crash flag */
+        return 1;
+#endif
     if (!n || n > DL_NAME_MAX || s[0] == '.')
         return 0;
     for (i = 0; i < n; i++)
@@ -451,6 +455,10 @@ static int name_ok(const char *s)
 
 static int writable(const char *s)
 {
+#ifdef DL_TEST_ARMED
+    if (same(s, ".armed"))
+        return 1;
+#endif
     return same(s, "active") || (ends(s, ".elemod") && len(s) > 7);
 }
 

@@ -31,6 +31,9 @@ tmp file is renamed over it.
 
 A build for a unit test run sets `-DDL_TEST_DIR` (mod.json `cflags`), which makes the folder
 `/~T MODS`. The test rules allow only `~T` items.
+A unit test build may also set `-DDL_TEST_ARMED`, which lets the route take an upload of `.armed` too, so a
+test can plant the crash flag (`elekloader mods`' clients do this on purpose only). Without it, the name is
+refused like any other dot file. Neither flag is set by default.
 
 ### How it hooks stock
 
