@@ -46,5 +46,46 @@ dl_row_label:
         unlk    %a6
         rts
 
+| The MODS row's icon: the row's draw callback, as stock's SETTINGS rows have it
+| (SAMPLES' is at 0x400da21c): a thunk that moves its arguments down and tail-calls
+| the bitmap blit 0x400716e0 with a Bitmap. The Bitmap is stock's object layout
+| (vptr 0x401d6794, +4 width, +8 height, +0xc words a column, +0x10 pixels,
+| +0x14 mask, +0x18 owns = 0): 9 x 9, one column a long, the top row the lowest
+| bit of the field; a lightning bolt, the elekloader web icon's.
+        .globl  dl_mods_icon
+dl_mods_icon:
+        move.l  12(%sp), %d0
+        move.l  %d0, 4(%sp)
+        move.l  16(%sp), %d0
+        move.l  %d0, 12(%sp)
+        move.l  20(%sp), %d0
+        clr.l   20(%sp)
+        move.l  %d0, 16(%sp)
+        move.l  #dl_icon_bitmap, %d0
+        move.l  %d0, 8(%sp)
+        jmp     0x400716e0
+
+        .align  2
+dl_icon_bitmap:
+        .long   0x401d6794
+        .long   9, 9, 1
+        .long   dl_icon_pixels, dl_icon_mask
+        .long   0
+
+dl_icon_mask:
+        .rept   9
+        .long   0xff800000
+        .endr
+dl_icon_pixels:
+        .long   0x00000000
+        .long   0x00000000
+        .long   0x08000000
+        .long   0x0e000000
+        .long   0x7f000000
+        .long   0x38000000
+        .long   0x08000000
+        .long   0x00000000
+        .long   0x00000000
+
 dl_mods_name:
         .asciz  "MODS"

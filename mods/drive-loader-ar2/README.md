@@ -98,7 +98,10 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
 ## The MODS page
 
 A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) opens a page
-(`page.c`, `page.s`) listing the `.elemod` files in the folder, one row each, with a tick.
+(`page.c`, `page.s`) listing the `.elemod` files in the folder, one row each, with a tick. The MODS row has a 9 x 9
+lightning-bolt icon like the other submenu rows: its draw callback (`dl_mods_icon`, `page.s`) is
+stock's icon thunk, tail-calling the bitmap blit `0x400716e0` with a Bitmap of stock's layout
+(one long a column, top row the lowest bit, a full mask).
 
 - **The rows.** The first row is the state: how many mods the boot loaded, or why it skipped;
   after a change, `SAVED: REBOOT`, `NOT SAVED`, `SAVE FAILED` or `BUSY: TRY AGAIN`; with no

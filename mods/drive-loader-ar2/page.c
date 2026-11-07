@@ -37,7 +37,7 @@
 
 extern char core_desc[];
 extern void core_additem(void *menu, const void *row);
-extern void dl_mods_label(void), dl_row_label(void);     /* page.s */
+extern void dl_mods_label(void), dl_row_label(void), dl_mods_icon(void);   /* page.s */
 extern void dl_call_a0(unsigned fn, void *res, void *a, unsigned b);   /* route.s */
 int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max);           /* route.c */
 
@@ -456,7 +456,7 @@ void dl_mods_open(void **f)
 
 static const void *const mods_row[4] = {
     (const void *)dl_mods_label, (const void *)dl_mods_open,
-    (const void *)nothing, (const void *)nothing,
+    (const void *)dl_mods_icon, (const void *)nothing,
 };
 
 /* ev_settings: GLOBAL's rows are built; MODS goes last */
