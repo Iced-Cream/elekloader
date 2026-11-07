@@ -288,6 +288,18 @@ def main():
         check('a pass-2 refusal with nothing loaded leaves the area zero',
               s['loaded'] == 0 and not any(area(F, ram, 4096)), s)
 
+        # the boot's time (dl.h, dl_bus_us): bus ticks at 132 MHz to ﾂｵs, across DTIM0's wrap
+        src = os.path.join(work, 'bus_us.c')
+        with open(src, 'w') as f:
+            f.write('#include <stdio.h>\n#include "%s"\nint main(void) {\n'
+                    '  printf("%%u %%u %%u %%u\\n", dl_bus_us(0, 131), dl_bus_us(1000, 1000 + 132 * 20000),\n'
+                    '         dl_bus_us(0xFFFFFF00u, 0x00000184u), dl_bus_us(5, 5));\n  return 0;\n}\n'
+                    % os.path.join(SRC, 'dl.h').replace('\\', '/'))
+        exe2 = os.path.join(work, 'bus_us')
+        subprocess.run(['cc', '-Wall', '-DDL_HOST', '-o', exe2, src], check=True)
+        got = subprocess.run([exe2], capture_output=True, text=True, check=True).stdout.split()
+        check('boot time: ticks to us, a wrap, zero', got == ['0', '20000', '4', '0'], got)
+
     if fails:
         print('%d failed' % len(fails))
         sys.exit(1)

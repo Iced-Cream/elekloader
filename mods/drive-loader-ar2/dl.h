@@ -61,6 +61,15 @@ extern char dl_detail[DL_MAX_MODS][32];  /* the refusal's name argument, NUL-ter
 extern u32 dl_status_n;
 extern u8 dl_skip_reason;
 
+/* ---- boot time (/mods/.status "boot:") ------------------------------------------------ */
+/* DTIM0's count (0xfc07000c) runs free from the 132 MHz bus clock: the bootstrap sets its
+ * DTMR to 0x0b and stock's own 64-bit clock (0x401006bc) reads it. 32 bits wrap after 32 s,
+ * far past a boot, so one unsigned difference is enough. */
+#define DL_BUS_PER_US 132u
+static inline u32 dl_bus_us(u32 from, u32 to) { return (to - from) / DL_BUS_PER_US; }
+enum { DL_T_ALL, DL_T_CHECKS, DL_T_LINK, DL_T_INIT };   /* dl_boot_us[]: the whole, then its parts */
+extern u32 dl_boot_us[4];
+
 /* ---- memory ------------------------------------------------------------------------ */
 #ifdef DL_HOST
 u8 *dl_host_mem(u32 addr);

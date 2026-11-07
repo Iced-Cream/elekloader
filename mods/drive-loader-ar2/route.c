@@ -76,6 +76,7 @@ extern struct dl_status_rec dl_status[] __attribute__((weak));
 extern int dl_status_n __attribute__((weak));
 extern unsigned char dl_skip_reason __attribute__((weak));
 extern char dl_detail[][32] __attribute__((weak));      /* a refusal's name argument */
+extern unsigned dl_boot_us[] __attribute__((weak));     /* the boot's time: whole, checks, link, inits */
 
 static char dl_note[64];
 static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
@@ -403,6 +404,14 @@ static void status_text(void)
         at = num(at, end, (unsigned)dl_last_io[i]);
     }
     at = cat(at, end, "\n");
+    if (&dl_boot_us) {
+        static const char *const part[] = {"boot: ", " us (checks ", ", link ", ", inits "};
+        for (i = 0; i < 4; i++) {
+            at = cat(at, end, part[i]);
+            at = num(at, end, dl_boot_us[i]);
+        }
+        at = cat(at, end, ")\n");
+    }
     if (&dl_skip_reason && dl_skip_reason) {
         at = cat(at, end, "skipped: ");
         if (dl_skip_reason < 7)

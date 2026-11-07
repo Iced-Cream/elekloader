@@ -20,7 +20,7 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 | `/mods` | the files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build` and `.status` |
 | `/mods/<name>` | read, upload or Clear one file. Uploads take `*.elemod` and `active` only. Other files there can be read and cleared |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
-| `/mods/.status` | read only: plain text, the route's last commit or delete, then the boot linker's records |
+| `/mods/.status` | read only: plain text, the route's last commit or delete, the boot's time, then the boot linker's records |
 
 Each transfer goes through stock's data container (31-byte header, body, 12-byte footer with
 CRC-32). An upload's header must say family 2, file type `0x454d4f44` (`'EMOD'`), not
@@ -89,6 +89,10 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
   an index, not an address), then sets CACR to `0xA40CE100`: stock's value without DCINVA.
 - **The crash guard.** With a mod loaded, it writes `/mods/.armed`, calls each `drive_init` in
   id order, and deletes `.armed` 200 `ev_tick`s (about 10 s) later.
+- **The time.** `dl_boot` reads DTIM0's count (`0xfc07000c`, free running from the 132 MHz bus
+  clock; stock's own clock at `0x401006bc` reads it) as it starts, after the checks, after the
+  link and the flush, and as it ends. `/mods/.status` shows it as `boot: N us (checks N, link N, inits N)`
+  (the skip key's query alone is 20 ms of the checks); a part the boot didn't reach is 0.
 
 `tests/drive_link_host.c` builds the same linker for the computer, and
 `tests/test_drive_link.py` checks it on a made-up Rytm build, and checks that the MODS page's
@@ -96,7 +100,7 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
 
 | what | address |
 |---|---|
-| panel lock, send, unlock; sleep (µs); key held | `0x40001bf6`, `0x400019e4`, `0x40001c06`; `0x40098c84`; `0x40081c28` |
+| panel lock, send, unlock; sleep (µs); key held; DTIM0's count | `0x40001bf6`, `0x400019e4`, `0x40001c06`; `0x40098c84`; `0x40081c28`; `0xfc07000c` |
 
 ## The MODS page
 
