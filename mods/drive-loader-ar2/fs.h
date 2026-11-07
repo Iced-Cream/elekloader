@@ -50,5 +50,17 @@ extern unsigned char drive_staging[];
  * answers every /mods transfer "busy" until dl_staging_give. 1 taken, 0 not. */
 int dl_staging_take(void);
 void dl_staging_give(void);
+/* bumped by each dl_staging_take: an upload whose header arrived under another epoch had
+ * its staged bytes overwritten by a loader part, and is dropped at its commit */
+extern volatile unsigned dl_staging_epoch;
+/* live copies of open reads' fill closures: nonzero while a read of a file is open */
+extern volatile int dl_reads;
+/* dl_staging_take, also refused while a read is open, unless its reader hasn't moved for
+ * `stall` ticks (the MODS page; `now` in its ticks) */
+int dl_staging_take_idle(unsigned now, unsigned stall);
+/* the open reads' readers (route.c, under dl_lock), and the page's poll of their progress */
+void dl_reader_add(unsigned char *r, unsigned now);
+void dl_reader_remove(unsigned char *r);
+void dl_readers_poll(unsigned now);
 
 #endif
