@@ -113,6 +113,8 @@ static struct {
     struct erel erel[ERELOCS];
     struct item items[MERGE];
     u8 mdata[MDATA];
+    struct dl_status *st;                /* where the records go: dl_status, or a check's */
+    char (*det)[32];
     u32 crc_table[256];
 } L;
 
@@ -197,15 +199,15 @@ static u16 keep(const char *s, u32 n)
 
 static void set_status(struct dmod *m, int state, int code, u32 arg, const char *detail)
 {
-    struct dl_status *s = &dl_status[m->choice];
+    struct dl_status *s = &L.st[m->choice];
     u32 i;
     s->state = (u8)state;
     s->code = (u8)code;
     s->arg = (u16)(arg > 0xFFFF ? 0xFFFF : arg);
     if (detail) {
         for (i = 0; i < 31 && detail[i]; i++)
-            dl_detail[m->choice][i] = detail[i];
-        dl_detail[m->choice][i] = 0;
+            L.det[m->choice][i] = detail[i];
+        L.det[m->choice][i] = 0;
     }
 }
 
@@ -623,7 +625,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         || !L.arena[m->id] || dl_strlen(L.arena + m->id) >= DL_ID_MAX)
         return DL_R_FORMAT;
     for (i = 0; i < DL_ID_MAX; i++)          /* the record names the mod from here on */
-        dl_status[m->choice].id[i] = i < dl_strlen(L.arena + m->id) ? L.arena[m->id + i] : 0;
+        L.st[m->choice].id[i] = i < dl_strlen(L.arena + m->id) ? L.arena[m->id + i] : 0;
     if (!k[K_VERSION] || (at(&j, k[K_VERSION], buf, len), !js_str(&j, &s, &n))
         || (m->version = keep(s, n)) == NONE)
         return DL_R_FORMAT;
@@ -1454,27 +1456,27 @@ static s32 load(struct dmod *m, const struct dl_choice *ch)
     return len;
 }
 
-int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
+/* The flashed build's names, then pass 1 over every chosen file and the id order: what a
+ * link and a check share. The records go to st/det (n of them, zeroed here). -> 0 when the
+ * descriptor isn't one the loader reads, else 1. */
+static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
+                 struct dl_status *st_out, char (*det)[32])
 {
-    int i, k, rounds, loaded = 0;
-    u32 dirty_hi = 0;                    /* the highest end any pass 2 wrote to */
+    int i, k;
     const char *what;
     u32 e;
 
     dl_memset(&L, 0, (u32)((u8 *)&L.crc_table - (u8 *)&L));   /* the crc table stays */
-    dl_memset(dl_status, 0, sizeof dl_status);
-    dl_memset(dl_detail, 0, sizeof dl_detail);
-    dl_inits_n = 0;
-    dl_used_lo = dl_used_hi = 0;
-    dl_status_n = (u32)n;
+    L.st = st_out;
+    L.det = det;
+    dl_memset(st_out, 0, DL_MAX_MODS * sizeof *st_out);
+    dl_memset(det, 0, DL_MAX_MODS * sizeof *det);
     L.buf = buf;
     L.max = max;
     L.d_addr = desc;
     L.d = DL_MEM(desc);
-    if (dl_rd32(L.d) != 0x454c4b44 || dl_rd16(L.d + 4) != 1) {
-        dl_skip_reason = DL_SKIP_ABI;
+    if (dl_rd32(L.d) != 0x454c4b44 || dl_rd16(L.d + 4) != 1)
         return 0;
-    }
     L.pool = D32(0x18);
     L.area_lo = D32(D32(0x3c) + 4);
     L.area_hi = D32(D32(0x3c) + 8);
@@ -1504,7 +1506,7 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
     /* pass 1 */
     for (i = 0; i < n; i++) {
         struct dmod *m = &L.mods[L.nmods];
-        struct dl_status *st = &dl_status[i];
+        struct dl_status *st = &L.st[i];
         s32 len;
         int code;
         u32 q;
@@ -1542,6 +1544,60 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
             k--;
         }
         L.order[k] = x;
+    }
+    return 1;
+}
+
+/* The MODS page's check of a set: pass 1, the checks and the layout, as dl_link, without
+ * pass 2 and without writing anything outside the link state (the area, the tables and
+ * dl_status stay as the boot left them). A mod that would load gets DL_ST_LOADED. The
+ * refusals only pass 2 finds (a pc16 out of range, a relocation to a name nothing
+ * defines) are not seen. -> how many would load, or -1 when the descriptor isn't one the
+ * loader reads. */
+int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
+             struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX])
+{
+    u32 lo = dl_used_lo, hi = dl_used_hi;
+    int i, rounds, ok = 0;
+    if (!begin(desc, choice, n, buf, max, st, det))
+        return -1;
+    if (ver) {
+        dl_memset(ver, 0, DL_MAX_MODS * sizeof *ver);
+        for (i = 0; i < L.nmods; i++) {
+            const char *v = astr(L.mods[i].version);
+            u32 q;
+            for (q = 0; q < DL_VER_MAX - 1 && v[q]; q++)
+                ver[L.mods[i].choice][q] = v[q];
+        }
+    }
+    for (rounds = 0; rounds < 4 * DL_MAX_MODS; rounds++) {
+        while (check_round())
+            ;
+        if (layout())
+            break;
+    }
+    for (i = 0; i < L.nmods; i++)
+        if (L.mods[i].alive) {
+            set_status(&L.mods[i], DL_ST_LOADED, 0, 0, 0);
+            ok++;
+        }
+    dl_used_lo = lo;
+    dl_used_hi = hi;
+    return ok;
+}
+
+int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
+{
+    int i, rounds, loaded = 0;
+    u32 dirty_hi = 0;                    /* the highest end any pass 2 wrote to */
+    const char *what;
+
+    dl_inits_n = 0;
+    dl_used_lo = dl_used_hi = 0;
+    dl_status_n = (u32)n;
+    if (!begin(desc, choice, n, buf, max, dl_status, dl_detail)) {
+        dl_skip_reason = DL_SKIP_ABI;
+        return 0;
     }
 
     /* check, layout and pass 2, until a pass 2 refuses nothing */

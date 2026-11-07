@@ -5,8 +5,9 @@ The +Drive mods loader's flashed part, for core-ar2 0.11 and newer on OS 1.74. I
 (docs/FORMAT.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
 
-From 0.1 it holds the `/mods` route and links the mods `/mods/active` names into the +Drive
-mods' area at boot. The rules (what a +Drive mod may hold, the checks, the order, the refusal
+From 0.1 it holds the `/mods` route, links the mods `/mods/active` names into the +Drive
+mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
+The rules (what a +Drive mod may hold, the checks, the order, the refusal
 codes and skip reasons) are docs/FORMAT.md's, "+Drive mods".
 
 ## The /mods route
@@ -30,6 +31,9 @@ tmp file is renamed over it.
 
 A build for a unit test run sets `-DDL_TEST_DIR` (mod.json `cflags`), which makes the folder
 `/~T MODS`. The test rules allow only `~T` items.
+A unit test build may also set `-DDL_TEST_ARMED`, which lets the route take an upload of `.armed` too, so a
+test can plant the crash flag (`elekloader mods`' clients do this on purpose only). Without it, the name is
+refused like any other dot file. Neither flag is set by default.
 
 ### How it hooks stock
 
@@ -91,11 +95,76 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
   (the skip key's query alone is 20 ms of the checks); a part the boot didn't reach is 0.
 
 `tests/drive_link_host.c` builds the same linker for the computer, and
-`tests/test_drive_link.py` checks it on a made-up Rytm build.
+`tests/test_drive_link.py` checks it on a made-up Rytm build, and checks that the MODS page's
+`dl_check` gives the same verdicts without writing RAM.
 
 | what | address |
 |---|---|
 | panel lock, send, unlock; sleep (µs); key held; DTIM0's count | `0x40001bf6`, `0x400019e4`, `0x40001c06`; `0x40098c84`; `0x40081c28`; `0xfc07000c` |
+
+## The MODS page
+
+A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) opens a page
+(`page.c`, `page.s`) listing the `.elemod` files in the folder, one row each, with a tick. The MODS row has a 9 x 9
+lightning-bolt icon like the other submenu rows: its draw callback (`dl_mods_icon`, `page.s`) is
+stock's icon thunk, tail-calling the bitmap blit `0x400716e0` with a Bitmap of stock's layout
+(one long a column, top row the lowest bit, a full mask).
+
+- **The rows.** The first row is the state: how many mods the boot loaded, or why it skipped;
+  after a change, `SAVED: REBOOT`, `NOT SAVED`, `SAVE FAILED` or `BUSY: TRY AGAIN`; with no
+  files, `NO MODS ON +DRIVE`. Each file's row shows its id, alternating every half second with
+  what applies first: why the set on the page is refused for it, why the file itself is (a bad
+  file, another device, a newer core), `LOADED`, `BOOT:` and why the boot refused it,
+  `ON NEXT BOOT`, `OFF NEXT BOOT`, or its version and size.
+- **A change.** [YES] on a row toggles it, and the page runs the boot's own pass 1, checks and
+  layout (`dl_check`, `dlink.c`) on the new set against `core_desc`, without writing RAM. A
+  set where every ticked mod would load is written to `active` (`active.tmp`, then the old
+  file deleted and the tmp renamed), one line per file, its name and CRC-32. A set that
+  wouldn't is not saved, and the refused row says why. The page never loads or unloads code:
+  the next boot links the saved set.
+- **The boot's verdicts** come from the boot's own records, matched by file name
+  (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
+- **Reading files.** The page reads each file into the staging buffer, which it takes only
+  while it reads: at its opening and at each change. The route answers `busy` then, and only
+  then. A separate buffer for the UI task would cost another 512 KB, or limit what the page
+  can check. Every ekFS call is made under `dl_lock`.
+- **Keeping off reads.** Stock streams a read out of the buffer after the route fills it, so
+  a page check during a read would hand the client the page's bytes under a good CRC (in the
+  emulator, 6 of 90 reads while ticking). ReadOpen (`0x4008b4a0`) makes a reader that copies
+  the entry, its functions included, after the fill, and the reader goes at ReadClose
+  (`0x4008b716`) or when the next transfer's open drops it (`0x4008af8e`). The fill marks its
+  own closure, and the route's function manager counts the marked copies alive
+  (`dl_reads`), so the count is the open reads. The page takes the buffer only at a count of
+  0 (`dl_staging_take_idle`); otherwise it shows `BUSY: TRY AGAIN` and saves nothing. Uploads
+  aren't counted: stock keeps an upload's entry in the Data handler (`+0x44`) until the next
+  upload, and the epoch below covers them.
+- **A read left open.** A client that stops partway through a read (a crash, a closed tab,
+  a pulled cable) never sends the close, and stock keeps the reader until the next transfer
+  opens: a USB disconnect and re-enumeration don't drop it. The route keeps each open
+  reader's address (the copy's place, less `0x30`, when the reader's vtable `0x401ca970` is
+  there), the page's tick notes its progress (`+0xb0` the body's running CRC, `+0xb4` its
+  bytes served), and a reader that hasn't moved for 30 s (600 `ev_tick`s) no longer counts.
+- **An upload that met a check.** The route counts each time a loader part takes the buffer
+  (`dl_staging_epoch`, `fs.c`). An upload whose body went to the buffer while the page held it
+  is refused at the commit, so a file is never written from bytes the page overwrote.
+
+What the page doesn't see:
+
+- Pass 2's refusals (a `pc16` out of range) are only found by the boot's link: the page saves
+  such a set, and the row shows `BOOT:` and the reason after the restart.
+- A read the client leaves open keeps the page `BUSY` for 30 s. If that client takes the read
+  up again after a page check, it can get the page's bytes.
+
+| what | address |
+|---|---|
+| MenuItem ctor (0x54 bytes), `Menu::addItem` | `0x40072fbc`, `0x400727f2` |
+| std::function manager for a plain pointer | `0x4019411a` |
+| VerticalSettingsMenuView ctor `(this, name, rows, &title, icon, height, width)`, 0x194 bytes, its View at `+0x38` | `0x400780e8` |
+| the view's `shared_ptr<View>` `(parent, view + 0x38)`, returned in `%a0` | `0x4007762c` |
+| Data handler: ReadOpen, ReadClose, a job's drop, WritePartial, WriteClose | `0x4008b4a0`, `0x4008b716`, `0x4008af8e`, `0x4008c1c6`, `0x4008c5ce` |
+| reader: ctor (0xd8 bytes), vtable, its read | `0x4002beba`, `0x401ca970`, `0x4002bab0` |
+| show a child `(parent, &shared_ptr)`: kept in the parent's slot `+0x84`, which releases the one before | `0x40077a16` |
+| text `(canvas, font, x, y, align, box, clear, fmt, ...)`, the font | `0x4007154c`, `0x40279e24` |
 
 `tools/modsrpc.py` is a small Data RPC client (list, get, put, rm) for checking the route in an
 emulator through its `--usb-midi-tcp` port.

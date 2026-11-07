@@ -88,8 +88,9 @@ def drive_mod(B, ident, **extra):
     return d
 
 
-def run(exe, F, mods, work, active=None, raw=None, extra_files=None):
-    """Link `mods` (docs, in this /mods/active order). -> (summary, RAM after)."""
+def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False):
+    """Link `mods` (docs, in this /mods/active order). -> (summary, RAM after).
+    With check, run the MODS page's dl_check instead of dl_link."""
     d = tempfile.mkdtemp(dir=work)
     lines = []
     for m in mods:
@@ -109,11 +110,17 @@ def run(exe, F, mods, work, active=None, raw=None, extra_files=None):
     with open(stockf, 'wb') as fh:
         fh.write(F.B.img)
     r = subprocess.run([exe, ramf, '0x%x' % F.ram_base, stockf, '0x%x' % F.B.dev.main_load,
-                        '0x%x' % F.desc_at, d, outf], capture_output=True, text=True)
+                        '0x%x' % F.desc_at, d, outf], capture_output=True, text=True,
+                       env=dict(os.environ, DL_HOST_CHECK='1') if check else None)
     if r.returncode:
         raise AssertionError('host linker failed: %s %s' % (r.stdout, r.stderr))
     with open(outf, 'rb') as fh:
         return json.loads(r.stdout), bytearray(fh.read())
+
+
+def untouched(F, ram):
+    """The host's RAM out is the flashed image followed by zeros."""
+    return ram[:len(F.ram)] == F.ram and not any(ram[len(F.ram):])
 
 
 def area(F, ram, n):
@@ -204,6 +211,18 @@ def main():
             if detail is not None:
                 ok = ok and got.get('detail') == detail
             check('refuses ' + name, ok, s)
+            # the MODS page's check: the same verdict without touching RAM, except a pass-2
+            # refusal (pc16), which only the link sees
+            c, cram = run(exe, F, mods, work, raw=raw, active=active, check=True)
+            cst = {x['id']: x for x in c['status']}
+            cgot = cst.get(bad['id']) or cst.get(bad['id'] + '.elemod', {})
+            if code == 18:
+                cok = cgot.get('state') == 1
+            else:
+                cok = (cgot.get('state') in (2, 3) and cgot.get('code') == code
+                       and (detail is None or cgot.get('detail') == detail))
+            cok = cok and cst['good']['state'] == 1 and untouched(F, cram) and c['boot_status_n'] == 0
+            check('check agrees: ' + name, cok, c)
             return s
 
         refused('a flashed id', drive_mod(B, 'flm'), 8, detail='flm')
@@ -248,6 +267,12 @@ def main():
         big = drive_mod(B, 'big')
         refused('a file over 512 KB', big, 3, raw={'big': (json.dumps(big) + ' ' * (512 * 1024)).encode()})
         refused('broken JSON', drive_mod(B, 'bj'), 4, raw={'bj': b'{"elemod": 2, "id": "bj",'})
+
+        # the check reports each file's version and loads nothing
+        c, cram = run(exe, F, [user, hello], work, check=True)
+        check('check: both would load, versions reported, RAM untouched',
+              c['loaded'] == 2 and [x['version'] for x in c['status']] == [user.get('version', ''), hello.get('version', '')]
+              and untouched(F, cram) and c['boot_status_n'] == 0, c)
 
         # a require of a refused mod goes too; its dependant of a pc16 refusal in pass 2 as well
         base = drive_mod(B, 'base', imports=['core_fn'], relocs=[['.run', 0, 'pc16', 'sym:core_fn', 0]])

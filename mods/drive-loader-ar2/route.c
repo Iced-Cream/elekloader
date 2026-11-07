@@ -79,6 +79,7 @@ extern char dl_detail[][32] __attribute__((weak));      /* a refusal's name argu
 extern unsigned dl_boot_us[] __attribute__((weak));     /* the boot's time: whole, checks, link, inits */
 
 static char dl_note[64];
+static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
 int dl_last_io[4];                             /* the last commit's raw results, for .status */                       /* the route's last commit or delete */
 static char dl_status_text[2048];
 static unsigned dl_dir_obj[0x130 / 4];         /* under dl_lock */
@@ -178,8 +179,36 @@ static void set_str(unsigned char *slot, const char *msg)
 enum { C_FILE = 1, C_BUILD, C_STATUS };
 struct clo {
     int what;
+    int reading;                          /* set by the fill: counted in dl_reads */
     char name[DL_NAME_MAX + 1];
 };
+
+/* A read's reader copies the entry, closures and all, after the fill, and destroys the
+ * copies at the read's close or drop (ReadClose 0x4008b716, or the next transfer's open,
+ * 0x4008af8e). The fill marks its own closure, so the copies of it that live count the
+ * open reads: while any does, the MODS page keeps off the staging buffer
+ * (dl_staging_take_idle). An upload's entry stays in the Data handler until the next
+ * upload, so only reads are counted. The router never calls a manager with dl_lock
+ * held. */
+/* stock's reader (ctor 0x4002beba): its vtable, and where it keeps its copy of the
+ * entry's fill function */
+#define READER_VT 0x401ca970u
+#define READER_FILL 0x30
+unsigned dl_page_now(void);                   /* page.c */
+
+static void count(const struct clo *c, void *const *where, int by)
+{
+    unsigned char *r = (unsigned char *)where - READER_FILL;
+    if (!c->reading)
+        return;
+    dl_lock();
+    dl_reads += by;
+    if (by < 0)
+        dl_reader_remove(r);
+    else if (*(unsigned *)r == READER_VT)
+        dl_reader_add(r, dl_page_now());
+    dl_unlock();
+}
 
 /* the manager of every closure here: 0 type, 1 pointer, 2 clone, 3 destroy */
 static const int dl_typeinfo[2];
@@ -196,9 +225,11 @@ int dl_clo_mgr(void **dest, void *const *src, int op)
         struct clo *c = NEW(sizeof *c);
         copy(c, *src, sizeof *c);
         *dest = c;
+        count(c, (void *const *)dest, 1);
         break;
     }
     case 3:
+        count(*dest, (void *const *)dest, -1);
         DELETE(*dest);
         break;
     }
@@ -253,6 +284,15 @@ void dl_fill(void **f)
         return;
     path_of(path, c->name, "");
     dl_lock();
+    if (!c->reading) {
+        c->reading = 1;                   /* this read is open until its copies go */
+        dl_reads++;
+    }
+    if (dl_staging_owner) {               /* not while the entry lives (dl_staging_take_idle) */
+        note("read during a check:", c->name);
+        dl_unlock();
+        return;
+    }
     want = dl_fs_file_size(path);         /* its own open: a small file's size is read */
     if (dl_fs_open(&fl, path, 0) == 0) {
         if (want > DL_STAGING_SIZE)
@@ -290,6 +330,7 @@ unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
         set_str(res + 4, why);
         return (unsigned)res;
     }
+    dl_upload_epoch = dl_staging_epoch;
     res[0] = 1;
     put32(res + 4, STR_EMPTY);
     res[8] = 1;
@@ -316,7 +357,7 @@ void dl_change(void **f, const unsigned char *h)
         return;
     }
     n = be32(h + H_PAYLOAD);
-    if (dl_staging_owner || n > DL_STAGING_SIZE) {
+    if (dl_staging_owner || n > DL_STAGING_SIZE || dl_upload_epoch != dl_staging_epoch) {
         note("upload dropped:", c->name);
         dl_unlock();
         return;
@@ -409,6 +450,10 @@ static void status_text(void)
 static int name_ok(const char *s)
 {
     unsigned n = len(s), i;
+#ifdef DL_TEST_ARMED
+    if (same(s, ".armed"))               /* test builds only: plant the crash flag */
+        return 1;
+#endif
     if (!n || n > DL_NAME_MAX || s[0] == '.')
         return 0;
     for (i = 0; i < n; i++)
@@ -419,6 +464,10 @@ static int name_ok(const char *s)
 
 static int writable(const char *s)
 {
+#ifdef DL_TEST_ARMED
+    if (same(s, ".armed"))
+        return 1;
+#endif
     return same(s, "active") || (ends(s, ".elemod") && len(s) > 7);
 }
 
@@ -529,6 +578,33 @@ static int walk(unsigned char *at, int max)
                      P_READ | P_CLEAR | (writable(nm) ? P_WRITE : 0));
             }
             k++;
+        }
+        if (sp[1])
+            SP_RELEASE(&sp[1]);
+    }
+    DIR_DEL(dl_dir_obj);
+    return k;
+}
+
+/* the names of DL_DIR's files (not its folders), up to `max`, for the MODS page;
+ * the caller holds dl_lock. -> how many */
+int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max)
+{
+    int i, n, k = 0;
+    DIR_NEW(dl_dir_obj, DL_DIR, 0);
+    n = DIR_COUNT(dl_dir_obj);
+    for (i = 0; i < n && k < max; i++) {
+        unsigned sp[2] = {0, 0};
+        const unsigned char *node;
+        dl_call_a0(DIR_CHILD, sp, dl_dir_obj, i);
+        node = (const unsigned char *)sp[0];
+        if (node && *(const unsigned short *)(node + NODE_KIND) != 1) {
+            const char *nm = (const char *)node + NODE_NAME;
+            unsigned q = len(nm);
+            if (q <= DL_NAME_MAX) {
+                copy(names[k], nm, q + 1);
+                k++;
+            }
         }
         if (sp[1])
             SP_RELEASE(&sp[1]);

@@ -6,7 +6,9 @@
  *
  * RAM.bin is the flashed build's RAM from RAM_BASE up to 0x48000000 (the rest zero),
  * STOCK.bin the main OS image at STOCK_BASE (stock parts copy from it). MODS_DIR holds the
- * files and `active`. OUT.bin gets the RAM afterwards; stdout a JSON summary. */
+ * files and `active`. OUT.bin gets the RAM afterwards; stdout a JSON summary. With
+ * DL_HOST_CHECK set it runs the MODS page's dl_check instead of dl_link: the same summary
+ * from the check's own records, plus each file's version. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,6 +111,30 @@ int main(int argc, char **argv)
         fwrite(ram, 1, ram_len, f);
         fclose(f);
         printf("{\"skip\": \"count\"}\n");
+        return 0;
+    }
+    if (getenv("DL_HOST_CHECK")) {
+        static struct dl_status st[DL_MAX_MODS];
+        static char det[DL_MAX_MODS][32], ver[DL_MAX_MODS][DL_VER_MAX];
+        loaded = dl_check(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging, st, det, ver);
+        f = fopen(argv[7], "wb");
+        fwrite(ram, 1, ram_len, f);
+        fclose(f);
+        printf("{\"loaded\": %d, \"status\": [", loaded);
+        for (i = 0; i < (u32)(k > 0 ? k : 0); i++) {
+            char id[DL_ID_MAX + 1];
+            memcpy(id, st[i].id, DL_ID_MAX);
+            id[DL_ID_MAX] = 0;
+            printf("%s{\"state\": %d, \"code\": %d, \"arg\": %d, \"id\": ", i ? ", " : "",
+                   st[i].state, st[i].code, st[i].arg);
+            jstr(id);
+            printf(", \"detail\": ");
+            jstr(det[i]);
+            printf(", \"version\": ");
+            jstr(ver[i]);
+            printf("}");
+        }
+        printf("], \"boot_status_n\": %u}\n", dl_status_n);
         return 0;
     }
     loaded = dl_link(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging);
