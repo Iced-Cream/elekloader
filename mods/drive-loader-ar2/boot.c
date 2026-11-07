@@ -25,6 +25,7 @@ typedef u32 (*held_fn)(u32 code);
 #define KEY_NO 0x45
 
 #define CRASH_TICKS 200                              /* ev_tick is about 20 Hz: 10 s */
+#define DTCN0 (*(volatile u32 *)0xfc07000c)          /* bus clock count (dl.h, "boot time") */
 
 extern char core_desc[];
 void dl_flush(void);
@@ -129,7 +130,31 @@ static int skip_key(void)
     return held;
 }
 
+/* The boot's time in µs: the whole of dl_boot, then its checks (drive, skip key, crash
+ * guard), the link (/mods/active, the linker, the cache flush) and the inits (.armed, each
+ * drive_init). A part the boot didn't reach takes 0. */
+u32 dl_boot_us[4];
+static u32 t_checks, t_link;
+
+static void boot(void);
+
 void dl_boot(void)
+{
+    u32 t0 = DTCN0, t1;
+    t_checks = t_link = 0;
+    boot();
+    t1 = DTCN0;
+    if (!t_checks)
+        t_checks = t1;
+    if (!t_link)
+        t_link = t1;
+    dl_boot_us[DL_T_ALL] = dl_bus_us(t0, t1);
+    dl_boot_us[DL_T_CHECKS] = dl_bus_us(t0, t_checks);
+    dl_boot_us[DL_T_LINK] = dl_bus_us(t_checks, t_link);
+    dl_boot_us[DL_T_INIT] = dl_bus_us(t_link, t1);
+}
+
+static void boot(void)
 {
     s32 len;
     int n, loaded;
@@ -150,6 +175,7 @@ void dl_boot(void)
         dl_skip_reason = DL_SKIP_ARMED;
         return;
     }
+    t_checks = DTCN0;
     len = dl_read_file("active", (u8 *)active, sizeof active - 1);
     if (len <= 0)
         return;                          /* no set chosen */
@@ -162,6 +188,7 @@ void dl_boot(void)
         return;
     loaded = dl_link((u32)core_desc, choices, n, (u8 *)drive_staging, DL_STAGING_SIZE);
     dl_flush();
+    t_link = DTCN0;
     if (loaded <= 0)
         return;
     write_armed();
