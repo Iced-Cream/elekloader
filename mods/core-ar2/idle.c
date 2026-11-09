@@ -5,45 +5,53 @@
  * The render calls one machine routine per voice slot (8 slots) every block
  * through 0x419ca110, from the slot's first SYN trig until the power goes
  * off, whether the voice sounds or not. Core stops calling it once the slot
- * is silent and its call provably changes nothing the voice board gets, and
- * at the slot's next SYN trig puts the slot's digital state back to what the
- * boot left, so that note starts as the first one after a power-on does.
+ * is silent and its call changes nothing the voice board gets (or only what
+ * a machine below is let off), and at the slot's next SYN trig puts the
+ * slot's digital state back to what the boot left, so that note starts as
+ * the first one after a power-on does.
  *
- * Silent, all of these, every block (idle.s tests the gain first):
+ * Only while a mod asks for it and none holds it off (core_voice_skip_want
+ * nonzero, core_voice_skip_hold 0; analog-rytm-mk2/voice.h); off, the site
+ * is stock's (idle.s).
+ *
+ * Watched (idle.s tests the gain first, then core_voice_quiet), cheapest
+ * first; all of these, every block:
  *   - the machine's gain, both words, below 0x1000 (2^-19 of full scale,
  *     -114 dB): the machine's digital part (noise, click) is gone;
+ *   - the recorded machine is a public one (0..33) and not CP CLASSIC (6),
+ *     whose generator is a global one; machines mods add (34 up) keep state
+ *     core can't know;
+ *   - no trig of the owner, and the machine's own sequence done or not
+ *     waiting for its timer (state < 0, or timer +4 below 0x10);
  *   - the slot's analog amp envelope (0x4010d0fc's sequence, 0x42fb49b4 +
  *     0x20 x slot) in its decay (3) or release (5), for twice the time
  *     stock's own rate-to-time routine (0x4011e7d6) gives for that rate from
- *     full level, plus 375 blocks (0.25 s), measured against the rate the
- *     envelope has now;
+ *     full level, plus 375 blocks (0.25 s), against the rate it has now;
  *   - nothing the call reads changed since the last block: the owner track's
  *     0x54-byte parameter block, its pitch, the owner, the idle bit, the
- *     pointers, the machine's sequence state, and no trig of the owner;
- *   - the machine's own sequence is done or not waiting for its timer
- *     (state < 0, or timer +4 below 0x10, where the next step would be due);
- *   - the recorded machine is a public one (0..33) and not CP CLASSIC (6),
- *     whose generator is a global one; machines mods add (34 up) keep state
- *     core can't know.
+ *     pointers and the machine's sequence state.
  * Then core makes the call itself for QUIET_BLOCKS blocks and checks that it
  * changes nothing in the control frame (0x800063c0, 0x3d8 bytes) or the
- * slot's whole sequence record (0x8000fef8 + 0x20 x slot: state, timer and
- * the machine's private words), leaves both gain words as they were, and
- * leaves the slot's click buffer (0x80006bf8 + 0x80 x slot) at zero. One
- * kind of frame write passes: a byte set from 0 in a place the render
- * clears after each send (byte +4 of entries 0x15..0x4c, 8 bytes apart,
- * 0x401214d8), the same bytes every call, at most REPLAY of them, which core
- * writes again in each skipped block. A call that changes anything else
- * (SY CHIP's arpeggio counter, BD PLASTIC's envelope word) is left to stock
- * for BLOCKED_BLOCKS blocks before core looks again.
+ * slot's sequence record (0x8000fef8 + 0x20 x slot: state, timer and the
+ * machine's private words), leaves both gain words as they were, and leaves
+ * the slot's click buffer (0x80006bf8 + 0x80 x slot) at zero. Passed:
+ *   - a byte set from 0 in a place the render clears after each send (byte
+ *     +4 of entries 0x15..0x4c, 8 bytes apart, 0x401214d8), the same bytes
+ *     every call, at most REPLAY of them, which core writes again in each
+ *     skipped block;
+ *   - BD PLASTIC, SD NATURAL, BD SHARP and BD ACOUSTIC (21, 23, 26, 30): their
+ *     private record words (+8..+0x1c), an envelope that keeps decaying, which
+ *     stay where they are while skipped (owner's pick, 2026-11-09);
+ *   - XT CLASSIC (8) on slots 3 and 5: its ring-out words (frame +0x7a/+0x7c,
+ *     +0x7e/+0x80), which stay where they are while skipped (owner's pick).
+ * A call that changes anything else (SY CHIP's arpeggio counter) is left to
+ * stock for BLOCKED_BLOCKS blocks before core looks again.
  *
- * While a slot is skipped it keeps its state as stock's last call left it,
- * so every check compares honest calls, and core makes the call and checks
- * it again every PROBE_BLOCKS blocks: a machine whose frame words drift
- * slower than the quiet window sees (XT CLASSIC's ring-out) goes back to
- * stock at its next step. Any change of the inputs above (a trig of the
- * owner, SYN on or off, a knob, an LFO, a kit or machine change) gives the
- * slot back to stock in that same block.
+ * Skipped, a block costs a few loads: a trig of the owner, a new owner, a
+ * new sequence state or idle bit gives the slot back to stock in that block.
+ * Everything else, a knob, an LFO, a kit's values, reaches the voice at the
+ * next check: every PROBE_BLOCKS blocks core makes the call and checks it as
+ * above, and a change gives the slot back to stock.
  *
  * At the next SYN trig (flag bit 7 of 0x8000e53c) of a slot that was
  * skipped, just before stock's call for that note, its generator and filter
@@ -58,7 +66,6 @@
 
 typedef uint32_t u32a2 __attribute__((aligned(2), may_alias));
 
-#define MACH_PTR ((volatile uint32_t *)0x419ca110)  /* + slot */
 #define MACH_REC ((volatile uint32_t *)0x419ca0d0)  /* + slot: the recorded machine */
 #define PARAM_PTR ((volatile uint32_t *)0x419ca0f0) /* + slot */
 #define IDLE_BITS (*(volatile uint8_t *)0x419ca0cc)
@@ -90,11 +97,15 @@ typedef uint32_t u32a2 __attribute__((aligned(2), may_alias));
 #define REPLAY 4
 
 #define QUIET_BLOCKS 16
-#define PROBE_BLOCKS 64
+#define PROBE_BLOCKS 256
 #define BLOCKED_BLOCKS 256
+#define SETTLE_BLOCKS 16
 #define MARGIN_BLOCKS 375
 #define LAST_PUBLIC 33
 #define CP_CLASSIC 6
+#define XT_CLASSIC 8
+/* machines whose private record words may move: 21, 23, 26, 30 */
+#define RECORD_FREE ((1U << 21) | (1U << 23) | (1U << 26) | (1U << 30))
 
 enum { WATCH = 0, SKIPPED = 1, BLOCKED = 2 };
 enum { IN_N = PARAM_LONGS + 7 };
@@ -108,9 +119,12 @@ struct voice_state {
 };
 struct voice_state core_voice_state[8];
 static uint32_t inputs[8][IN_N];
-static uint32_t amp_rate[8];
+static uint32_t amp_rate[8], amp_need[8];
+/* a skipped slot's key: owner, idle bit, sequence state when it was skipped */
+static uint32_t skip_owner[8], skip_state[8];
+static uint8_t skip_idle[8];
 static uint32_t snap_a[SNAP_A_LONGS], snap_b[SNAP_B_LONGS], snap_c[SNAP_C_LONGS];
-static uint8_t reset_due;                   /* slots skipped since their last SYN trig */
+uint8_t core_voice_due;                     /* slots skipped since their last SYN trig */
 /* per slot: the frame bytes its quiet call sets, as offset << 8 | value */
 static uint32_t replay[8][REPLAY], replay_new[REPLAY];
 static uint8_t replays[8];
@@ -158,7 +172,8 @@ static int small(uint32_t g)
     return g + 0xfffU <= 0x1ffeU;
 }
 
-/* the decay's time is up (or not in a decay) */
+/* the decay's time is up (or not in a decay); the time is worked out only
+ * when the state or the rate changes */
 static int amp_done(uint32_t s, uint32_t owner, struct voice_state *v)
 {
     int32_t st = AMP_STATE(s);
@@ -172,11 +187,11 @@ static int amp_done(uint32_t s, uint32_t owner, struct voice_state *v)
     if ((v->amp & 0xff000000U) != tag || amp_rate[s] != rate) {
         v->amp = tag;
         amp_rate[s] = rate;
+        amp_need[s] = 2U * ((uint32_t)RATE_TIME(0x7f, rate) >> 4) + MARGIN_BLOCKS;
         return 0;
     }
     uint32_t n = v->amp & 0xffffffU;
-    uint32_t need = 2U * ((uint32_t)RATE_TIME(0x7f, rate) >> 4) + MARGIN_BLOCKS;
-    if (n < need) {
+    if (n < amp_need[s]) {
         v->amp = tag | (n + 1);
         return 0;
     }
@@ -199,88 +214,124 @@ static void set(struct voice_state *v, uint32_t mode, uint32_t count, uint32_t r
     v->m = rec | mode << 16 | count;
 }
 
-/* idle.s, the gain small: 0 skips the call, else the pointer runs it */
+/* the 16-bit frame words a machine is let off, as a mask over the long at
+ * byte offset off */
+static uint32_t free_bits(uint32_t mach, uint32_t s, uint32_t off)
+{
+    if (mach != XT_CLASSIC)
+        return 0;
+    if (s == 3)                         /* +0x7a/+0x7c: the long at 0x78's low word, 0x7c's high */
+        return off == 0x78 ? 0xffffU : off == 0x7c ? 0xffff0000U : 0;
+    if (s == 5)                         /* +0x7e/+0x80 */
+        return off == 0x7c ? 0xffffU : off == 0x80 ? 0xffff0000U : 0;
+    return 0;
+}
+
+/* idle.s, the skip off, a trig of a slot that was skipped: its SYN trig
+ * still puts back the boot's state */
+void core_voice_off(uint32_t s, uint32_t owner)
+{
+    if ((core_voice_due >> s & 1) && TRACK_TRIG[owner] == 1 && (TRACK_TRIG_FLAGS[owner] & 0x80)) {
+        reset_slot(s);
+        core_voice_due &= ~(1U << s);
+    }
+}
+
+/* idle.s, the skip on and the gain small: 0 skips the call, else the
+ * pointer runs it */
 uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
 {
     struct voice_state *v = &core_voice_state[s];
-    uint32_t mode = v->m >> 16 & 0xff, count = v->m & 0xffff;
-    uint32_t mach = MACH_REC[s];
+    uint32_t m = v->m, mode = m >> 16 & 0xff, count = m & 0xffff;
+    uint32_t trig = TRACK_TRIG[owner];
+    int32_t state = (int32_t)RECORD(s)[0];
+    uint32_t idle = IDLE_BITS >> s & 1;
+
+    /* skipped: the cheap key, and the call made and checked every PROBE_BLOCKS */
+    if (mode == SKIPPED && !trig && owner == skip_owner[s] && (uint32_t)state == skip_state[s]
+        && idle == skip_idle[s] && count + 1 < PROBE_BLOCKS) {
+        if (idle)
+            *(volatile uint16_t *)(PARAM_PTR[s] + 4) = 0;
+        for (uint32_t i = 0; i < replays[s]; i++)
+            ((volatile uint8_t *)FRAME)[replay[s][i] >> 8] = (uint8_t)replay[s][i];
+        core_voice_skips++;
+        v->m = m + 1;
+        return 0;
+    }
 
     /* a SYN trig of a slot that was skipped: the boot's state, then stock */
-    if ((reset_due >> s & 1) && TRACK_TRIG[owner] == 1 && (TRACK_TRIG_FLAGS[owner] & 0x80)) {
-        reset_slot(s);
-        reset_due &= ~(1U << s);
+    if (trig) {
+        if ((core_voice_due >> s & 1) && trig == 1 && (TRACK_TRIG_FLAGS[owner] & 0x80)) {
+            reset_slot(s);
+            core_voice_due &= ~(1U << s);
+        }
+        v->m = 0;
+        return ptr;
     }
+    uint32_t mach = MACH_REC[s];
     if (mach > LAST_PUBLIC || mach == CP_CLASSIC || !snapped)
         return ptr;
     if (mode == BLOCKED) {
-        if (count > 1)
-            set(v, BLOCKED, count - 1, 0);
-        else
-            set(v, WATCH, 0, 0);
+        v->m = count > 1 ? (BLOCKED << 16 | (count - 1)) : 0;
+        return ptr;
+    }
+    int probe = mode == SKIPPED && owner == skip_owner[s] && (uint32_t)state == skip_state[s]
+                && idle == skip_idle[s];
+    if (mode == SKIPPED && !probe) {
+        v->m = 0;                       /* the key changed: stock, watched again */
+        return ptr;
+    }
+    if (!probe && ((state >= 0 && (int32_t)RECORD(s)[1] >= 0x10) || !amp_done(s, owner, v))) {
+        v->m = 0;
         return ptr;
     }
 
-    /* the call's inputs */
-    uint32_t in[IN_N];
+    /* the call's inputs, the same as the last block's */
     const u32a2 *pb = (const u32a2 *)(TRACK_PARAMS + 0x54U * owner);
-    for (int i = 0; i < PARAM_LONGS; i++)
-        in[i] = pb[i];
-    in[PARAM_LONGS] = pitch_of(owner);
-    in[PARAM_LONGS + 1] = owner;
-    in[PARAM_LONGS + 2] = IDLE_BITS >> s & 1;
-    in[PARAM_LONGS + 3] = mach;
-    in[PARAM_LONGS + 4] = ptr;
-    in[PARAM_LONGS + 5] = PARAM_PTR[s];
-    in[PARAM_LONGS + 6] = RECORD(s)[0];
-    int same = (v->m & RECORDED) && TRACK_TRIG[owner] == 0;
-    for (int i = 0; i < IN_N; i++) {
-        if (inputs[s][i] != in[i]) {
+    uint32_t *in = inputs[s];
+    int same = (m & RECORDED) != 0;
+    uint32_t x[IN_N - PARAM_LONGS] = {pitch_of(owner), owner, idle, mach, ptr, PARAM_PTR[s], (uint32_t)state};
+    for (int i = 0; i < PARAM_LONGS; i++) {
+        uint32_t w = pb[i];
+        if (in[i] != w) {
+            in[i] = w;
             same = 0;
-            inputs[s][i] = in[i];
+        }
+    }
+    for (int i = 0; i < IN_N - PARAM_LONGS; i++) {
+        if (in[PARAM_LONGS + i] != x[i]) {
+            in[PARAM_LONGS + i] = x[i];
+            same = 0;
         }
     }
     if (!same) {
-        set(v, WATCH, 0, RECORDED);
-        return ptr;
-    }
-    int probe = 0;
-    if (mode == SKIPPED) {
-        if (count + 1 < PROBE_BLOCKS) {
-            idle_clear(s);
-            for (uint32_t i = 0; i < replays[s]; i++)
-                ((volatile uint8_t *)FRAME)[replay[s][i] >> 8] = (uint8_t)replay[s][i];
-            core_voice_skips++;
-            set(v, SKIPPED, count + 1, RECORDED);
-            return 0;
-        }
-        probe = 1;                      /* every PROBE_BLOCKS: the call, checked again */
-    } else if (!amp_done(s, owner, v)
-               || ((int32_t)RECORD(s)[0] >= 0 && (int32_t)RECORD(s)[1] >= 0x10)) {
-        /* (a machine state still waiting for its timer has a step to come) */
-        set(v, WATCH, 0, RECORDED);
+        /* recorded; inputs that moved (an LFO) are looked at again only after
+         * SETTLE_BLOCKS, and a probe that finds new inputs gives the slot to stock */
+        v->m = (m & RECORDED) ? (BLOCKED << 16 | SETTLE_BLOCKS) : RECORDED;
         return ptr;
     }
 
     /* the call, made here, with what it changes */
     volatile uint32_t *rec = RECORD(s), *g = GAIN(s), *ck = CLICK(s);
     uint32_t rec0[8], g0 = g[0], g1 = g[1];
+    uint32_t rec_n = (RECORD_FREE >> mach & 1) ? 2 : 8;
     for (int i = 0; i < FRAME_LONGS; i++)
         frame_before[i] = FRAME[i];
-    for (int i = 0; i < 8; i++)
+    for (uint32_t i = 0; i < rec_n; i++)
         rec0[i] = rec[i];
     idle_clear(s);
     ((void (*)(uint32_t, volatile uint32_t *, uint32_t, uint32_t))ptr)(s, FRAME, PARAM_PTR[s], pitch_of(owner));
     int changed = 0;
-    for (int i = 0; i < 8; i++)
+    for (uint32_t i = 0; i < rec_n; i++)
         changed |= rec0[i] != rec[i];
     uint32_t n = 0;
     for (uint32_t i = 0; i < FRAME_LONGS && !changed; i++) {
-        uint32_t was = frame_before[i], now = FRAME[i], off = 4 * i;
-        if (was == now)
+        uint32_t off = 4 * i, was = frame_before[i], now = FRAME[i];
+        uint32_t d = (was ^ now) & ~free_bits(mach, s, off);
+        if (!d)
             continue;
         /* one byte, the long's first, set from 0 where the render clears */
-        if ((was ^ now) & 0xffffffU || was >> 24 || off < CLEARED_FIRST
+        if (d & 0xffffffU || was >> 24 || off < CLEARED_FIRST
             || off > CLEARED_LAST || (off - CLEARED_FIRST) % 8 || n == REPLAY)
             changed = 1;
         else
@@ -308,7 +359,10 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
         set(v, WATCH, count, RECORDED);
         return 0;
     }
-    reset_due |= 1U << s;
+    skip_owner[s] = owner;
+    skip_state[s] = (uint32_t)state;
+    skip_idle[s] = (uint8_t)idle;
+    core_voice_due |= 1U << s;
     set(v, SKIPPED, 0, RECORDED);
     return 0;
 }
