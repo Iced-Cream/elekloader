@@ -20,6 +20,8 @@
  *   - nothing the call reads changed since the last block: the owner track's
  *     0x54-byte parameter block, its pitch, the owner, the idle bit, the
  *     pointers, the machine's sequence state, and no trig of the owner;
+ *   - the machine's own sequence is done or not waiting for its timer
+ *     (state < 0, or timer +4 below 0x10, where the next step would be due);
  *   - the recorded machine is a public one (0..33) and not CP CLASSIC (6),
  *     whose generator is a global one; machines mods add (34 up) keep state
  *     core can't know.
@@ -253,7 +255,9 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
             return 0;
         }
         probe = 1;                      /* every PROBE_BLOCKS: the call, checked again */
-    } else if (!amp_done(s, owner, v)) {
+    } else if (!amp_done(s, owner, v)
+               || ((int32_t)RECORD(s)[0] >= 0 && (int32_t)RECORD(s)[1] >= 0x10)) {
+        /* (a machine state still waiting for its timer has a step to come) */
         set(v, WATCH, 0, RECORDED);
         return ptr;
     }

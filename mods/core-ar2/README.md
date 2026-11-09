@@ -1087,8 +1087,7 @@ the call provably changes nothing the voice board gets, and returns the call
 to stock on anything that changes its inputs: a trig of the slot's track
 (SYN on or off), a knob, an LFO, a lock, a kit or machine change.
 
-**This changes sound, a little, so core 0.12 is no longer silent on its
-own.** At the next SYN trig of a slot that was skipped, just before stock's
+**This changes the sound slightly: core 0.12 on its own is not silent.** At the next SYN trig of a slot that was skipped, just before stock's
 call for that note, the slot's digital state (its noise generator and
 filters, gains, resonator buffer and the machine's private record words)
 goes back to what the boot left, so the note starts as the slot's first
@@ -1106,6 +1105,7 @@ A slot is silent when, every block:
 | the slot's amp envelope (0x42fb49b4 + 0x20 x slot) is in its decay or release, for twice the time stock's rate routine (0x4011e7d6) gives for that rate, plus 0.25 s | the note has ended, not just its digital part |
 | the call's inputs (the owner's parameter block, pitch, owner, idle bit, pointers, sequence state) are unchanged, and the owner has no trig | anything stock would react to returns the slot |
 | the call changes nothing in the control frame or the slot's whole sequence record, leaves the gains as they were and the click buffer at 0, for 16 calls in a row, and again on every 64th block while skipped | proof that skipping it changes nothing sent; the frame bytes the render clears after each send (byte +4 of entries 0x15..0x4c) may be set, the same each call, and core sets them again in each skipped block; a call that changes anything else is left to stock for 256 blocks |
+| the machine's own sequence (0x8000fef8 + 0x20 x slot) is done (state < 0) or not waiting for its timer (timer below 0x10) | no timed step of the machine is still to come |
 | the machine is a public one (0..33), not CP CLASSIC (6) | machines mods add keep state core doesn't know; CP CLASSIC's generator is shared |
 
 Machines whose call keeps changing their own words never pass (SY CHIP's

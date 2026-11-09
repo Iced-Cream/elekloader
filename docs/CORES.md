@@ -171,7 +171,9 @@ the one a mod that uses it names in `resources.core`.
   other than 0, its `init` (0.10; ADAPTING.md, "Mod storage (core-ar2 0.2,
   Analog Rytm MKII)"). P-locks a mod keeps itself, on knob ids from 555
   (0.11; ADAPTING.md, "Locks a mod keeps itself (core-ar2 0.11, Analog Rytm
-  MKII)").
+  MKII)"). A silent voice's machine call skipped, its next note starting
+  from the slot's power-on state, which changes the sound slightly (0.12;
+  mods/core-ar2/README.md, "The silent-voice skip (0.12)").
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose
