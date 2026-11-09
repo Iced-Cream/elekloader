@@ -1112,10 +1112,11 @@ Machines whose call keeps changing their own words never pass (SY CHIP's
 arpeggio counter; BD PLASTIC, SD NATURAL, BD SHARP and BD ACOUSTIC's
 envelope word), and the hats' and cymbals' frame bytes pass only as
 replayed bytes. A SYN-off trig gives the slot back to stock without a
-reset, as stock does. Each slot's own work while it is skipped is about 60
-instructions, plus one checked call every 64 blocks, against about 1100 to
-1400 for an idle machine call; a sounding voice costs about a dozen more
-than stock. The reset copies from a snapshot core takes at the render's
+reset, as stock does. In the emulator a skipped slot costs about 400 instructions a block at
+the site (the input compare), plus one checked call every 64 blocks,
+against about 1100 to 1400 for an idle machine call; a slot that is
+watched but not yet skipped costs about 380 on top of its call, and a
+sounding voice about a dozen more than stock. The reset copies from a snapshot core takes at the render's
 first block (`core_voice_boot`, on `ev_render_in` after `core_load_in`), so
 no stock values are in the source. `core_voice_skips` counts the skipped
 calls.
