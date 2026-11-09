@@ -6,8 +6,8 @@
  * through 0x419ca110, from the slot's first SYN trig until the power goes
  * off, whether the voice sounds or not. Core stops calling it once the slot
  * is silent and its call provably changes nothing the voice board gets, and
- * puts the slot's digital state back to what the boot left, so the next
- * trig starts as the first one after a power-on does.
+ * at the slot's next SYN trig puts the slot's digital state back to what the
+ * boot left, so that note starts as the first one after a power-on does.
  *
  * Silent, all of these, every block (idle.s tests the gain first):
  *   - the machine's gain, both words, below 0x1000 (2^-19 of full scale,
@@ -25,31 +25,31 @@
  *     core can't know.
  * Then core makes the call itself for QUIET_BLOCKS blocks and checks that it
  * changes nothing in the control frame (0x800063c0, 0x3d8 bytes) or the
- * slot's sequence state and timer (0x8000fef8 + 0x20 x slot, +0 and +4),
- * leaves both gain words as they were, and leaves the slot's click buffer
- * (0x80006bf8 + 0x80 x slot) at zero. Only one kind of frame write passes:
- * a byte set from 0 in a place the render clears after each send (byte +4
- * of entries 0x15..0x4c, 8 bytes apart, 0x401214d8): the same bytes every
- * call, at most REPLAY of them, which core writes again in each skipped
- * block so the frame sent is stock's. A call that changes anything else
- * (SY CHIP's arpeggio) is left to stock for BLOCKED_BLOCKS blocks before
- * core looks again. While a slot is skipped, core makes the call and checks
- * it again every PROBE_BLOCKS blocks: a machine whose words drift slower
- * than the quiet window sees (XT CLASSIC's ring-out, 1 in about 1000
- * blocks) goes back to stock at its next step, so the frame sent is at most
- * PROBE_BLOCKS blocks behind stock's (43 ms).
+ * slot's whole sequence record (0x8000fef8 + 0x20 x slot: state, timer and
+ * the machine's private words), leaves both gain words as they were, and
+ * leaves the slot's click buffer (0x80006bf8 + 0x80 x slot) at zero. One
+ * kind of frame write passes: a byte set from 0 in a place the render
+ * clears after each send (byte +4 of entries 0x15..0x4c, 8 bytes apart,
+ * 0x401214d8), the same bytes every call, at most REPLAY of them, which core
+ * writes again in each skipped block. A call that changes anything else
+ * (SY CHIP's arpeggio counter, BD PLASTIC's envelope word) is left to stock
+ * for BLOCKED_BLOCKS blocks before core looks again.
  *
- * Skipped, the slot's generator and filter struct (0x80007e20 + 0x2c x
- * slot), gain words and resonator buffer (0x80007040 + 0x80 x slot), and
- * for slot 7 the two RS words at 0x80007f6c, are copied back from the
- * snapshot core takes at the render's first block. The engine's private
- * words of its record (+8..+0x1c) stay where stock's last call left them
- * while the slot is skipped, since some machines write the frame from them
- * on their next call (BD PLASTIC's envelope rate), and go back to the
- * snapshot's at the slot's next SYN trig (flag bit 7 of 0x8000e53c), just
- * before stock's call for that note. Any change above (a trig of the owner, SYN on
- * or off, a knob, an LFO, a kit or machine change) gives the slot back to
- * stock in that same block.
+ * While a slot is skipped it keeps its state as stock's last call left it,
+ * so every check compares honest calls, and core makes the call and checks
+ * it again every PROBE_BLOCKS blocks: a machine whose frame words drift
+ * slower than the quiet window sees (XT CLASSIC's ring-out) goes back to
+ * stock at its next step. Any change of the inputs above (a trig of the
+ * owner, SYN on or off, a knob, an LFO, a kit or machine change) gives the
+ * slot back to stock in that same block.
+ *
+ * At the next SYN trig (flag bit 7 of 0x8000e53c) of a slot that was
+ * skipped, just before stock's call for that note, its generator and filter
+ * struct (0x80007e20 + 0x2c x slot), gain words, resonator buffer
+ * (0x80007040 + 0x80 x slot), the machine's private record words
+ * (+8..+0x1c) and for slot 7 the two RS words at 0x80007f6c go back to the
+ * snapshot core takes at the render's first block. A SYN-off trig resets
+ * nothing, as in stock.
  */
 
 #include <stdint.h>
@@ -61,6 +61,7 @@ typedef uint32_t u32a2 __attribute__((aligned(2), may_alias));
 #define PARAM_PTR ((volatile uint32_t *)0x419ca0f0) /* + slot */
 #define IDLE_BITS (*(volatile uint8_t *)0x419ca0cc)
 #define TRACK_TRIG ((volatile uint32_t *)0x8000e508) /* + track: 1 trig, 2 stop */
+#define TRACK_TRIG_FLAGS ((volatile uint32_t *)0x8000e53c) /* + track: bit 7 SYN */
 #define TRACK_FLAGS ((volatile uint8_t *)0x8000ea18)
 #define TRACK_PITCH ((volatile uint32_t *)0x80006388)
 #define TRACK_PARAMS 0x8000f7baU                    /* + track x 0x54 */
@@ -74,14 +75,14 @@ typedef uint32_t u32a2 __attribute__((aligned(2), may_alias));
 #define AMP_RATES ((const uint32_t *)0x401ef030)
 #define RATE_TIME ((int (*)(int, uint32_t))0x4011e7d6)
 
-/* the snapshot's regions: gains + resonator buffers, the structs + RS words */
+/* the snapshot's regions: gains + resonator buffers; the structs + RS words;
+ * the sequence records */
 #define SNAP_A 0x80007000U
 #define SNAP_A_LONGS ((0x40 + 0x400) / 4)
 #define SNAP_B 0x80007e20U
 #define SNAP_B_LONGS (0x160 / 4)
 #define SNAP_C 0x8000fef8U
 #define SNAP_C_LONGS (0x100 / 4)
-#define TRACK_TRIG_FLAGS ((volatile uint32_t *)0x8000e53c) /* + track: bit 7 SYN */
 #define CLEARED_FIRST (0x15 * 8 + 4)            /* frame offsets the render clears */
 #define CLEARED_LAST (0x4c * 8 + 4)
 #define REPLAY 4
@@ -95,6 +96,7 @@ typedef uint32_t u32a2 __attribute__((aligned(2), may_alias));
 
 enum { WATCH = 0, SKIPPED = 1, BLOCKED = 2 };
 enum { IN_N = PARAM_LONGS + 7 };
+#define RECORDED 0x1000000U
 
 /* per slot: idle.s clears both longs when the voice sounds.
  *   m: count in bits 0-15, mode in 16-23, bit 24 inputs recorded
@@ -106,7 +108,7 @@ struct voice_state core_voice_state[8];
 static uint32_t inputs[8][IN_N];
 static uint32_t amp_rate[8];
 static uint32_t snap_a[SNAP_A_LONGS], snap_b[SNAP_B_LONGS], snap_c[SNAP_C_LONGS];
-static uint8_t record_due;                 /* slots whose record waits for a SYN trig */
+static uint8_t reset_due;                   /* slots skipped since their last SYN trig */
 /* per slot: the frame bytes its quiet call sets, as offset << 8 | value */
 static uint32_t replay[8][REPLAY], replay_new[REPLAY];
 static uint8_t replays[8];
@@ -129,15 +131,20 @@ void core_voice_boot(void)
     snapped = 1;
 }
 
+/* the slot's digital state back to the boot's (not its sequence state and
+ * timer, which the trig sets) */
 static void reset_slot(uint32_t s)
 {
     volatile uint32_t *a = (volatile uint32_t *)SNAP_A, *b = (volatile uint32_t *)SNAP_B;
+    volatile uint32_t *c = (volatile uint32_t *)SNAP_C;
     a[2 * s] = snap_a[2 * s];
     a[2 * s + 1] = snap_a[2 * s + 1];
     for (uint32_t i = 0x10 + 0x20 * s; i < 0x30 + 0x20 * s; i++)
         a[i] = snap_a[i];
     for (uint32_t i = 11 * s; i < 11 * s + 11; i++)
         b[i] = snap_b[i];
+    for (uint32_t i = 8 * s + 2; i < 8 * s + 8; i++)
+        c[i] = snap_c[i];
     if (s == 7) {                       /* 0x80007f6c, 0x80007f70 */
         b[0x53] = snap_b[0x53];
         b[0x54] = snap_b[0x54];
@@ -197,6 +204,11 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     uint32_t mode = v->m >> 16 & 0xff, count = v->m & 0xffff;
     uint32_t mach = MACH_REC[s];
 
+    /* a SYN trig of a slot that was skipped: the boot's state, then stock */
+    if ((reset_due >> s & 1) && TRACK_TRIG[owner] == 1 && (TRACK_TRIG_FLAGS[owner] & 0x80)) {
+        reset_slot(s);
+        reset_due &= ~(1U << s);
+    }
     if (mach > LAST_PUBLIC || mach == CP_CLASSIC || !snapped)
         return ptr;
     if (mode == BLOCKED) {
@@ -219,7 +231,7 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     in[PARAM_LONGS + 4] = ptr;
     in[PARAM_LONGS + 5] = PARAM_PTR[s];
     in[PARAM_LONGS + 6] = RECORD(s)[0];
-    int same = (v->m & 0x1000000U) && TRACK_TRIG[owner] == 0;
+    int same = (v->m & RECORDED) && TRACK_TRIG[owner] == 0;
     for (int i = 0; i < IN_N; i++) {
         if (inputs[s][i] != in[i]) {
             same = 0;
@@ -227,12 +239,7 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
         }
     }
     if (!same) {
-        if (TRACK_TRIG[owner] == 1 && (TRACK_TRIG_FLAGS[owner] & 0x80) && (record_due >> s & 1)) {
-            for (uint32_t i = 8 * s + 2; i < 8 * s + 8; i++)
-                ((volatile uint32_t *)SNAP_C)[i] = snap_c[i];
-            record_due &= ~(1U << s);
-        }
-        set(v, WATCH, 0, 0x1000000U);
+        set(v, WATCH, 0, RECORDED);
         return ptr;
     }
     int probe = 0;
@@ -242,23 +249,27 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
             for (uint32_t i = 0; i < replays[s]; i++)
                 ((volatile uint8_t *)FRAME)[replay[s][i] >> 8] = (uint8_t)replay[s][i];
             core_voice_skips++;
-            set(v, SKIPPED, count + 1, 0x1000000U);
+            set(v, SKIPPED, count + 1, RECORDED);
             return 0;
         }
         probe = 1;                      /* every PROBE_BLOCKS: the call, checked again */
     } else if (!amp_done(s, owner, v)) {
-        set(v, WATCH, 0, 0x1000000U);
+        set(v, WATCH, 0, RECORDED);
         return ptr;
     }
 
     /* the call, made here, with what it changes */
     volatile uint32_t *rec = RECORD(s), *g = GAIN(s), *ck = CLICK(s);
-    uint32_t rec0 = rec[0], rec1 = rec[1], g0 = g[0], g1 = g[1];
+    uint32_t rec0[8], g0 = g[0], g1 = g[1];
     for (int i = 0; i < FRAME_LONGS; i++)
         frame_before[i] = FRAME[i];
+    for (int i = 0; i < 8; i++)
+        rec0[i] = rec[i];
     idle_clear(s);
     ((void (*)(uint32_t, volatile uint32_t *, uint32_t, uint32_t))ptr)(s, FRAME, PARAM_PTR[s], pitch_of(owner));
-    int changed = rec0 != rec[0] || rec1 != rec[1];
+    int changed = 0;
+    for (int i = 0; i < 8; i++)
+        changed |= rec0[i] != rec[i];
     uint32_t n = 0;
     for (uint32_t i = 0; i < FRAME_LONGS && !changed; i++) {
         uint32_t was = frame_before[i], now = FRAME[i], off = 4 * i;
@@ -286,15 +297,14 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     for (uint32_t i = 0; i < n; i++)
         replay[s][i] = replay_new[i];
     if (!settled) {
-        set(v, WATCH, 0, 0x1000000U);
+        set(v, WATCH, 0, RECORDED);
         return 0;
     }
     if (!probe && ++count < QUIET_BLOCKS) {
-        set(v, WATCH, count, 0x1000000U);
+        set(v, WATCH, count, RECORDED);
         return 0;
     }
-    reset_slot(s);
-    record_due |= 1U << s;
-    set(v, SKIPPED, 0, 0x1000000U);
+    reset_due |= 1U << s;
+    set(v, SKIPPED, 0, RECORDED);
     return 0;
 }
