@@ -11,8 +11,9 @@ and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable paramet
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
 defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
-itself (below). On its own it changes nothing
-the unit does, apart from that restart, which it makes safe.
+itself (below), and from 0.12 the silent-voice skip in `idle.c` and `idle.s` (below). On its own it changes nothing
+the unit does, apart from that restart, which it makes safe, and from 0.12 the skip, which starts a silent voice's next
+note from its power-on state.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -1074,6 +1075,52 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   for a mod that draws its knob. The text is drawn just after the value,
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
+
+## The silent-voice skip (0.12)
+
+`idle.c` and `idle.s`, at 0x40121208 in the render's slot loop: stock calls
+each of the 8 voice slots' machine routines every block from the slot's
+first SYN trig on, whether the voice sounds or not, and that cost never
+leaves (a power cycle is the only thing that clears it: no STOP, kit load or
+project load does). Core stops making that call once the slot is silent and
+the call provably changes nothing the voice board gets, and returns the call
+to stock on anything that changes its inputs: a trig of the slot's track
+(SYN on or off), a knob, an LFO, a lock, a kit or machine change.
+
+**This changes sound, a little, so core 0.12 is no longer silent on its
+own.** A skipped slot's digital state (its noise generator, filters, gain
+and resonator buffer) goes back to what the boot left, and the machine's
+private words in its record (+8..+0x1c) follow at the slot's next SYN trig,
+so that note starts as the slot's first note after a power-on does, not
+from wherever the generator had run to. The record words wait for the trig
+because some machines write the frame from them on any call (BD PLASTIC's
+envelope rate). While a slot is skipped, the frame sent to the voices is
+stock's to the byte, except a machine word that drifts slower than the
+quiet window sees: core makes the call and checks it again every 64 blocks,
+so such a word (XT CLASSIC's ring-out) is at most 64 blocks (43 ms) behind
+stock's. The slot's digital output differs by the machine's leftover gain
+(below 2^-19 of full scale, under -114 dB; a stuck -1 in the last bit of 24
+on BD PLASTIC).
+
+A slot is silent when, every block:
+
+| test | why |
+|---|---|
+| the machine's gain words (0x80007000 + 8 x slot) are both within ±0xfff | its noise and click are gone; ten machines leave a small negative gain stuck for good, so the test is a level, not zero |
+| the slot's amp envelope (0x42fb49b4 + 0x20 x slot) is in its decay or release, for twice the time stock's rate routine (0x4011e7d6) gives for that rate, plus 0.25 s | the note has ended, not just its digital part |
+| the call's inputs (the owner's parameter block, pitch, owner, idle bit, pointers, sequence state) are unchanged, and the owner has no trig | anything stock would react to returns the slot |
+| the call changes nothing in the control frame or the sequence state and timer, leaves the gains as they were and the click buffer at 0, for 16 calls in a row, and again on every 64th block while skipped | proof that skipping it changes nothing sent; the frame bytes the render clears after each send (byte +4 of entries 0x15..0x4c) may be set, the same each call, and core sets them again in each skipped block; a call that changes anything else is left to stock for 256 blocks |
+| the machine is a public one (0..33), not CP CLASSIC (6) | machines mods add keep state core doesn't know; CP CLASSIC's generator is shared |
+
+A SYN-off trig gives the slot back to stock without a reset (as stock
+does); its machine then runs on from the reset generator and the frozen
+record words instead of where stock's would be. Each slot's own work while
+it is skipped is about 60 instructions, plus one checked call every 64
+blocks, against about 1100 to 1400 for an idle machine call; a sounding
+voice costs about a dozen more than stock. The reset copies from a snapshot core takes at the
+render's first block (`core_voice_boot`, on `ev_render_in` after
+`core_load_in`), so no stock values are in the source. `core_voice_skips`
+counts the skipped calls.
 
 ## Checked so far
 
