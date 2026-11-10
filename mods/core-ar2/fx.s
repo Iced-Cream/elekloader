@@ -33,7 +33,8 @@ core_fx_send_site:
         beq     9f
         tst.l   core_fx_skip_hold
         bne     9f
-        btst    #1,core_fx_skip_want    | TEST ONLY: 2 = no send trim
+        move.b  core_fx_skip_want,%d0   | TEST ONLY: 2 = no send trim
+        btst    #1,%d0
         bne     9f
         move.l  %d3,%d0
         lsl.l   #6,%d0
