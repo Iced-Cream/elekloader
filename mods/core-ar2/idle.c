@@ -134,13 +134,37 @@ static uint32_t frame_before[FRAME_LONGS];
 static uint8_t snapped;
 /* blocks skipped, for the emulator checks and a meter */
 uint32_t core_voice_skips;
-/* the block whose checked call (a quiet call or a probe) has been made: at
- * most one slot makes one in a block. A checked call costs the machine's
- * call plus a copy and a compare of the 0x3d8-byte frame; eight in one
- * block (every slot watched from the same block, as after a STOP's trig to
- * every track, and their probes then 256 blocks apart in step) ran that
- * block past the period. */
-static uint32_t checked_block;
+/* the checked call (a quiet call or a probe): at most one slot makes one in
+ * a block. A checked call costs the machine's call plus a copy and a compare
+ * of the 0x3d8-byte frame; several in one block (every slot watched from the
+ * same block, as after a STOP's trig to every track or the skip's switch-on,
+ * and their probes then 256 blocks apart in step) ran that block past the
+ * period. The turn starts at slot core_block & 7, so a slot that asks every
+ * block gets it within 8 blocks. */
+static uint32_t checked_block, checked_slot, turn_block;
+static uint8_t asks_now, asks_last;     /* slots that asked this block, the last */
+
+/* 1: slot s makes this block's checked call */
+static int check_turn(uint32_t s)
+{
+    uint32_t b = core_block;
+    if (turn_block != b) {
+        asks_last = turn_block + 1 == b ? asks_now : 0;
+        asks_now = 0;
+        turn_block = b;
+    }
+    asks_now |= 1U << s;
+    if (checked_block == b)
+        return checked_slot == s;
+    /* the slot loop runs 0..7: a slot before this block's start waits while
+     * one at or after it asked in the last block */
+    uint32_t r = b & 7;
+    if (s < r && (asks_last >> r))
+        return 0;
+    checked_block = b;
+    checked_slot = s;
+    return 1;
+}
 
 /* ev_render_in, after core_load_in: the boot's state, before any machine */
 void core_voice_boot(void)
@@ -257,9 +281,9 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     uint32_t idle = IDLE_BITS >> s & 1;
 
     /* skipped: the cheap key, and the call made and checked every PROBE_BLOCKS
-     * (later, in the first block no other slot's check has taken) */
+     * (later, in the first block that gives this slot the turn) */
     if (mode == SKIPPED && !trig && owner == skip_owner[s] && (uint32_t)state == skip_state[s]
-        && idle == skip_idle[s] && (count + 1 < PROBE_BLOCKS || checked_block == core_block)) {
+        && idle == skip_idle[s] && (count + 1 < PROBE_BLOCKS || !check_turn(s))) {
         if (idle)
             *(volatile uint16_t *)(PARAM_PTR[s] + 4) = 0;
         for (uint32_t i = 0; i < replays[s]; i++)
@@ -322,10 +346,9 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
         return ptr;
     }
 
-    /* another slot made this block's check: stock's call, nothing counted */
-    if (checked_block == core_block)
+    /* not this slot's turn: stock's call, nothing counted */
+    if (!check_turn(s))
         return ptr;
-    checked_block = core_block;
 
     /* the call, made here, with what it changes */
     volatile uint32_t *rec = RECORD(s), *g = GAIN(s), *ck = CLICK(s);
