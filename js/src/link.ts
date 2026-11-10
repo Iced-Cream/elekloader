@@ -778,9 +778,10 @@ export function ddrFor(dev: Device, coreVersion: string): Range {
 }
 
 /** The patched main OS, its map, tables and layout, and for a core with mod storage the new lockfile. lock: the
- * build's lockfile, or null for a new one (store.ts). Throws ModError. */
+ * build's lockfile, or null for a new one (store.ts); drive: what the unit's +Drive keeps (drivestore.reserve), as
+ * store.allocate takes it. Throws ModError. */
 export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = null,
-  sharcStream: Uint8Array | null = null): Linked {
+  sharcStream: Uint8Array | null = null, drive: store.Drive | false | null = null): Linked {
   if (!mods.length) throw new ModError('no mods')
   const dev = mods[0].dev, rel = mods[0].rel
   if (sha(image) !== rel.mainSha256) throw new ModError(`the stock main OS is not ${dev.name} ${rel.version}`)
@@ -906,7 +907,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(handles.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} mark${users.length === 1 ? 's' : ''} storage fields as handles, which ${core.label()} does not keep (no table ${store.HANDLES_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field

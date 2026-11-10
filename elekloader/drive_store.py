@@ -337,6 +337,14 @@ def decode(raw):
     return st
 
 
+def reserve(st):
+    """The state (decode()'s) -> what the +Drive keeps, as a build's lockfile keeps it (store.py, "drive"):
+    the live layout ID, each scope's low mark, and the codes and CCs its fields and parked fields hold."""
+    return {'id': '0x%08x' % st['id'], 'low': {s: st['scopes'][s]['low'] for s in store.SCOPES},
+            'codes': sorted({c['code'] for c in st['codes'] + st['freed_codes']}),
+            'ccs': sorted({c['cc'] for c in st['ccs'] + st['freed_ccs']})}
+
+
 def forget(st, mod):
     """FORGET DATA: drop a parked mod's fields, codes and CCs (a dict like st; st is not changed). Their bits
     stay below the low mark, given out again only by a repack. -> (the new state, whether it changed)."""

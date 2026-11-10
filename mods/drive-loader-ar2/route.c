@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* drive-loader (Analog Rytm MKII, OS 1.74): the /mods route of stock's Data
  * router (README, "The /mods route"). A RouteTypeHandler added to the
- * router's resolver (route.s) lists DL_DIR's files plus .build and .status,
+ * router's resolver (route.s) lists DL_DIR's files plus .build, .status and .store,
  * and resolves /mods/<name> to a RAM entry over the staging buffer. Stock
  * streams every transfer through that buffer inside Elektron's data
  * container; the entry's functions fill it from the file before a read and
@@ -835,6 +835,23 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         c.what = C_STATUS;
     } else if (dl_staging_owner) {
         why = "Busy: the loader is using /mods";
+    } else if (same(name, DL_STORE)) {    /* .store: read only, so a build can keep its codes and CCs */
+        char path[DL_PATH_MAX];
+        path_of(path, name, "");
+        dl_lock();
+        size = dl_fs_file_size(path);
+        dl_unlock();
+        if (size < 0)
+            why = "No .store yet";
+        else if (size > DL_STAGING_SIZE)
+            why = "File too large";
+        else {
+            put32(e + E_TYPE, EMOD);
+            put32(e + E_ADDR, (unsigned)drive_staging);
+            perm = P_READ;
+            c.what = C_FILE;
+            copy(c.name, name, len(name) + 1);
+        }
     } else if (same(name, DL_MOVE) && !dl_move_seen) {
         why = "Busy: the MODS page";      /* it hasn't taken the last move yet: try again */
     } else if (same(name, DL_MOVE)) {      /* .mv: an upload of "FROM\nTO" moves or renames */
@@ -1021,13 +1038,13 @@ static int walk(unsigned char *at, const char *rel, int folders, struct dl_ent *
 /* /mods, /mods/<folder>...: optional<vector<item>>, 0x14 bytes: {u8 has_value, string error +4,
  * begin +8, end +0xc, cap +0x10}. The router frees the items and their names. The vector is sized
  * to the folder (no cap: 254 left files of a full /mods unlisted). DL_DIR itself also lists .build
- * and .status. */
+ * and .status, and .store when there is one. */
 unsigned dl_list(unsigned char *res, void **f, void **caps)
 {
     unsigned char *v;
     char rel[DL_NAME_MAX + 1];
     struct dl_ent *ents;
-    int n, k, top, folders = 0;
+    int n, k, top, folders = 0, store_size = -1;
     (void)f;
     zero(res, 0x14);
     if (caps && caps[0] != caps[1]) {
@@ -1040,11 +1057,16 @@ unsigned dl_list(unsigned char *res, void **f, void **caps)
         rel[0] = 0;
     top = !rel[0];
     dl_lock();
+    if (top) {
+        char path[DL_PATH_MAX];
+        path_of(path, DL_STORE, "");
+        store_size = dl_fs_file_size(path);
+    }
     n = dl_list_dir(rel, 0, 0);
     ents = heap_ents(n);
     n = dl_list_dir(rel, ents, n);
     k = walk(0, rel, folders, ents, n);
-    v = NEW(0x14 * (unsigned)(k + 2));
+    v = NEW(0x14 * (unsigned)(k + 3));
     k = walk(v, rel, folders, ents, n);
     dl_unlock();
     DELETE(ents);
@@ -1053,6 +1075,10 @@ unsigned dl_list(unsigned char *res, void **f, void **caps)
         k++;
         item(v + 0x14 * k, k + 1, ".status", 0, P_READ);
         k++;
+        if (store_size >= 0) {
+            item(v + 0x14 * k, k + 1, DL_STORE, store_size, P_READ);
+            k++;
+        }
     }
     res[0] = 1;
     put32(res + 4, STR_EMPTY);

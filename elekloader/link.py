@@ -793,13 +793,14 @@ class Linked:
     pass
 
 
-def link(mods, image, lock=None, *, sharc_stream=None):
+def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
     with mod storage .store (the new lockfile) and .store_notes; .knobs ({mod id:
     [first id, count]}) and .knob_notes for the mods' "knobs". lock: the
-    build's lockfile, or None for a new one (elekloader/store.py). Raises
-    ModError."""
+    build's lockfile, or None for a new one (elekloader/store.py); drive: what
+    the unit's +Drive keeps (drive_store.reserve), as store.allocate takes it.
+    Raises ModError."""
     if not mods:
         raise ModError('no mods')
     dev, rel = mods[0].dev, mods[0].rel
@@ -933,7 +934,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             users = sorted({k[0] for k in handles})
             raise ModError('%s mark%s storage fields as handles, which %s does not keep (no table %s)'
                            % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.HANDLES_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)
