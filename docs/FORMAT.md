@@ -74,6 +74,8 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
+| `machine_knobs` | the machines this mod adds by count: a list of up to 64, each the knobs it needs, 0..16; the linker gives each a machine slot (the Analog Rytm MKII; "Machine slots and page ids" below) |
+| `pages` | a count of page ids, 0..256, the linker gives this mod (the Analog Rytm MKII; "Machine slots and page ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 | `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
@@ -264,7 +266,8 @@ each program on its own.
    When a mod declares `storage`, the linker places the fields from the
    build's lockfile ("Mod storage" below) and defines each field's `sym`
    as an absolute symbol, its descriptor. When a mod declares `knobs`, the
-   linker gives it its run of ids ("Knob ids" below).
+   linker gives it its run of ids ("Knob ids" below), and likewise for
+   `machine_knobs` and `pages` ("Machine slots and page ids" below).
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -413,6 +416,37 @@ those run out (past 65535, which an `abs16` holds) are freed runs given out
 again. A build whose core keeps no lockfile gets the same ids for the same
 mods. The build's manifest carries the runs as `knobs` (`{mod: [first,
 count]}`).
+
+### Machine slots and page ids
+
+On a device whose profile gives mods machine slots (`machine_slots`: the
+Analog Rytm MKII's hidden slots 34..52, those of the build's core), a mod declares `"machine_knobs": [k0, k1, ...]`, the knobs each of
+its machines needs, and the linker gives machine i a slot whose parameter
+records cover knobs 0..ki-1. A relocation to `__machines` with addend i
+(an `abs32` or `abs16`) is written as machine i's slot itself, not as a
+sum, so it fills a `core_machines` entry's slot field and nothing else.
+The linker (`store.machines`, the same in `js/src/store.ts`) never gives
+out a slot a mod claims by number (a `core_machines` entry that names its
+slot, or a `machine:<n>` resource), and picks for each new machine, by mod
+id, the free slot with the fewest knobs that has enough, then the lowest.
+A slot is stored data (sounds and kits save their machine's number), so
+the lockfile keeps each machine's slot in `machines` and `freed_machines`
+(`mod`, `index`, `slot`, `knobs`), outside the layout ID: a machine keeps
+its slot while the slot has its knobs; one that leaves keeps its slot in
+`freed_machines` and gets it back when it returns; freed slots are given
+out again only when no never-used slot fits. A claim by number on a slot
+the lockfile gives a machine of the same build is refused, not moved. The
+manifest carries them as `machines` (`{mod: [slot, ...]}`).
+
+On a device whose profile gives mods page ids (`page_ids`: the Analog
+Rytm MKII's start at 12, past stock's 0..11), a mod declares `"pages": n`
+and the linker gives it n ids in a row, by mod id, past every id a
+`core_pages`, `core_page_fns` or `core_view_pages` entry names in its own
+bytes. `__pages` is the first, as `__knobs`. Page ids are not saved, so
+the lockfile does not keep them: they can change from one build to the
+next. The manifest carries them as `pages` (`{mod: [first, count]}`).
+`"machine_knobs"` or `"pages"` on a device without them, or a mod that defines
+`__machines` or `__pages` itself, is refused.
 
 ### DSP code
 

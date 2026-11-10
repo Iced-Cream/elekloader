@@ -955,12 +955,72 @@ def _(B):
             ('k: "knobs" is a count of knob ids, 0..1024', count('4'))], count(1024)
 
 
-@row('Mod2.__init__', "<>: <> is the linker's (its first knob id), not a symbol of a mod", device='analog-rytm-mk2')
+@row('Mod2.__init__', "<>: <> is the linker's (<>), not a symbol of a mod", device='analog-rytm-mk2')
 def _(B):
-    bad = knobbed(B)
-    bad['symbols']['__knobs'] = ['abs', 600]
-    return [("k: __knobs is the linker's (its first knob id), not a symbol of a mod", [knobs(B), bad])], \
+    def own(sym):
+        bad = knobbed(B)
+        bad['symbols'][sym] = ['abs', 600]
+        return [knobs(B), bad]
+    return [("k: __knobs is the linker's (its first knob id), not a symbol of a mod", own('__knobs')),
+            ("k: __machines is the linker's (its machine slots), not a symbol of a mod", own('__machines')),
+            ("k: __pages is the linker's (its first page id), not a symbol of a mod", own('__pages'))], \
         [knobs(B), knobbed(B)]
+
+
+def machined(B, ident='p', wants=(8,), slot_at=None):
+    """A mod with "machine_knobs": wants, one core_machines entry per machine whose slot (+0) is
+    __machines+i; slot_at: a literal slot instead, a claim by number (and no "machine_knobs")."""
+    d = B.other(ident)
+    n = len(wants) if slot_at is None else 1
+    d['sections']['.run'] = {'align': 4, 'len': 4 * n,
+                             'parts': [['hex', ('%08x' % slot_at) if slot_at is not None else '00' * 4 * n]]}
+    d['symbols'] = {'e_%s_%d' % (ident, i): ['.run', 4 * i] for i in range(n)}
+    if slot_at is None:
+        d['machine_knobs'] = list(wants)
+        d['imports'] = ['core_fn', '__machines']
+        d['relocs'] = [['.run', 4 * i, 'abs32', 'sym:__machines', i] for i in range(n)]
+    d['contribute'] = [{'to': 'core_machines', 'data': '00000000',
+                        'relocs': [[0, 'abs32', 'sym:e_%s_%d' % (ident, i), 0]]} for i in range(n)]
+    return d
+
+
+def machine_core(B, keep=False):
+    c = keeper(B) if keep else B.core()
+    c['collections']['core_machines'] = {'entry': 4}
+    return c
+
+
+@row('Mod2.__init__', '<>: "machine_knobs" is a list of up to <> machines, each the knobs it needs (0..<>)',
+     device='analog-rytm-mk2')
+def _(B):
+    def wants(w):
+        d = machined(B)
+        d['machine_knobs'] = w
+        return [machine_core(B), d]
+    msg = 'p: "machine_knobs" is a list of up to 64 machines, each the knobs it needs (0..16)'
+    return [(msg, wants([17])), (msg, wants(['8'])), (msg, wants(8)), (msg, wants([0] * 65))], wants([0])
+
+
+@row('Mod2.__init__', '<>: "pages" is a count of page ids, 0..<>', device='analog-rytm-mk2')
+def _(B):
+    def count(n):
+        d = B.other('m')
+        d['pages'] = n
+        return [B.core(), d]
+    return [('m: "pages" is a count of page ids, 0..256', count(257)),
+            ('m: "pages" is a count of page ids, 0..256', count('2'))], count(256)
+
+
+@row('check', '<> asks for machine slots ("machine_knobs"), which the <> does not give mods')
+def _(B):
+    return B.pair('m 1 asks for machine slots ("machine_knobs"), which the Octatrack does not give mods',
+                  lambda d: d[1].update(machine_knobs=[2]), lambda d: d[1].update(machine_knobs=[]))
+
+
+@row('check', '<> asks for page ids ("pages"), which the <> does not give mods')
+def _(B):
+    return B.pair('m 1 asks for page ids ("pages"), which the Octatrack does not give mods',
+                  lambda d: d[1].update(pages=2), lambda d: d[1].update(pages=0))
 
 
 @row('check', '<> asks for knob ids ("knobs"), which the <> does not give mods')
@@ -969,10 +1029,14 @@ def _(B):
                   lambda d: d[1].update(knobs=2), lambda d: d[1].update(knobs=0))
 
 
-@row('check', '<>: <> is a <> reference to <>+<>; one takes abs32 or abs16 with an addend below its "knobs" (<>)',
+@row('check', '<>: <> is a <> reference to <>+<>; one takes abs32 or abs16 with an addend below its "<>" (<>)',
      device='analog-rytm-mk2')
 def _(B):
-    return [('k 1: .run+0x0 is a abs32 reference to __knobs+4; one takes abs32 or abs16 with an addend below '
+    over = machined(B, wants=(4, 4))
+    over['relocs'][1][4] = 2
+    return [('p 1: .run+0x4 is a abs32 reference to __machines+2; one takes abs32 or abs16 with an addend below '
+             'its "machine_knobs" (2)', [machine_core(B), over]),
+            ('k 1: .run+0x0 is a abs32 reference to __knobs+4; one takes abs32 or abs16 with an addend below '
              'its "knobs" (4)', [knobs(B), knobbed(B, 4, add=(4, 3))]),
             ('k 1: .run+0x0 is a pc32 reference to __knobs+0; one takes abs32 or abs16 with an addend below '
              'its "knobs" (4)', [knobs(B), knobbed(B, 4, typ='pc32')]),
@@ -1094,7 +1158,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 17
+    assert run_rows('analog-rytm-mk2') == 19
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -1388,6 +1452,87 @@ def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():
         three = build(two.store, knobbed(B, 4, 'k'), knobbed(B, 2, 'j', (0, 1)), knobbed(B, 3, 'a', (0, 2)))
         assert three.knobs == {'a': [561, 3], 'j': [555, 2], 'k': [557, 4]}
         assert three.knob_notes == ['j: back with knob ids 555..556']
+
+
+def test_machines_by_count_take_the_best_fitting_slots_past_claims_by_number():
+    """A mod's "machine_knobs" get the slot with the fewest knobs that has enough, then the lowest, past
+    the slots mods claim by number (a core_machines entry naming its slot, or a machine:<n>
+    resource); __machines+i is written as the i-th slot, abs32 and abs16."""
+    import struct
+    with Bench('analog-rytm-mk2') as B:
+        claim = machined(B, 'h', slot_at=35)                    # hidden-machines unhides slot 35
+        spare = B.other('s', resources={'names': ['machine:45']})
+        p = machined(B, 'p', wants=(8, 4, 0))
+        p['relocs'][1][2] = 'abs16'
+        p['relocs'][1][1] = 4
+        out = link.link([link.Mod2(d, d['id']) for d in (machine_core(B), claim, spare, p)], B.img)
+        assert out.machines == {'p': [36, 48, 52]}
+        assert out.machine_notes == ['p: machine 0 in slot 36', 'p: machine 1 in slot 48', 'p: machine 2 in slot 52']
+        assert out.map['p:__machines+1'] == 48
+        run = out.layout['sections']['p .run'] - out.layout['ddr'][0]
+        at = out.layout['run_load'] - B.dev.main_load + run
+        assert struct.unpack('>IHHI', out.image[at:at + 12]) == (36, 48, 0, 52)
+        # the core of 0.12 and older gives 34..43 only; a ninth knob is never there
+        old = machine_core(B)
+        old['version'] = '0.12'
+        out = link.link([link.Mod2(d, d['id']) for d in (old, machined(B, 'q', wants=(5, 3)))], B.img)
+        assert out.machines == {'q': [43, 34]}
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (machine_core(B), machined(B, 'q', wants=(9,)))], B.img)
+            raise AssertionError('linked')
+        except ModError as e:
+            assert str(e) == 'q asks for a machine with 9 knobs, and no machine slot with that many is free'
+
+
+def test_a_core_with_a_lockfile_keeps_the_machine_slots_from_build_to_build():
+    with Bench('analog-rytm-mk2') as B:
+        def build(lock, *mods):
+            return link.link([link.Mod2(copy.deepcopy(d), d['id']) for d in (machine_core(B, True),) + mods],
+                             B.img, lock)
+        one = build(None, machined(B, 'p', wants=(8,)), machined(B, 'd', wants=(8, 8)))
+        assert one.machines == {'d': [35, 36], 'p': [37]}
+        assert one.store['machines'][0] == {'mod': 'd', 'index': 0, 'slot': 35, 'knobs': 8}
+        two = build(one.store, machined(B, 'p', wants=(8,)), machined(B, 'a', wants=(8,)))   # d out, a in
+        assert two.machines == {'a': [38], 'p': [37]} and two.store['id'] == one.store['id']
+        assert store.from_image(two.image)['machines'] == two.store['machines']
+        three = build(two.store, machined(B, 'p', wants=(8,)), machined(B, 'd', wants=(8, 8)),
+                      machined(B, 'a', wants=(8,)))
+        assert three.machines == {'a': [38], 'd': [35, 36], 'p': [37]}
+        assert three.machine_notes == ['d: machine 0 back in slot 35', 'd: machine 1 back in slot 36']
+        # a claim by number on a slot the lockfile gives a machine of this build is refused, not moved
+        try:
+            build(three.store, machined(B, 'p', wants=(8,)), machined(B, 'h', slot_at=37))
+            raise AssertionError('linked')
+        except ModError as e:
+            assert str(e).startswith('machine slot 37 is claimed by number, and the lockfile gives it to p\'s machine 0')
+        # ...and a slot freed by a mod that left may be claimed by number
+        four = build(three.store, machined(B, 'p', wants=(8,)), machined(B, 'h', slot_at=35))
+        assert 'slot 35, freed by d, is claimed by number' in four.machine_notes
+
+
+def test_page_ids_by_count_start_past_stocks_and_the_fixed_ones():
+    """A mod's "pages" get a run of page ids from 12 (stock's are 0..11) past the ids mods'
+    core_pages, core_page_fns and core_view_pages entries name themselves; __pages is the first."""
+    import struct
+    with Bench('analog-rytm-mk2') as B:
+        core = B.core()
+        core['collections'].update({'core_pages': {'entry': 4}, 'core_view_pages': {'entry': 4}})
+        fixed = B.other('f')                                    # pages 12 and 14, the second on a key
+        fixed['sections']['.run'] = {'align': 4, 'len': 16, 'parts': [['hex', '%08x%08x%08x%08x' % (12, 0, 8, 14)]]}
+        fixed['symbols'] = {'pg': ['.run', 0], 'vp': ['.run', 8]}
+        fixed['contribute'] = [{'to': 'core_pages', 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:pg', 0]]},
+                               {'to': 'core_view_pages', 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:vp', 0]]}]
+        paged = B.other('p', pages=2, imports=['core_fn', '__pages'])
+        paged['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '00' * 8]]}
+        paged['relocs'] = [['.run', 0, 'abs32', 'sym:__pages', 0], ['.run', 4, 'abs32', 'sym:__pages', 1]]
+        more = copy.deepcopy(paged)
+        more['id'], more['pages'] = 'q', 1
+        more['relocs'] = more['relocs'][:1]
+        out = link.link([link.Mod2(d, d['id']) for d in (core, fixed, paged, more)], B.img)
+        assert out.pages == {'p': [15, 2], 'q': [17, 1]} and out.map['p:__pages'] == 15
+        run = out.layout['sections']['p .run'] - out.layout['ddr'][0]
+        at = out.layout['run_load'] - B.dev.main_load + run
+        assert struct.unpack('>II', out.image[at:at + 8]) == (15, 16)
 
 
 def test_every_refusal_has_a_fixture():

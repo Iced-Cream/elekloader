@@ -134,6 +134,21 @@ struct core_param {
 #define CORE_KNOBS extern char __knobs[]
 #define CORE_KNOB(k) ((int32_t)__knobs + (k))
 
+/* Page ids by count. A mod that declares "pages": n in its mod.json gets n
+ * page ids in a row from 12 up (stock's are 0..11), past the ids other mods'
+ * core_pages, core_page_fns and core_view_pages entries name themselves; the
+ * linker defines __pages, the mod's own, as the first. CORE_PAGE(k) is page
+ * k's id, 0..n-1, as CORE_KNOB(k):
+ *
+ *     CORE_PAGES;
+ *     const struct core_page my_page = {CORE_PAGE(0), "MY PAGE", {CORE_KNOB(0), 0, 0, 0, 0, 0, 0, 0}};
+ *     const struct core_view_page my_view_page = {CORE_VIEW_COMP, CORE_PAGE(0), 0};
+ *
+ * Page ids are not saved, so they are not kept in the lockfile: they can
+ * differ from one build to the next. */
+#define CORE_PAGES extern char __pages[]
+#define CORE_PAGE(k) ((int32_t)__pages + (k))
+
 /* core-ar2 0.13: knob looks. A mod's own id (555 up) has no stock records,
  * so stock draws its knob as record 0's dial on record 0's range. An entry
  * in core_knob_looks gives the ids the look of any stock knob, or a UI
