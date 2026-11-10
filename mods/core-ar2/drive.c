@@ -15,7 +15,8 @@
  * views (vtables 0x401e8438, 0x401e710c) with the model at +0x538 and their
  * list at +0x38; after an edit stock refreshes a folder with the model's
  * method +8 (0x4007ede0) and marks the list (0x40078580), and the view's
- * method +0x98 (0x400e4d84) runs each UI tick while the view is shown.
+ * tick (0x400e4d84) runs each UI tick while the view is shown, called
+ * through the list's vtable +0x30 (0x401e84f8, 0x401e71cc).
  *
  * Mod entries are ids 0x7E000000 | slot << 21 | file << 20 | folder << 10
  * | index: stock's own ids are 2..65535 on the card and 0x1000002.. in RAM.
@@ -378,10 +379,13 @@ int32_t core_drive_ref(uint32_t *out, const uint8_t *model, int32_t index)
     return 1;
 }
 
-/* SampleManager's tick (its vtable's +0x98), UI task: a refill of the open
- * mod folder reads it again, as stock does after a CREATE DIR */
-void core_drive_view_tick(void *view)
+/* SampleManager's tick, UI task: its list's vtable +0x30 (stock's thunk
+ * 0x400e4db6 takes the list, view+0x38, back to the view; the view's own
+ * +0x98 is never called). A refill of the open mod folder reads it again,
+ * as stock does after a CREATE DIR */
+void core_drive_list_tick(void *list)
 {
+    void *view = (uint8_t *)list - VIEW_LIST;
     uint8_t *model = *(uint8_t **)((uint8_t *)view + VIEW_MODEL);
     if (model) {
         uint32_t id = *(uint32_t *)(model + MODEL_DIR), s = SLOT(id);
@@ -390,7 +394,7 @@ void core_drive_view_tick(void *view)
             void (*refresh)(void *) = *(void (**)(void *))(*(uint8_t **)model + MODEL_REFRESH);
             pend[s] = 0;
             refresh(model);
-            LIST_DIRTY((uint8_t *)view + VIEW_LIST);
+            LIST_DIRTY(list);
         }
     }
     VIEW_TICK(view);

@@ -138,9 +138,9 @@ def test_core_ar2_sites():
                     ((76, 0x400a86dc), (60, 0x400a98b4), (64, 0x400a9926), (68, 0x400a99c2), (72, 0x400a8560))}
             ptrs.update({0x401dcea0 + o: v for o, v in
                          ((76, 0x400a870c), (60, 0x400a9a26), (64, 0x400a9a98), (68, 0x400a9b0e), (72, 0x400a8560))})
-            # the SampleManager views' tick (+0x98; vtables 0x401e8438 and 0x401e710c), for the
-            # mod folders' refill
-            ptrs.update({0x401e8438 + 0x98: 0x400e4d84, 0x401e710c + 0x98: 0x400e4d84})
+            # the SampleManager views' tick through their list's vtable (+0x30; 0x401e84f8 and
+            # 0x401e71cc, stock's thunk 0x400e4db6), for the mod folders' refill
+            ptrs.update({0x401e84f8 + 0x30: 0x400e4db6, 0x401e71cc + 0x30: 0x400e4db6})
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -549,15 +549,15 @@ def test_core_ar2_drive_folders():
             '0x4007c640': 'core_drive_path_site', '0x40080060': 'core_drive_check',
             '0x4007b41c': 'core_drive_link_site', '0x4007c1dc': 'core_drive_mkdir',
             '0x400ea820': 'core_drive_ref_site', '0x400ea6b2': 'core_drive_mkdir_site',
-            '0x401e84d0': 'core_drive_view_tick', '0x401e71a4': 'core_drive_view_tick'}
+            '0x401e8528': 'core_drive_list_tick', '0x401e71fc': 'core_drive_list_tick'}
     got = {x['addr']: x for x in j['sites'] if x.get('target', '').startswith('core_drive_')}
     assert sorted(got) == sorted(want), sorted(got)
     for addr, target in want.items():
         assert got[addr]['target'] == target, got[addr]
     assert got['0x400ea820']['stock'] == '4eb94007e698' and got['0x400ea820']['op'] == 'jsr'
     assert got['0x400ea6b2']['stock'] == '4eb94007c1dc' and got['0x400ea6b2']['op'] == 'jsr'
-    for addr in ('0x401e84d0', '0x401e71a4'):
-        assert got[addr]['op'] == 'ptr' and got[addr]['stock'] == '400e4d84'
+    for addr in ('0x401e8528', '0x401e71fc'):
+        assert got[addr]['op'] == 'ptr' and got[addr]['stock'] == '400e4db6'
     assert j['collections']['core_drive_folders'] == {'entry': 4, 'spare': 8, 'max': 8}
     assert 'drive.c' in j['sources'] and 'drive.s' in j['sources']
     _r, _s, img = stock()
