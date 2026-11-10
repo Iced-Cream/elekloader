@@ -90,15 +90,15 @@ struct core_machine_knob {
 };
 
 struct core_machine {
-    int32_t slot;           /* 34..43; 34..52 from core 0.13 */
-    core_engine engine;
+    int32_t slot;           /* 34..43; 34..52 from core 0.13; CORE_MACHINE(i) by count */
+    core_engine engine;     /* 0: the slot's stock engine */
     int8_t home;            /* the track the machine list files it under: 0 BD,
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
     uint8_t voices;         /* bit v: physical voice v may run it (0 BD, 1 BT,
                                2 SD, 3 LT, 4 CH/OH, 5 MT/HT, 6 CY/CB, 7 RS/CP) */
     uint16_t pad;
-    const char *name;       /* "BD TX-9" */
-    const char *label;      /* four letters: "BDT9" */
+    const char *name;       /* "BD TX-9"; 0: the slot's stock name */
+    const char *label;      /* four letters: "BDT9"; 0: the slot's stock label */
     struct core_machine_knob knobs[8];  /* sound indices 9..16: LEV, then A..H's order */
 };
 
@@ -117,6 +117,20 @@ struct core_machine {
 #define CORE_ENGINE_BT_CLASSIC ((core_engine)0x4011b5a0)
 #define CORE_ENGINE_XT_CLASSIC ((core_engine)0x4011b850)
 #define CORE_ENGINE_DISABLE ((core_engine)0x40113f68)
+
+/* Machines by count: a mod that declares "machine_knobs": [k0, k1, ...] in mod.json
+ * (the knobs each machine needs, from LEV) is given a slot per machine by the
+ * linker, one with records for at least that many knobs, past the slots mods
+ * claim by number, kept in the lockfile so saved sounds keep their machine.
+ * CORE_MACHINE(i) is the i-th machine's slot, for the entry's slot field:
+ *
+ *     CORE_MACHINES;
+ *     const struct core_machine my_machine = {CORE_MACHINE(0), my_engine, ...};
+ *
+ * The linker writes the slot itself, so CORE_MACHINE(i) is not a number to
+ * compute with: use it as a whole value only. */
+#define CORE_MACHINES extern char __machines[]
+#define CORE_MACHINE(i) ((int32_t)__machines + (i))
 
 /* core 0.13 */
 int core_voice_trigged(int32_t voice);

@@ -275,3 +275,73 @@ test('knob ids from 555 past fixed ids, abs32 and abs16, kept by the lockfile (t
     ar.releases.splice(ar.releases.indexOf(rel), 1)
   }
 })
+
+test('machines by count and page ids by count, as tests/test_link_refusals.py', () => {
+  const ar = ANALOG_RYTM_MK2, real = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(real.mainLen)
+  for (let i = 0; i < image.length; i += 2) image.set([0x4e, 0x71], i)
+  const rel = { version: 'SYN', syxSha256: sha(new TextEncoder().encode('synthetic machines')), mainSha256: sha(image), mainLen: image.length, binSha256: '' }
+  ar.releases.push(rel)
+  try {
+    const target = targetOf(ar, rel)
+    const hex8 = (n: number) => n.toString(16).padStart(8, '0')
+    const core = (keeps: boolean, version = '1') => ({ elemod: 2, id: 'core', version, target,
+      sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+      collections: { ev_x: { entry: 4 }, core_machines: { entry: 4 }, core_pages: { entry: 4 }, core_view_pages: { entry: 4 },
+        ...(keeps ? { core_store_ids: { entry: 4 } } : {}) },
+      ...(keeps ? { imports: ['__store_gen', '__store_gen2'] } : {}) })
+    const machined = (id: string, wants: number[], slotAt: number | null = null) => {
+      const n = slotAt === null ? wants.length : 1
+      return { elemod: 2, id, version: '1', target, requires: ['core'],
+        sections: { '.run': { align: 4, len: 4 * n, parts: [['hex', slotAt !== null ? hex8(slotAt) : '00'.repeat(4 * n)]] } },
+        symbols: Object.fromEntries([...Array(n).keys()].map(i => [`e_${id}_${i}`, ['.run', 4 * i]])),
+        ...(slotAt === null ? { machine_knobs: wants, imports: ['core_fn', '__machines'],
+          relocs: [...Array(n).keys()].map(i => ['.run', 4 * i, 'abs32', 'sym:__machines', i]) } : { imports: ['core_fn'] }),
+        contribute: [...Array(n).keys()].map(i => ({ to: 'core_machines', data: '00000000', relocs: [[0, 'abs32', `sym:e_${id}_${i}`, 0]] })) }
+    }
+    const mods = (...docs: Record<string, any>[]) => docs.map(d => new Mod2(structuredClone(d), d.id))
+    const spare = { elemod: 2, id: 's', version: '1', target, requires: ['core'], imports: ['core_fn'], resources: { names: ['machine:45'] },
+      sections: { '.run': { align: 4, len: 4, parts: [['hex', '4e714e75']] } } }
+    const p = machined('p', [8, 4, 0]) as Record<string, any>
+    p.relocs[1][2] = 'abs16'
+    const out = link(mods(core(false), machined('h', [], 35), spare, p), image)
+    assert.deepEqual([...out.machines], [['p', [36, 48, 52]]])
+    assert.deepEqual(out.machineNotes, ['p: machine 0 in slot 36', 'p: machine 1 in slot 48', 'p: machine 2 in slot 52'])
+    assert.equal(out.map.get('p:__machines+1'), 48)
+    const at = out.layout.run_load - ar.mainLoad + out.layout.sections['p .run'] - out.layout.ddr[0]
+    const v = new DataView(out.image.buffer, out.image.byteOffset + at, 12)
+    assert.deepEqual([v.getUint32(0), v.getUint16(4), v.getUint16(6), v.getUint32(8)], [36, 48, 0, 52])
+    assert.deepEqual([...link(mods(core(false, '0.12'), machined('q', [5, 3])), image).machines], [['q', [43, 34]]])
+    assert.throws(() => link(mods(core(false), machined('q', [9])), image),
+      { message: 'q asks for a machine with 9 knobs, and no machine slot with that many is free' })
+    const over = machined('p', [4, 4]) as Record<string, any>
+    over.relocs[1][4] = 2
+    assert.deepEqual(check(mods(core(false), over), image), [
+      'p 1: .run+0x4 is a abs32 reference to __machines+2; one takes abs32 or abs16 with an addend below its "machine_knobs" (2)'])
+    assert.throws(() => new Mod2({ ...machined('p', [8]), machine_knobs: [17] }, 'p'),
+      { message: 'p: "machine_knobs" is a list of up to 64 machines, each the knobs it needs (0..16)' })
+    // the lockfile keeps them
+    const one = link(mods(core(true), machined('p', [8]), machined('d', [8, 8])), image)
+    assert.deepEqual([...one.machines], [['d', [35, 36]], ['p', [37]]])
+    const two = link(mods(core(true), machined('p', [8]), machined('a', [8])), image, one.store)
+    assert.deepEqual([...two.machines], [['a', [38]], ['p', [37]]])
+    const three = link(mods(core(true), machined('p', [8]), machined('d', [8, 8]), machined('a', [8])), image, two.store)
+    assert.deepEqual(three.machineNotes, ['d: machine 0 back in slot 35', 'd: machine 1 back in slot 36'])
+    assert.throws(() => link(mods(core(true), machined('p', [8]), machined('h', [], 37)), image, three.store),
+      (e: Error) => e.message.startsWith("machine slot 37 is claimed by number, and the lockfile gives it to p's machine 0"))
+    // page ids
+    const fixed = { elemod: 2, id: 'f', version: '1', target, requires: ['core'], imports: ['core_fn'],
+      sections: { '.run': { align: 4, len: 16, parts: [['hex', hex8(12) + hex8(0) + hex8(8) + hex8(14)]] } },
+      symbols: { pg: ['.run', 0], vp: ['.run', 8] },
+      contribute: [{ to: 'core_pages', data: '00000000', relocs: [[0, 'abs32', 'sym:pg', 0]] },
+        { to: 'core_view_pages', data: '00000000', relocs: [[0, 'abs32', 'sym:vp', 0]] }] }
+    const paged = (id: string, n: number) => ({ elemod: 2, id, version: '1', target, requires: ['core'], pages: n,
+      imports: ['core_fn', '__pages'], sections: { '.run': { align: 4, len: 8, parts: [['hex', '00'.repeat(8)]] } },
+      relocs: [...Array(n).keys()].map(i => ['.run', 4 * i, 'abs32', 'sym:__pages', i]) })
+    const pg = link(mods(core(false), fixed, paged('p', 2), paged('q', 1)), image)
+    assert.deepEqual([...pg.pages], [['p', [15, 2]], ['q', [17, 1]]])
+    assert.equal(pg.map.get('p:__pages'), 15)
+  } finally {
+    ar.releases.splice(ar.releases.indexOf(rel), 1)
+  }
+})

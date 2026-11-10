@@ -22523,5 +22523,1164 @@
    },
    "error": null
   }
+ },
+ "machine_runs": {
+  "best fit past direct claims, kept, freed, back and given again (none)": {
+   "start": "none",
+   "steps": [
+    [
+     {
+      "a": [
+       8,
+       4
+      ],
+      "b": [
+       5
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      36
+     ]
+    ],
+    [
+     {
+      "b": [
+       5
+      ],
+      "c": [
+       3
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      36
+     ]
+    ],
+    [
+     {
+      "b": [
+       5
+      ],
+      "c": [
+       3
+      ],
+      "d": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      36
+     ]
+    ],
+    [
+     {
+      "b": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     []
+    ],
+    [
+     {
+      "b": [
+       8
+      ],
+      "a": [
+       8,
+       4
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      43
+     ]
+    ],
+    [
+     {
+      "e": [
+       9
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     []
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 43,
+        "knobs": 5
+       },
+       {
+        "mod": "a",
+        "index": 1,
+        "slot": 45,
+        "knobs": 4
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "a": [
+       35,
+       45
+      ],
+      "b": [
+       43
+      ]
+     },
+     "notes": [
+      "a: machine 0 in slot 35",
+      "a: machine 1 in slot 45",
+      "b: machine 0 in slot 43"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "machines": [
+       {
+        "mod": "c",
+        "index": 0,
+        "slot": 34,
+        "knobs": 3
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 43,
+        "knobs": 5
+       }
+      ],
+      "freed_machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "a",
+        "index": 1,
+        "slot": 45,
+        "knobs": 4
+       }
+      ]
+     },
+     "slots": {
+      "b": [
+       43
+      ],
+      "c": [
+       34
+      ]
+     },
+     "notes": [
+      "a: machine 0 freed slot 35, kept for it until the unused slots run out",
+      "a: machine 1 freed slot 45, kept for it until the unused slots run out",
+      "c: machine 0 in slot 34"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "machines": [
+       {
+        "mod": "c",
+        "index": 0,
+        "slot": 34,
+        "knobs": 3
+       },
+       {
+        "mod": "d",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 43,
+        "knobs": 5
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "b": [
+       43
+      ],
+      "c": [
+       34
+      ],
+      "d": [
+       35
+      ]
+     },
+     "notes": [
+      "machine slots freed by a given out again",
+      "d: machine 0 in slot 35"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "machines": [
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 36,
+        "knobs": 8
+       }
+      ],
+      "freed_machines": [
+       {
+        "mod": "c",
+        "index": 0,
+        "slot": 34,
+        "knobs": 3
+       },
+       {
+        "mod": "d",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       }
+      ]
+     },
+     "slots": {
+      "b": [
+       36
+      ]
+     },
+     "notes": [
+      "c: machine 0 freed slot 34, kept for it until the unused slots run out",
+      "d: machine 0 freed slot 35, kept for it until the unused slots run out",
+      "b: machine 0 needs 8 knobs, which slot 43 has not: it moves, and sounds saved with it load another machine",
+      "b: machine 0 in slot 36"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 36,
+        "knobs": 8
+       },
+       {
+        "mod": "a",
+        "index": 1,
+        "slot": 45,
+        "knobs": 4
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "a": [
+       35,
+       45
+      ],
+      "b": [
+       36
+      ]
+     },
+     "notes": [
+      "machine slots freed by c, d given out again",
+      "a: machine 0 in slot 35",
+      "a: machine 1 in slot 45"
+     ],
+     "layout_id": null
+    },
+    {
+     "error": "e asks for a machine with 9 knobs, and no machine slot with that many is free"
+    }
+   ]
+  },
+  "best fit past direct claims, kept, freed, back and given again (fresh)": {
+   "start": "fresh",
+   "steps": [
+    [
+     {
+      "a": [
+       8,
+       4
+      ],
+      "b": [
+       5
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      36
+     ]
+    ],
+    [
+     {
+      "b": [
+       5
+      ],
+      "c": [
+       3
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      36
+     ]
+    ],
+    [
+     {
+      "b": [
+       5
+      ],
+      "c": [
+       3
+      ],
+      "d": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      36
+     ]
+    ],
+    [
+     {
+      "b": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     []
+    ],
+    [
+     {
+      "b": [
+       8
+      ],
+      "a": [
+       8,
+       4
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      43
+     ]
+    ],
+    [
+     {
+      "e": [
+       9
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     []
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 43,
+        "knobs": 5
+       },
+       {
+        "mod": "a",
+        "index": 1,
+        "slot": 45,
+        "knobs": 4
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "a": [
+       35,
+       45
+      ],
+      "b": [
+       43
+      ]
+     },
+     "notes": [
+      "a: machine 0 in slot 35",
+      "a: machine 1 in slot 45",
+      "b: machine 0 in slot 43"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "machines": [
+       {
+        "mod": "c",
+        "index": 0,
+        "slot": 34,
+        "knobs": 3
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 43,
+        "knobs": 5
+       }
+      ],
+      "freed_machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "a",
+        "index": 1,
+        "slot": 45,
+        "knobs": 4
+       }
+      ]
+     },
+     "slots": {
+      "b": [
+       43
+      ],
+      "c": [
+       34
+      ]
+     },
+     "notes": [
+      "a: machine 0 freed slot 35, kept for it until the unused slots run out",
+      "a: machine 1 freed slot 45, kept for it until the unused slots run out",
+      "c: machine 0 in slot 34"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "machines": [
+       {
+        "mod": "c",
+        "index": 0,
+        "slot": 34,
+        "knobs": 3
+       },
+       {
+        "mod": "d",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 43,
+        "knobs": 5
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "b": [
+       43
+      ],
+      "c": [
+       34
+      ],
+      "d": [
+       35
+      ]
+     },
+     "notes": [
+      "machine slots freed by a given out again",
+      "d: machine 0 in slot 35"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "machines": [
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 36,
+        "knobs": 8
+       }
+      ],
+      "freed_machines": [
+       {
+        "mod": "c",
+        "index": 0,
+        "slot": 34,
+        "knobs": 3
+       },
+       {
+        "mod": "d",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       }
+      ]
+     },
+     "slots": {
+      "b": [
+       36
+      ]
+     },
+     "notes": [
+      "c: machine 0 freed slot 34, kept for it until the unused slots run out",
+      "d: machine 0 freed slot 35, kept for it until the unused slots run out",
+      "b: machine 0 needs 8 knobs, which slot 43 has not: it moves, and sounds saved with it load another machine",
+      "b: machine 0 in slot 36"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       },
+       {
+        "mod": "b",
+        "index": 0,
+        "slot": 36,
+        "knobs": 8
+       },
+       {
+        "mod": "a",
+        "index": 1,
+        "slot": 45,
+        "knobs": 4
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "a": [
+       35,
+       45
+      ],
+      "b": [
+       36
+      ]
+     },
+     "notes": [
+      "machine slots freed by c, d given out again",
+      "a: machine 0 in slot 35",
+      "a: machine 1 in slot 45"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "error": "e asks for a machine with 9 knobs, and no machine slot with that many is free"
+    }
+   ]
+  },
+  "a claim by number on a held slot (none)": {
+   "start": "none",
+   "steps": [
+    [
+     {
+      "a": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     []
+    ],
+    [
+     {
+      "a": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      35
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "a": [
+       35
+      ]
+     },
+     "notes": [
+      "a: machine 0 in slot 35"
+     ],
+     "layout_id": null
+    },
+    {
+     "error": "machine slot 35 is claimed by number, and the lockfile gives it to a's machine 0 (saved sounds name the slot): give the claim another slot"
+    }
+   ]
+  },
+  "a claim by number on a held slot (fresh)": {
+   "start": "fresh",
+   "steps": [
+    [
+     {
+      "a": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     []
+    ],
+    [
+     {
+      "a": [
+       8
+      ]
+     },
+     {
+      "34": 3,
+      "35": 8,
+      "36": 8,
+      "43": 5,
+      "45": 4
+     },
+     [
+      35
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "machines": [
+       {
+        "mod": "a",
+        "index": 0,
+        "slot": 35,
+        "knobs": 8
+       }
+      ],
+      "freed_machines": []
+     },
+     "slots": {
+      "a": [
+       35
+      ]
+     },
+     "notes": [
+      "a: machine 0 in slot 35"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "error": "machine slot 35 is claimed by number, and the lockfile gives it to a's machine 0 (saved sounds name the slot): give the claim another slot"
+    }
+   ]
+  }
+ },
+ "machine_locks": {
+  "one slot twice": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "machines": [
+     {
+      "mod": "a",
+      "index": 0,
+      "slot": 35,
+      "knobs": 8
+     },
+     {
+      "mod": "b",
+      "index": 0,
+      "slot": 35,
+      "knobs": 8
+     }
+    ],
+    "freed_machines": []
+   },
+   "error": "lockfile: a bad entry in \"machines\""
+  },
+  "one machine twice": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "machines": [
+     {
+      "mod": "a",
+      "index": 0,
+      "slot": 35,
+      "knobs": 8
+     },
+     {
+      "mod": "a",
+      "index": 0,
+      "slot": 36,
+      "knobs": 8
+     }
+    ],
+    "freed_machines": []
+   },
+   "error": "lockfile: a bad entry in \"machines\""
+  },
+  "freed not a list": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "machines": [],
+    "freed_machines": {}
+   },
+   "error": "lockfile: \"freed_machines\" is a list"
+  },
+  "no knobs": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "machines": [
+     {
+      "mod": "a",
+      "index": 0,
+      "slot": 35
+     }
+    ],
+    "freed_machines": []
+   },
+   "error": "lockfile: a bad entry in \"machines\""
+  },
+  "good": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "machines": [
+     {
+      "mod": "a",
+      "index": 0,
+      "slot": 35,
+      "knobs": 8
+     }
+    ],
+    "freed_machines": [
+     {
+      "mod": "b",
+      "index": 1,
+      "slot": 36,
+      "knobs": 2
+     }
+    ]
+   },
+   "error": null
+  }
  }
 }

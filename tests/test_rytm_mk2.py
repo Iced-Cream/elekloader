@@ -373,6 +373,11 @@ def test_core_ar2_machine_slots_44_52():
             assert l(r + 0x18) == 0xffffffff and l(r + 0x1c) == 0xffffffff, (m, hex(r))
     for m in range(34, 53):
         assert all(l(r + 0x20) == 0 for r in recs[m].values()), m
+    # the profile's machine_slots: how many knobs from LEV on have a record, as the linker gives slots
+    _t, by_core = DEV.machine_slots
+    have = {m: next(k for k in range(9) if 9 + k not in recs[m]) for m in range(34, 53)}
+    assert dict(by_core[-1][1]) == have and by_core[-1][0] == '0.13'
+    assert dict(by_core[0][1]) == {m: have[m] for m in range(34, 44)} and by_core[0][0] == '0.5'
     owner = img[0x40291138 - DEV.main_load:0x40291138 - DEV.main_load + 8]
     assert all(t < 12 for t in owner), owner.hex()
     with open(os.path.join(ROOT, 'mods', 'core-ar2', 'machines.c')) as fh:

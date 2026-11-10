@@ -32,6 +32,15 @@ the linker gives it a run of n ids from the profile's first mod id up (store.kno
 lockfile), and its own symbol `__knobs` is the run's first id. A relocation to `__knobs` is an
 abs32 or an `abs16` (two big-endian bytes, for the 16-bit knob lists of const tables) with an
 addend of 0..n-1.
+
+On a device with machine slots for mods (the profile's `machine_slots`), a mod may declare
+`"machine_knobs": [k0, k1, ...]`, the knobs each of its machines needs: the linker gives each a slot
+with records for that many knobs (store.machines, kept in the lockfile), past the slots mods
+claim by number, and a relocation to `__machines` with addend i (abs32 or abs16) is written as
+the i-th machine's slot, not as a sum. On a device with page ids for mods (the profile's
+`page_ids`), a mod may declare `"pages": n`: the linker gives it a run of n page ids from the
+profile's first up, past the ids mods' entries name themselves, and `__pages` is the run's first
+id (as `__knobs`). Page ids are not saved, so they are not kept in the lockfile.
 """
 import struct
 
@@ -46,6 +55,8 @@ SECTIONS = ('.boot', '.run', '.fast', '.bss', '.payload')
 RTYPES = ('abs32', 'abs16', 'pc32', 'pc16', 'dsp24')
 RSIZE = {'abs32': 4, 'abs16': 2, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
 KNOBS = '__knobs'                 # a mod's first knob id (its "knobs")
+MACHINES = '__machines'           # + i: a mod's i-th machine slot (its "machine_knobs")
+PAGES = '__pages'                 # a mod's first page id (its "pages")
 DSP = '.dsp.'                     # a DSP section: '.dsp.' + its payload's tag
 
 
@@ -58,6 +69,9 @@ FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
 PAYLOADS = 'core_payloads'        # the core's table of the mods' payloads: id, address, length
 PAYLOAD_ENTRY = 12
 MAX_KNOBS = 1024                  # a mod's "knobs": at most this many ids
+MAX_MACHINES = 64                 # a mod's "machine_knobs": at most this many
+MAX_MACHINE_KNOBS = 16            # a machine's knobs, in "machine_knobs"
+MAX_PAGES = 256                   # a mod's "pages": at most this many ids
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words', '__run_hash'}
@@ -97,7 +111,7 @@ class Mod2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
                                      'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
-                                     'sharc_raw', 'knobs'}
+                                     'sharc_raw', 'knobs', 'machine_knobs', 'pages'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -146,11 +160,21 @@ class Mod2:
             self.symbols[nm] = (v[0], _int(v[1], name))
             if _dsp_tag(self.dev, v[0]) and self.symbols[nm][1] % 3:
                 raise ModError('%s: DSP symbol %s is not at a whole word' % (name, nm))
-        if KNOBS in self.symbols:
-            raise ModError('%s: %s is the linker\'s (its first knob id), not a symbol of a mod' % (name, KNOBS))
+        for sym, what in ((KNOBS, 'its first knob id'), (MACHINES, 'its machine slots'),
+                          (PAGES, 'its first page id')):
+            if sym in self.symbols:
+                raise ModError('%s: %s is the linker\'s (%s), not a symbol of a mod' % (name, sym, what))
         self.knobs = doc.get('knobs', 0)
         if type(self.knobs) is not int or not 0 <= self.knobs <= MAX_KNOBS:
             raise ModError('%s: "knobs" is a count of knob ids, 0..%d' % (name, MAX_KNOBS))
+        self.machines = doc.get('machine_knobs', [])
+        if type(self.machines) is not list or len(self.machines) > MAX_MACHINES or any(
+                type(k) is not int or not 0 <= k <= MAX_MACHINE_KNOBS for k in self.machines):
+            raise ModError('%s: "machine_knobs" is a list of up to %d machines, each the knobs it needs (0..%d)'
+                           % (name, MAX_MACHINES, MAX_MACHINE_KNOBS))
+        self.pages = doc.get('pages', 0)
+        if type(self.pages) is not int or not 0 <= self.pages <= MAX_PAGES:
+            raise ModError('%s: "pages" is a count of page ids, 0..%d' % (name, MAX_PAGES))
         self.exports = [str(x) for x in doc.get('exports', [])]
         for x in self.exports:
             if x not in self.symbols:
@@ -278,13 +302,30 @@ class Mod2:
             return (knobs + r[2]) & 0xFFFFFFFF
         return None
 
-    def knob_refs(self):
-        """-> [(where, type, addend)] of every relocation to __knobs: sections, sites, entries."""
-        out = [('%s+0x%x' % (sec, off), t, a) for sec, off, t, g, a in self.relocs if g == 'sym:' + KNOBS]
+    def knob_refs(self, sym=KNOBS):
+        """-> [(where, type, addend)] of every relocation to sym (__knobs, __machines, __pages):
+        sections, sites, entries."""
+        out = [('%s+0x%x' % (sec, off), t, a) for sec, off, t, g, a in self.relocs if g == 'sym:' + sym]
         out += [('site 0x%08x' % s['addr'], t, a) for s in self.sites for _o, t, g, a in s['relocs']
-                if g == 'sym:' + KNOBS]
+                if g == 'sym:' + sym]
         out += [('an entry of %s' % c['to'], t, a) for c in self.contribute for _o, t, g, a in c['relocs']
-                if g == 'sym:' + KNOBS]
+                if g == 'sym:' + sym]
+        return out
+
+    def page_ids(self, image):
+        """The page ids this mod's entries name themselves, by the profile's page_ids: a
+        contribution to such a table holds four-byte pointers to entries with a page id at a
+        known offset. An id this cannot read (relocated, to __pages too) is not one. -> [id]."""
+        out = []
+        for table, at in (self.dev.page_ids[1] if self.dev.page_ids else ()):
+            for c in self.contribute:
+                if c['to'] != table:
+                    continue
+                for off, typ, tgt, add in c['relocs']:
+                    p = None if off % 4 else self._target(typ, tgt, add)
+                    v = None if p is None else self._long(p[0], p[1] + at, image)
+                    if v is not None and v not in out:
+                        out.append(v)
         return out
 
     def _long(self, sec, off, image):
@@ -547,10 +588,18 @@ def check(mods, image):
         if m.knobs and not dev.param_ids:
             bad.append('%s asks for knob ids ("knobs"), which the %s does not give mods'
                        % (m.label(), dev.name))
-        for where, t, a in m.knob_refs():
-            if t not in ('abs32', 'abs16') or not 0 <= a < m.knobs:
-                bad.append('%s: %s is a %s reference to %s+%d; one takes abs32 or abs16 with an addend '
-                           'below its "knobs" (%d)' % (m.label(), where, t, KNOBS, a, m.knobs))
+        if m.machines and not dev.machine_slots:
+            bad.append('%s asks for machine slots ("machine_knobs"), which the %s does not give mods'
+                       % (m.label(), dev.name))
+        if m.pages and not dev.page_ids:
+            bad.append('%s asks for page ids ("pages"), which the %s does not give mods'
+                       % (m.label(), dev.name))
+        for sym, key, n in ((KNOBS, 'knobs', m.knobs), (MACHINES, 'machine_knobs', len(m.machines)),
+                            (PAGES, 'pages', m.pages)):
+            for where, t, a in m.knob_refs(sym):
+                if t not in ('abs32', 'abs16') or not 0 <= a < n:
+                    bad.append('%s: %s is a %s reference to %s+%d; one takes abs32 or abs16 with an addend '
+                               'below its "%s" (%d)' % (m.label(), where, t, sym, a, key, n))
     sized = reserve_names(dev, owner)
     fields = {}                                 # mod storage: the linker defines these
     for m in mods:
@@ -567,7 +616,8 @@ def check(mods, image):
     for m in mods:
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
-                    or (x.endswith('_n') and x[:-2] in tables) or x in fields or (x == KNOBS and m.knobs):
+                    or (x.endswith('_n') and x[:-2] in tables) or x in fields or (x == KNOBS and m.knobs) \
+                    or (x == MACHINES and m.machines) or (x == PAGES and m.pages):
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
@@ -728,7 +778,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
     with mod storage .store (the new lockfile) and .store_notes; .knobs ({mod id:
-    [first id, count]}) and .knob_notes for the mods' "knobs". lock: the
+    [first id, count]}) and .knob_notes for the mods' "knobs"; .machines ({mod id: [slot,
+    ...]}) and .machine_notes for their "machine_knobs"; .pages ({mod id: [first id, count]}). lock: the
     build's lockfile, or None for a new one (elekloader/store.py). Raises
     ModError."""
     if not mods:
@@ -891,6 +942,31 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         bad = id_problems(order, image, knob_base)
         if bad:                                # store.knobs keeps clear of them: a self-check
             raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
+    # machine slots: each "machine_knobs" mod's, past the slots mods claim by number
+    machine_slots, machine_notes = {}, []
+    if dev.machine_slots and (any(m.machines for m in order) or (new_lock or {}).get('machines')
+                              or (new_lock or {}).get('freed_machines')):
+        table = dev.machine_slots[0]
+        prefix = next(p for t, _at, _n, p in dev.slot_claims if t == table) + ':'
+        direct = {int(nm[len(prefix):]) for m in order for nm in m.names
+                  if nm.startswith(prefix) and nm[len(prefix):].isdigit()}
+        held = new_lock if new_lock is not None else {}
+        machine_slots, machine_notes = store.machines(held, {m.id: m.machines for m in order if m.machines},
+                                                      dev.machine_slots_for(core.version), direct)
+    # page ids: each "pages" mod's run, past the ids mods' entries name themselves
+    page_base = {}
+    if dev.page_ids and any(m.pages for m in order):
+        first = dev.page_ids[0]
+        taken = sorted({v for m in order for v in m.page_ids(image) if v >= first})
+        at = first
+        for m in sorted((m for m in order if m.pages), key=lambda m: m.id):
+            while True:
+                hit = [v for v in taken if at <= v < at + m.pages]
+                if not hit:
+                    break
+                at = max(hit) + 1
+            page_base[m.id] = at
+            at += m.pages
     fast_mods = [m for m in order if m.size('.fast')]
     pay_mods = [m for m in order if m.size('.payload')]
     if pay_mods:
@@ -1044,6 +1120,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             return addr[(m.id, nm)]
         if nm == KNOBS and m.id in knob_base:
             return knob_base[m.id]
+        if nm == PAGES and m.id in page_base:
+            return page_base[m.id]
         if nm in glob:
             return glob[nm]
         if nm in m.weak and zero is not None:
@@ -1067,6 +1145,9 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             raise ModError('%s: %s is a %s reference to a %s address' % (
                 m.label(), where, 'DSP' if typ == 'dsp24' else 'ColdFire',
                 'DSP' if d else 'ColdFire'))
+        if tgt == 'sym:' + MACHINES and m.id in machine_slots:    # the add-th machine's slot, not a sum
+            put(buf, off, typ, machine_slots[m.id][add], p, where)
+            return
         put(buf, off, typ, resolve(m, tgt, where) + add, p, where)
 
     def put(buf, off, typ, value, p, where):
@@ -1237,6 +1318,13 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     out.knob_notes = knob_notes
     for mid, b in knob_base.items():
         out.map['%s:%s' % (mid, KNOBS)] = b
+    out.machines, out.machine_notes = machine_slots, machine_notes
+    for mid, slots in machine_slots.items():
+        for i, v in enumerate(slots):
+            out.map['%s:%s+%d' % (mid, MACHINES, i)] = v
+    out.pages = {mid: [b, next(m.pages for m in order if m.id == mid)] for mid, b in sorted(page_base.items())}
+    for mid, b in page_base.items():
+        out.map['%s:%s' % (mid, PAGES)] = b
     if units is not None:                      # the reserve the core takes: units of dev.reserve
         out.layout['reserve'] = {'units': units, 'end': ddr_base + units * dev.reserve[0]}
     if areas:                                  # words: P addresses of each payload's area

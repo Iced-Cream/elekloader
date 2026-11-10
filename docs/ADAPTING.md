@@ -1973,6 +1973,19 @@ the mod's `"knobs"`.
 Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
 with other mods may give the mod other ids.
 
+**Page ids by count.** In the same way, `"pages": 2` in mod.json gives the
+mod two page ids from 12 up, past the ids other mods' `core_pages`,
+`core_page_fns` and `core_view_pages` entries name, and `CORE_PAGE(k)`
+(pages.h) is page k's id:
+
+```c
+CORE_PAGES;                         /* extern char __pages[] */
+const struct core_page my_page = {CORE_PAGE(0), "MY PAGE", {CORE_KNOB(0), 0, 0, 0, 0, 0, 0, 0}};
+const struct core_view_page my_view_page = {CORE_VIEW_COMP, CORE_PAGE(0), 0};
+```
+
+Page ids are not saved, so they may differ from one build to the next.
+
 ### Knob looks (core-ar2 0.13, Analog Rytm MKII)
 
 A knob id of the mod's own (555 up) has no stock records: without more,
@@ -2688,6 +2701,35 @@ A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
 not run. `examples/machine-ar2` is the smallest machine: BD COPY, BD
 CLASSIC under another name.
+
+**Machines by count.** Rather than pick a slot, a mod may declare its
+machines in mod.json, each with the knobs it needs counted from LEV,
+`"machine_knobs": [8, 4]`, and fill each entry's slot with `CORE_MACHINE(i)`
+(machines.h). The linker gives each machine a free slot whose records
+cover that many knobs (the fewest that do, then the lowest), past every
+slot a mod claims by number, and keeps it in the lockfile from build to
+build, since saved sounds name the slot (docs/FORMAT.md, "Machine slots
+and page ids"):
+
+```c
+CORE_MACHINES;                      /* extern char __machines[] */
+const struct core_machine my_machine = {
+    CORE_MACHINE(0), my_engine, 0, CORE_VOICE_BD, 0, "BD COPY", "BDCP", {/* ... */}};
+```
+
+`CORE_MACHINE(i)` is written as the slot itself: use it whole, never in a
+sum. A claim by number on a slot the lockfile gives a machine in the same
+build is refused, not moved.
+
+**A stock hidden machine.** An entry whose engine is 0 keeps the slot's
+stock engine, and one whose name or label is 0 keeps the slot's stock name
+or label (with an engine of 0 core installs no trampoline, so the trig
+getters are not latched for it). With a voice mask, such an entry unhides a
+factory machine as an ordinary claim by number that the linker checks:
+
+```c
+const struct core_machine bd_test = {44, 0, 0, CORE_VOICE_BD, 0, 0, 0, {{0}}};
+```
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 
@@ -4309,8 +4351,11 @@ Some differences from an octabam build, by design:
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
 | `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
 | `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
-| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` | the mod uses a knob past the count it declares, or a PC-relative reference to it | raise `"knobs"` in mod.json, or fix the index |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` (or `__machines`, `"machine_knobs"`; `__pages`, `"pages"`) | the mod uses a knob, machine or page past the count it declares, or a PC-relative reference to it | raise the count in mod.json, or fix the index |
 | `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
+| `asks for machine slots ("machine_knobs"), which the <device> does not give mods` / `asks for page ids ("pages"), ...` | only the Analog Rytm MKII gives them out | pick fixed slots or ids, or drop the field |
+| `asks for a machine with N knobs, and no machine slot with that many is free` | every hidden slot with that many records is taken | ask for fewer knobs, or drop a machine mod |
+| `machine slot N is claimed by number, and the lockfile gives it to M's machine I` | a mod claims, by number, a slot the lockfile already gives a by-count machine; saved sounds name that slot | give the claim another slot |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |

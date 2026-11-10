@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, checkFlags, checkLock, fresh, knobs, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseCvs, parseDecls, parseHandles, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, checkFlags, checkLock, fresh, knobs, machines, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseCvs, parseDecls, parseHandles, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -198,6 +198,30 @@ test('knob ids: the same runs, notes and refusals as store.knobs', () => {
     })
   }
   for (const [name, c] of Object.entries<any>(V.knob_locks)) {
+    if (c.error) assert.throws(() => checkLock(c.lock, DEV), (e: Error) => e.message === c.error, name)
+    else checkLock(c.lock, DEV)
+  }
+})
+
+test('machine slots: the same slots, notes, lockfiles and refusals as store.machines', () => {
+  for (const [name, run] of Object.entries<any>(V.machine_runs)) {
+    const lock: Record<string, any> = run.start === 'fresh' ? fresh(DEV) : {}
+    run.steps.forEach(([want, slots, direct]: [Record<string, number[]>, Record<string, number>, number[]], i: number) => {
+      const res = run.results[i]
+      const w = new Map(Object.entries(want)), sl = new Map(Object.entries(slots).map(([k, v]) => [Number(k), v]))
+      if (res.error) {
+        assert.throws(() => machines(lock, w, sl, direct), (e: Error) => e.message === res.error, `${name} step ${i}`)
+        return
+      }
+      const [got, notes] = machines(lock, w, sl, direct)
+      assert.deepEqual(Object.fromEntries(got), res.slots, `${name} step ${i}: slots`)
+      assert.deepEqual(notes, res.notes, `${name} step ${i}: notes`)
+      assert.deepEqual(lock, res.lock, `${name} step ${i}: lockfile`)
+      assert.equal(JSON.stringify(lock), JSON.stringify(res.lock), `${name} step ${i}: key order`)
+      if (res.layout_id !== null) assert.equal(layoutId(lock as Lock), res.layout_id, `${name} step ${i}: layout ID`)
+    })
+  }
+  for (const [name, c] of Object.entries<any>(V.machine_locks)) {
     if (c.error) assert.throws(() => checkLock(c.lock, DEV), (e: Error) => e.message === c.error, name)
     else checkLock(c.lock, DEV)
   }
