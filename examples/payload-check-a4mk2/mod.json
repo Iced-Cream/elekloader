@@ -1,0 +1,39 @@
+{
+ "id": "payload-check",
+ "version": "0.1",
+ "title": "Payload check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-a4mk2 0.6's payloads and its 37.7 MB mods' area on the Analog Four MKII: a 512 KB payload of a known pattern found through core_payload and read back whole every 10 s, and an 8 MB .bss array filled with a pattern and read back round and round. Where each part landed and the counts are in RAM after the magic PKC1; a square at the bottom right while all reads back right.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": [
+  "check.c",
+  "payload.s"
+ ],
+ "cflags": [
+  "-DFILLRECT_AT=0x40059f1a"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "pk_tick",
+   "order": 60
+  },
+  {
+   "event": "ev_draw",
+   "fn": "pk_draw",
+   "order": 60
+  }
+ ],
+ "resources": {
+  "core": "0.6"
+ },
+ "requires": [
+  "core"
+ ],
+ "defsym": {
+  "BLOCKS": "2048"
+ }
+}

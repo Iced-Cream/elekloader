@@ -1,0 +1,36 @@
+{
+ "id": "mark-check",
+ "version": "0.1",
+ "title": "Mark check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-a4mk2 0.6's modified mark and field defaults on the Analog Four MKII. A MARK CHECK page behind the AMP key: knob A a mod page knob (core marks the project), encoders I and J taken by the mod (I without core_project_edited, J with it). Fields in every scope with an init; the mod counts the items not reading their init. The mark, the counts and the fields are in RAM after the magic MKC1, and on the screen's bottom edge.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["check.c"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "storage": [
+  {"sym": "mk_t", "scope": "track", "bits": 5, "init": 21},
+  {"sym": "mk_p", "scope": "pattern", "bits": 9, "init": 300},
+  {"sym": "mk_s", "scope": "sound", "bits": 7, "init": 100},
+  {"sym": "mk_k", "scope": "kit", "bits": 12, "init": 3000},
+  {"sym": "mk_g", "scope": "global", "bits": 8, "init": 60},
+  {"sym": "mk_a", "scope": "project", "bits": 7, "init": 64},
+  {"sym": "mk_i", "scope": "project", "bits": 8, "init": 7},
+  {"sym": "mk_j", "scope": "project", "bits": 16, "init": 48879}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "mk_tick", "order": 60},
+  {"event": "ev_draw", "fn": "mk_draw", "order": 60},
+  {"event": "ev_enc", "fn": "mk_enc", "order": 40},
+  {"event": "ev_project", "fn": "mk_project", "order": 60}
+ ],
+ "contribute": [
+  {"to": "core_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:mk_params", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:mk_page", 0]]},
+  {"to": "core_view_pages", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:mk_view", 0]]}
+ ],
+ "resources": {"core": "0.6"},
+ "requires": ["core"]
+}

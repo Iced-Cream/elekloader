@@ -1,0 +1,3934 @@
+{
+ "id": "look-check",
+ "version": "0.1",
+ "title": "Look check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-a4mk2 0.6's knob looks (core_knob_looks) on the Analog Four MKII. At the first tick after stock's first draw it groups stock's UI records by look and gives an own knob the look of each group's first id through a core_knob_looks entry, plus one knob with a ui callback's record and one with a range of 0..12. LOOK CHECK behind the AMP key shows four pairs (a stock id and its own knob, the same value and text), knob J choosing which. What core's UI record and range lookups answer for every own knob is in RAM after the magic LKA1.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": [
+  "look.c"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "lk_tick",
+   "order": 60
+  },
+  {
+   "event": "ev_draw",
+   "fn": "lk_draw",
+   "order": 60
+  }
+ ],
+ "contribute": [
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_params_own",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_params_stock",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_page_fns",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_fn",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 30,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     24
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     48
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     72
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     96
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     120
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     144
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     168
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     192
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     216
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     240
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     264
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     288
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     312
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     336
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     360
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     384
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     408
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     432
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     456
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     480
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     504
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     528
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     552
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     576
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     600
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     624
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     648
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     672
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     696
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     720
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     744
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     768
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     792
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     816
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     840
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     864
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     888
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     912
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     936
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     960
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     984
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1008
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1032
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1056
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1080
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1104
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1128
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1152
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1176
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1200
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1224
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1248
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1272
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1296
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1320
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1344
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1368
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1392
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1416
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1440
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1464
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1488
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1512
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1536
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1560
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1584
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1608
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1632
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1656
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1680
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1704
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1728
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1752
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1776
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1800
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1824
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1848
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1872
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1896
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1920
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1944
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1968
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     1992
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2016
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2040
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2064
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2088
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2112
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2136
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2160
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2184
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2208
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2232
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2256
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2280
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2304
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2328
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2352
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2376
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2400
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2424
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2448
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2472
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2496
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2520
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2544
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2568
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2592
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2616
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2640
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2664
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2688
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2712
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2736
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2760
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2784
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2808
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2832
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2856
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2880
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2904
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2928
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2952
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     2976
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3000
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3024
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3048
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3072
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3096
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3120
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3144
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3168
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3192
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3216
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3240
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3264
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3288
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3312
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3336
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3360
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3384
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3408
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3432
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3456
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3480
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3504
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3528
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3552
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3576
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3600
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3624
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3648
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3672
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3696
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3720
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3744
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3768
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3792
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3816
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3840
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3864
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3888
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3912
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3936
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3960
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     3984
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4008
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4032
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4056
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4080
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4104
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4128
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4152
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4176
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4200
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4224
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4248
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4272
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4296
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4320
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4344
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4368
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4392
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4416
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4440
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4464
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4488
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4512
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4536
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4560
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4584
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4608
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4632
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4656
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4680
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4704
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4728
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4752
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4776
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4800
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4824
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4848
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4872
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4896
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4920
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4944
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4968
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     4992
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5016
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5040
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5064
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5088
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5112
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5136
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5160
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5184
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5208
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5232
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5256
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5280
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5304
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5328
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5352
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5376
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5400
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5424
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5448
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5472
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5496
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5520
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5544
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5568
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5592
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5616
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5640
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5664
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5688
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5712
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5736
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5760
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5784
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5808
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5832
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5856
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5880
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5904
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5928
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5952
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     5976
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6000
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6024
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6048
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6072
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6096
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6120
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6144
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6168
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6192
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6216
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6240
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6264
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6288
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6312
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6336
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6360
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6384
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6408
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6432
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6456
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6480
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6504
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6528
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6552
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6576
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6600
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6624
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6648
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6672
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6696
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6720
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6744
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6768
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6792
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6816
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6840
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6864
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6888
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6912
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6936
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6960
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     6984
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     7008
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     7032
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     7056
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks",
+     7080
+    ]
+   ]
+  }
+ ],
+ "resources": {
+  "core": "0.6"
+ },
+ "requires": [
+  "core"
+ ]
+}
