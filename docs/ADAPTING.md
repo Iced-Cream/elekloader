@@ -2657,7 +2657,9 @@ velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
 accent. `core_voice_released(voice)` is 1 when the track's note
 ended this block (a pad, key or MIDI note-off, the note's length, the
 sequencer) and 2 when stock cut every track at once (the kit and project
-loads), else 0.
+loads), else 0. It mirrors stock: the stop and the loads send every track a
+note-off, so an end can come for a note that already ended; a mod that
+sends MIDI keeps its own note-on flag.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may

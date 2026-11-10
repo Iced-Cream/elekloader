@@ -63,7 +63,12 @@
  *                                 block (pad, key or MIDI note-off, the
  *                                 note's length, the sequencer), 2 when
  *                                 stock cut every track at once (the kit
- *                                 and project loads do), else 0
+ *                                 and project loads do), else 0. Stock's
+ *                                 stop and the loads send a note-off to
+ *                                 every track, so an end can come for a
+ *                                 note that already ended: a mod that
+ *                                 needs one end per note keeps its own
+ *                                 flag.
  *
  * Call them from the engine, for its own voice: they read the latch of the
  * voice's last call, so outside it they hold that call's values. Plain

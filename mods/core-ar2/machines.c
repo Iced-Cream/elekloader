@@ -87,7 +87,11 @@ int core_voice_trigged(int32_t voice)
  * for a release (state 2: a pad, key or MIDI note-off, 0x4011e426; the
  * note's length running out; the sequencer's note-off), 2 for a cut of
  * every track at once (state 3: 0x4012171e, which the kit and project
- * loads call), else 0. Read like core_voice_trigged. */
+ * loads call), else 0. Read like core_voice_trigged. Stock's stop
+ * (0x4009c19a, 0x4009c43a) and the kit and project loads call 0x4011e426
+ * for every track, so state 2 can come for a note that already ended; core
+ * reports it as stock has it; a mod that needs one end per note keeps its
+ * own flag. */
 int core_voice_released(int32_t voice)
 {
     return (uint32_t)voice < VOICES ? released[voice] : 0;
