@@ -1,0 +1,13 @@
+{
+ "id": "echk", "version": "0.1", "title": "Engines check", "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "Emulator check for the sidecar-engines core: slot 44 with its knobs as destinations, stock engines for any machine, the sound a trig plays, core_param_set.",
+ "device": "analog-rytm-mk2", "os": "1.74",
+ "sources": ["echk.c"],
+ "contribute": [
+  {"to": "core_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:echk_44", 0]]}
+ ],
+ "subscribe": [{"event": "ev_tick", "fn": "echk_tick", "order": 60}],
+ "resources": {"core": "0.13"},
+ "requires": ["core"]
+}
