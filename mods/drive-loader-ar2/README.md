@@ -1,6 +1,6 @@
 # drive-loader (Analog Rytm MKII)
 
-The +Drive mods loader's flashed part, for core-ar2 0.12 and newer on OS 1.74. It imports
+The +Drive mods loader's flashed part, for core-ar2 0.14 and newer on OS 1.74. It imports
 `core_desc`, so the linker writes the build descriptor into every build that has it
 (docs/DRIVE.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
@@ -136,9 +136,9 @@ All addresses are OS 1.74's. They were read in Ghidra.
 
 ## Linking at boot
 
-One more site, `0x401009e0` in `main()` (`0x401006ee`), stock `jsr 0x4009da0e`: `drive_boot`
-(`flush.s`) makes that call, then runs `dl_boot` (`boot.c`). There ekFS is mounted and the audio
-start and the UI task haven't run, so nothing reads the tables the link rewrites.
+`dl_boot` (`boot.c`) runs in core's `ev_boot_drive` (core-ar2's README, "+Drive storage at
+boot"): ekFS is mounted and the audio start and the UI task haven't run, so nothing reads the
+tables the link rewrites.
 
 - **Skip.** Nothing links when the eMMC (`0x419ae2c0`) or ekFS (`0x419ae2bc`) didn't come up;
   when [NO] is held (the panel query `61 01`, 20 ms, the key bitmap `0x418d1340` through
@@ -208,5 +208,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.12.elemod --mod drive-loader-0.4.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.5.elemod --out drive-loader.syx --version 1.74
 ```

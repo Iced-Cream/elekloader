@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Drive Loader, boot side (Analog Rytm MKII, OS 1.74): the boot stub's C half (flush.s has
- * the entry at the site 0x401009e0), the skip key, the crash guard, /mods/active, and the
+/* Drive Loader, boot side (Analog Rytm MKII, OS 1.74): dl_boot, which core calls in
+ * ev_boot_drive from its site 0x401009e0 (core-ar2 0.14), the skip key, the crash guard, /mods/active, and the
  * tick that clears the crash guard. The linker is dlink.c.
  *
  * At the site, main() (FUN_401006ee) has mounted ekFS and runs as an RTOS task with

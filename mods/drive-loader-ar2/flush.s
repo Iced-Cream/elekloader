@@ -1,20 +1,7 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| Drive Loader: the boot stub's entry and the cache flush (Analog Rytm MKII, OS 1.74).
+| Drive Loader: the cache flush (Analog Rytm MKII, OS 1.74).
 
         .text
-
-| drive_boot: the site 0x401009e0 in main() (FUN_401006ee), stock `jsr 0x4009da0e.l`.
-| It makes the displaced call first, with the stack exactly as the site had it (its own
-| return address taken off and kept), then runs the boot linker (boot.c).
-        .globl  drive_boot
-drive_boot:
-        move.l  (%sp)+, dl_boot_ret
-        jsr     0x4009da0e
-        move.l  %d0, -(%sp)
-        jsr     dl_boot
-        move.l  (%sp)+, %d0
-        move.l  dl_boot_ret, -(%sp)
-        rts
 
 | dl_flush: push every data-cache line to memory, then invalidate the instruction and
 | branch caches. On the ColdFire V4, CPUSHL takes a set and way in An (bits 1..0 the way,
@@ -38,8 +25,3 @@ dl_flush:
         movec   %d0, %cacr
         nop
         rts
-
-        .bss
-        .align  4
-dl_boot_ret:
-        .skip   4
