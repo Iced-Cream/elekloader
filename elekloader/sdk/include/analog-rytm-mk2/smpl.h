@@ -32,13 +32,14 @@
  *
  * Which machine a sound runs: the one its SRC machine requires (bind
  * SMPL_REQUIRED and src the SRC machine's slot), else the sound's own choice
- * on the SAMPLE key's SMPL MACHINE page (kept in a sound field of
+ * in the sound setup menu's SMPL MACHINE row (kept in a sound field of
  * smpl-machines'), whose AUTO is the one its SRC machine names as
  * SMPL_DEFAULT, or stock's. A machine whose voices leave out the track's
  * voice is not offered there, and a sound that names it plays stock's.
  *
  * The engine runs in the audio interrupt, once a block for each voice whose
- * owner track's sound runs the machine, before stock's sample layer:
+ * owner track plays a sound that runs the machine (a sound-locked step's
+ * pool sound included), before stock's sample layer:
  *
  *     void engine(int32_t voice, int32_t track, const int16_t *words, int32_t trig)
  *
@@ -65,7 +66,7 @@ typedef void (*smpl_engine)(int32_t voice, int32_t track, const int16_t *words, 
 struct smpl_machine {
     int32_t id;             /* SMPL_MACHINE(i) */
     const char *name;       /* the SMPL page's title, up to 16 */
-    const char *label;      /* four letters, for the SMPL MACHINE page */
+    const char *label;      /* four letters */
     uint8_t voices;         /* bit v: voice v may run it (CORE_VOICE_*, machines.h) */
     uint8_t bind;           /* SMPL_FREE, SMPL_DEFAULT or SMPL_REQUIRED, with src */
     uint16_t pad;
@@ -74,7 +75,7 @@ struct smpl_machine {
     struct smpl_knob knobs[8];  /* sound indices 17..24, records 39..46, knobs A..H */
 };
 
-#define SMPL_FREE 0         /* chosen on the SMPL MACHINE page only */
+#define SMPL_FREE 0         /* chosen in the sound setup menu only */
 #define SMPL_DEFAULT 1      /* a sound of SRC machine src runs it on AUTO */
 #define SMPL_REQUIRED 2     /* a sound of SRC machine src always runs it */
 
@@ -82,10 +83,10 @@ struct smpl_machine {
 #define SMPL_MACHINES extern char __pool_smpl_machines[]
 #define SMPL_MACHINE(i) ((int32_t)__pool_smpl_machines + (i))
 
-/* exported by smpl-machines: the machine track t's sound (current kit)
- * runs, as the audio side sees it, updated each UI tick; 0 for stock's
- * sample layer. Any context. Like a label, a pointer returned to asm is in
- * %a0 and %d0. */
+/* exported by smpl-machines: the machine track t plays now, as the audio
+ * side sees it (the sound last put on the track, a sound lock's pool sound
+ * included); 0 for stock's sample layer. Any context. Like a label, a
+ * pointer returned to asm is in %a0 and %d0. */
 const struct smpl_machine *smpl_track_machine(int32_t track);
 
 #endif

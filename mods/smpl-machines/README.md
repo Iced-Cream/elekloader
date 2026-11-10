@@ -10,16 +10,15 @@ engine. Mods such as PLAITS, DAISYSP and DSP SAMPLE add their machines here
 and list smpl-machines as a dependency, so they combine in one build.
 
 On its own, and for a sound that runs no SMPL machine, it changes nothing
-but one extra page, SMPL MACHINE, on the SAMPLE key.
+but one extra row, SMPL MACHINE, in the sound setup menu.
 
 | | |
 |---|---|
 | needs | core-ar2 0.13 with knob faces (`core_knob_faces`) |
-| sites | 1: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs |
+| sites | 3: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs; the entry of the audio side's routine that puts a sound on a track, 0x4011f60a (the kit's sound, or a sound lock's pool sound); and the sound setup menu's build, 0x400ef184, after its MACHINE row |
 | exports | `smpl_track_machine` |
 | declares | `smpl_machines`, the machines (`elekloader/sdk/include/analog-rytm-mk2/smpl.h`); the id pool `smpl_machines`, ids 0..29 |
 | storage | `smpl_choice`, 5 bits a sound: 0 AUTO, 1 stock, 2 + id a machine |
-| knobs, pages | 1 and 1: MACH on the SMPL MACHINE page |
 | RAM | 2.6 KB code, 7.8 KB data |
 
 ## What a machine is
@@ -34,8 +33,10 @@ name, look, range, default, value text). docs/ADAPTING.md, "SMPL machines
 Which machine a sound runs:
 
 1. **Required**: one whose `bind` is `SMPL_REQUIRED` for the sound's SRC
-   machine. The MACH knob then doesn't turn.
-2. **Chosen**: the sound's `smpl_choice`, picked on SMPL MACHINE.
+   machine. The menu row then shows it and doesn't turn.
+2. **Chosen**: the sound's `smpl_choice`, picked in the sound setup menu's
+   SMPL MACHINE row, under MACHINE: AUTO, STOCK, then the machines the
+   track's voice may run.
 3. **Auto**: on AUTO, one whose `bind` is `SMPL_DEFAULT` for the SRC
    machine, else stock's.
 
@@ -56,15 +57,18 @@ sound that names it plays stock's.
   for indices 17..24 and the trig bit, then clears the voice's trig bit and
   sets its stop bit, so stock's sample stays silent there. The same masks
   reach the sample layer's second call (0x4011c6b8), which reads them again.
-- **The cache.** Each UI tick (`ev_tick`, order 40) it works out the
-  machine of each of the current kit's twelve tracks; the audio side reads
-  only that cache.
+- **Which sound plays.** Stock's audio side puts a sound on a track with
+  one routine, 0x4011f60a: the kit's sound, or a sound lock's pool sound
+  for its step. smpl-machines notes the sound there, and the render runs
+  the machine that sound names, so a sound-locked step plays its pool
+  sound's SMPL machine (the choice is a sound field, so it travels with the
+  sound). Each UI tick (`ev_tick`, order 40) it also works out the current
+  kit's machines, which the page and a track with no sound noted yet use.
 
 ## Not yet
 
 - Defaults on choosing a machine wait for `core_param_set` (core-ar2's
   engines work); until then a machine's `def` is the knob's default on a
   new sound and in the pop-up, not a value written on choosing.
-- The cache follows the current kit's sounds; a pool sound or a sound lock
-  on a step plays the machine of the track's kit sound.
+- TRK + SMPL, a machine list like SRC's, is still to come.
 

@@ -23,3 +23,57 @@ smpl_gate_s:
         move.l  %d3,4(%sp)              | the pushed copies, past the return address
         move.l  %d5,8(%sp)
         jmp     SAMPLE_INTAKE
+
+| The audio side's routine that puts a sound on a track, 0x4011f60a
+| (sound, track): smpl_apply notes it, then stock's first two instructions
+| (lea -16(%sp),%sp; movem.l %d2-%d4/%a2,(%sp)) and on.
+        .globl  smpl_apply_s
+        .align  2
+smpl_apply_s:
+        move.l  8(%sp),-(%sp)           | track
+        move.l  8(%sp),-(%sp)           | sound
+        jsr     smpl_apply
+        addq.l  #8,%sp
+        lea     -16(%sp),%sp
+        movem.l %d2-%d4/%a2,(%sp)
+        jmp     APPLY_BODY
+
+| The sound setup menu's build, 0x400ef184: stock's jsr (%a5) adds the
+| MACHINE row (view, row on the stack), then lea 0x20(%sp),%sp. Add it, then
+| the SMPL MACHINE row smpl_menu_row makes, if any.
+        .globl  smpl_menu_s
+        .align  2
+smpl_menu_s:
+        move.l  8(%sp),-(%sp)           | row
+        move.l  8(%sp),-(%sp)           | view
+        jsr     (%a5)                   | 0x400727f2, add a row
+        addq.l  #8,%sp
+        jsr     smpl_menu_row
+        tst.l   %d0
+        beq.s   1f
+        move.l  %d0,-(%sp)              | our row
+        move.l  8(%sp),-(%sp)           | view
+        jsr     (%a5)
+        addq.l  #8,%sp
+1:      movea.l (%sp)+,%a0
+        lea     0x20(%sp),%sp
+        jmp     (%a0)
+
+| The row's label, a functor invoker returning a std::string (into %a0), as
+| stock's MACHINE label 0x400ee184 does with "MACHINE".
+        .globl  smpl_row_label_s
+        .align  2
+smpl_row_label_s:
+        link.w  %a6,#-4
+        move.l  %d2,-(%sp)
+        pea     -1(%a6)                 | the allocator
+        pea     smpl_row_text
+        move.l  %a0,%d2
+        move.l  %a0,-(%sp)
+        jsr     STRING_INIT
+        lea     12(%sp),%sp
+        move.l  %d2,%d0
+        move.l  -8(%a6),%d2
+        unlk    %a6
+        rts
+

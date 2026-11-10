@@ -3,13 +3,15 @@
  * analog-rytm-mk2/smpl.h for the mods that add them).
  *
  *   - which machine a sound runs: the field smpl_choice (0 AUTO, 1 stock,
- *     2 + id a machine), the SRC machine's bind, the voice; cached per track
- *     for the current kit each UI tick (smpl_tick), which the render reads;
+ *     2 + id a machine), the SRC machine's bind, the voice. The render reads
+ *     it from the sound the audio side last put on each track (gate.s, at
+ *     0x4011f60a: the kit's sound, or a sound lock's pool sound), and the UI
+ *     from the current kit's sounds, cached each UI tick (smpl_tick);
  *   - the SMPL page: core_page_fns for stock's pages 4 and 5 (the title),
  *     core_knob_faces for records 39..46 (label, name, look, range), and
  *     core_params' text for them (the value);
- *   - the SMPL MACHINE page: one knob of the mod's own (CORE_KNOB(0)) on a
- *     page of its own behind the SAMPLE key;
+ *   - the choice: a SMPL MACHINE row under MACHINE in the sound setup menu
+ *     (gate.s, at the menu's build, 0x400ef184);
  *   - the render (gate.s, the call of the sample layer's trig intake): a
  *     voice whose track runs a machine starts no sample and stops any it
  *     plays, and the machine's engine gets the words. */
@@ -30,13 +32,12 @@
 #define SOUND_MACHINE 104               /* its SRC machine, a byte */
 #define KIT_SOUNDS 42                   /* a live kit's first sound */
 #define OWNERS ((const volatile uint8_t *)0x40291138)   /* the track each voice plays, by voice */
+#define PLAYING ((const volatile int8_t *)0x8000ea00)   /* the SRC machine the audio side plays, by track */
 #define WORDS(t) ((const int16_t *)(0x8000f7a8 + 0x54 * (t)))   /* a track's engine words, by sound index */
 #define STOCK_PAGE_SAMPLE 4             /* the SAMPLE view's pages: 4, and 5 (the same ids) */
 #define STOCK_PAGE_SAMPLE2 5
 
 STORE_FIELD(smpl_choice);
-CORE_KNOBS;
-CORE_PAGES;
 
 extern const struct smpl_machine *const smpl_machines[];   /* zero-terminated */
 
@@ -44,6 +45,7 @@ extern const struct smpl_machine *const smpl_machines[];   /* zero-terminated */
 static const uint8_t track_voice[12] = {0, 2, 7, 7, 1, 3, 5, 5, 4, 4, 6, 6};
 
 static volatile uint8_t track_entry[12];         /* the table index + 1 each track runs; 0 stock */
+static const unsigned char *volatile applied[12]; /* the sound the audio side last put on each track */
 static int n_machines = -1;                       /* -1 until the first tick */
 static struct core_knob_face faces[MAX_MACHINES][8];
 static struct core_page pages[MAX_MACHINES];
@@ -173,10 +175,29 @@ void smpl_tick(void)
     }
 }
 
+/* gate.s, at the entry of the audio side's routine that puts a sound on a
+ * track (0x4011f60a: a kit's sound, or a sound lock's pool sound) */
+void smpl_apply(const unsigned char *sound, int32_t track)
+{
+    if ((uint32_t)track < 12)
+        applied[track] = sound;
+}
+
+/* the machine track t plays now: the sound the audio side put on it, while
+ * that sound's SRC machine is the one playing (stock refuses one that doesn't
+ * fit the track), else the current kit's */
+static int entry_now(unsigned t)
+{
+    const unsigned char *s = applied[t];
+    if (s && n_machines > 0 && (signed char)s[SOUND_MACHINE] == PLAYING[t])
+        return index_of(machine_of(s, (int)t)) + 1;
+    return track_entry[t];
+}
+
 const struct smpl_machine *smpl_track_machine(int32_t track)
 {
-    unsigned e = (unsigned)track < 12 ? track_entry[track] : 0;
-    return e && (int)e <= n_machines ? smpl_machines[e - 1] : 0;
+    int e = (uint32_t)track < 12 ? entry_now((unsigned)track) : 0;
+    return e > 0 && e <= n_machines ? smpl_machines[e - 1] : 0;
 }
 
 /* gate.s, at the render's call of the sample layer's trig intake: masks[0]
@@ -186,9 +207,9 @@ void smpl_gate(uint32_t *masks)
     int v;
     for (v = 0; v < 8; v++) {
         unsigned t = OWNERS[v];
-        unsigned e = t < 12 ? track_entry[t] : 0;
+        int e = t < 12 ? entry_now(t) : 0;
         const struct smpl_machine *m;
-        if (!e || (int)e > n_machines)
+        if (e <= 0 || e > n_machines)
             continue;
         m = smpl_machines[e - 1];
         if (m->engine)
@@ -260,15 +281,7 @@ static int smpl_text(struct core_text *t)
 
 const struct core_param smpl_params = {FIRST_REC, LAST_REC, 0, 0, smpl_text};
 
-/* ---- the SMPL MACHINE page: AUTO, STCK, then the machines the voice may run */
-
-static int choice_get(int32_t id, int32_t *value)
-{
-    unsigned char *s = core_current_sound_item();
-    (void)id;
-    *value = s ? (int32_t)core_store_get(STORE(smpl_choice), s, 0) << 8 : 0;
-    return 1;
-}
+/* ---- the choice: AUTO, STOCK, then the machines the voice may run ------ */
 
 /* the next choice from c by dir (+1 / -1) the track may take, or c */
 static unsigned step_choice(unsigned c, int dir, int track)
@@ -287,81 +300,89 @@ static unsigned step_choice(unsigned c, int dir, int track)
     }
 }
 
-static int choice_delta(void *view, int32_t id, int32_t delta, int32_t func)
-{
-    unsigned char *s = core_current_sound_item();
-    int t = core_current_track();
-    unsigned c;
-    (void)view;
-    (void)id;
-    (void)func;
-    if (!s || t < 0 || t >= 12 || !delta || n_machines < 0)
-        return 1;
-    if (bound((signed char)s[SOUND_MACHINE], SMPL_REQUIRED))
-        return 1;                               /* the SRC machine holds it */
-    c = core_store_get(STORE(smpl_choice), s, 0);
-    c = step_choice(c, delta > 0 ? 1 : -1, t);
-    core_store_set(STORE(smpl_choice), s, 0, c);
-    return 1;
-}
-
-static void put4(char *buf, const char *s)
-{
-    int i;
-    for (i = 0; i < 4 && s && s[i]; i++)
-        buf[i] = s[i];
-    buf[i] = 0;
-}
-
-static int choice_text(struct core_text *t)
+/* what the sound setup menu shows for the current sound */
+static const char *choice_name(void)
 {
     unsigned char *s = core_current_sound_item();
     const struct smpl_machine *m;
     unsigned c;
-    if (!s) {
-        t->buf[0] = 0;
-        return CORE_TEXT_DONE;
+    if (!s)
+        return "";
+    if ((m = bound((signed char)s[SOUND_MACHINE], SMPL_REQUIRED)) != 0)
+        return m->name;
+    c = core_store_get(STORE(smpl_choice), s, 0);
+    if (c == CHOICE_AUTO) {
+        m = bound((signed char)s[SOUND_MACHINE], SMPL_DEFAULT);
+        return m && fits(m, core_current_track()) ? m->name : "AUTO";
     }
-    m = bound((signed char)s[SOUND_MACHINE], SMPL_REQUIRED);
-    c = (unsigned)t->value >> 8;
-    if (m)
-        put4(t->buf, m->label);
-    else if (c == CHOICE_AUTO)
-        put4(t->buf, "AUTO");
-    else if (c == CHOICE_STOCK)
-        put4(t->buf, "STCK");
-    else if ((m = by_id((int)c - CHOICE_FIRST)) != 0)
-        put4(t->buf, m->label);
-    else
-        put4(t->buf, "----");
-    return CORE_TEXT_DONE;
+    if (c == CHOICE_STOCK)
+        return "STOCK";
+    m = by_id((int)c - CHOICE_FIRST);
+    return m ? m->name : "----";
 }
 
-const struct core_param smpl_choice_param = {CORE_KNOB(0), CORE_KNOB(0), choice_get, choice_delta, choice_text};
-
-static const char *choice_label(int32_t id)
+static void choice_turn(int delta)
 {
-    (void)id;
-    return "MACH";
+    unsigned char *s = core_current_sound_item();
+    int t = core_current_track();
+    unsigned c;
+    if (!s || t < 0 || t >= 12 || !delta || n_machines <= 0)
+        return;
+    if (bound((signed char)s[SOUND_MACHINE], SMPL_REQUIRED))
+        return;                                 /* the SRC machine holds it */
+    c = core_store_get(STORE(smpl_choice), s, 0);
+    c = step_choice(c, delta > 0 ? 1 : -1, t);
+    core_store_set(STORE(smpl_choice), s, 0, c);
 }
 
-static const char *choice_name(int32_t id)
+/* ---- the sound setup menu's row (gate.s) -------------------------------- */
+
+/* stock's menu row (0x54 bytes, built by 0x40072fbc) takes four functors,
+ * each {storage[2], manager, invoker}: its label, a press, its value's
+ * drawing and a turn. The managers are stock's own for the MACHINE row's
+ * functors, which hold nothing. */
+struct functor {
+    void *data[2];
+    void *manager;
+    void *invoker;
+};
+
+#define NEW ((void *(*)(uint32_t))0x400827c4)                      /* operator new */
+#define ROW_INIT ((void (*)(void *, struct functor *, struct functor *, struct functor *, \
+                            struct functor *, int32_t, int32_t))0x40072fbc)
+#define DRAW_TEXT ((void (*)(void *, const void *, int32_t, int32_t, int32_t, int32_t, int32_t, \
+                             const char *, ...))0x4007154c)
+#define MENU_FONT ((const void *)0x4027aa28)
+#define FMT_S ((const char *)0x402413d4)                             /* "%s" */
+
+extern char smpl_row_label_s[];                                     /* gate.s */
+const char smpl_row_text[] = "SMPL MACHINE";                       /* the row's label */
+
+static void row_draw(void *f, void *row, void *ctx, int32_t x, int32_t y)
 {
-    (void)id;
-    return "SMPL Machine";
+    (void)f;
+    (void)row;
+    DRAW_TEXT(ctx, MENU_FONT, x + 0x13, y + 2, 2, 0, 0, FMT_S, choice_name());
 }
 
-const struct core_param_lock smpl_choice_lock = {CORE_KNOB(0), CORE_KNOB(0), 0, 0, 0, 0, choice_label, choice_name};
-
-/* SMP's select box, on 0..31 */
-const struct core_knob_look smpl_choice_look = {CORE_KNOB(0), CORE_KNOB(0), FIRST_REC + 2, 0, 0, 31 << 8};
-
-const struct core_page smpl_choice_page = {CORE_PAGE(0), "SMPL MACHINE", {CORE_KNOB(0), 0, 0, 0, 0, 0, 0, 0}};
-
-static int32_t choice_shown(void *view)
+static void row_turn(void *f, void *row, int32_t delta)
 {
-    (void)view;
-    return n_machines > 0;
+    (void)f;
+    (void)row;
+    choice_turn(delta);
 }
 
-const struct core_view_page smpl_choice_view = {CORE_VIEW_SAMPLE, CORE_PAGE(0), choice_shown};
+/* gate.s, as the sound setup menu is built, after its MACHINE row; returns
+ * the row to add, or 0 */
+void *smpl_menu_row(void)
+{
+    struct functor label = {{0, 0}, (void *)0x400ee470, smpl_row_label_s};
+    struct functor press = {{0, 0}, 0, 0};
+    struct functor draw = {{0, 0}, (void *)0x400ee4c2, (void *)row_draw};
+    struct functor turn = {{0, 0}, (void *)0x400ee514, (void *)row_turn};
+    void *row;
+    if (count_machines() <= 0 || !(row = NEW(0x54)))      /* the menu is built at boot, before a tick */
+        return 0;
+    ROW_INIT(row, &label, &press, &draw, &turn, -1, 8);
+    return row;
+}
