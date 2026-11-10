@@ -32,6 +32,11 @@
  *     47 BT TEST   9..13                 52 CB TEST   10..12, 16 (no LEV)
  *     48 LT TEST   9..12
  *
+ * From core 0.15 a filled TEST slot shows its knobs in the public order,
+ * knobs[1..7] on A..G and LEV on H (stock's TEST pages put LEV on A and the
+ * rest in each test's own order), and CORE_MACHINE_LOOKS (below) gives a
+ * knob a stock knob's look in place of the test machine's.
+ *
  * Mods that used these records as spare parameters (fx-sends, duck,
  * voice-dac) move off them for 0.13; one that still uses a slot's records
  * declares "machine:<n>" in its resources, so the linker refuses it next to
