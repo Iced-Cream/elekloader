@@ -20,7 +20,8 @@ number at +2, its command | 0x80 at +4 and a status byte at +5 (1: done). The Da
   0x5c clear   path
 
 What goes through it is a data container (container.py). The Drive Loader's `/mods` route takes
-`.elemod` files and `active`, and serves `.build` (the build descriptor) and `.status`. The router has
+`.elemod` files and `active`, and serves `.build` (the build descriptor), `.status` and `.store`
+(+Drive storage's places, read only). The router has
 no command for a folder and refuses its own Rename on the route's entries: an upload of an empty
 file to `FOLDER/.dir` asks the route to make FOLDER (`Mods.mkdir`), an upload of "FROM\nTO" to `.mv`
 to move or rename a file or a folder (`Mods.move`; `/mods/active` follows it), and a clear of an
@@ -363,7 +364,7 @@ def add_arguments(p):
     sub = p.add_subparsers(dest='op', required=True)
     q = sub.add_parser('ls', help='list /mods, or one of its folders')
     q.add_argument('folder_path', nargs='?', help='a folder below /mods (default: /mods itself)')
-    q = sub.add_parser('get', help='download a file (also .build and .status)')
+    q = sub.add_parser('get', help='download a file (also .build, .status and .store)')
     q.add_argument('name')
     q.add_argument('--out', help='where to write it (default: its name)')
     q = sub.add_parser('put', help='check the files against the unit\'s build, then upload them')

@@ -68,6 +68,12 @@ class Route(unittest.TestCase):
         # every put reads .build first: e37adef refused it ("Invalid name"), so no put went through
         self.assertEqual(self.entry('.build', '.status'), [(0, False, '.build'), (0, False, '.status')])
 
+    def test_the_store_is_a_name_only_at_the_top_and_never_writable(self):
+        # /mods/.store (+Drive storage's places): a build reads it (patch --drive-store); writable() keeps it
+        # read only, and dl_entry gives it P_READ alone
+        self.assertEqual(self.entry('.store'), [(0, False, '.store')])
+        self.assertEqual(self.entry('~T NAV/.store'), [None])
+
     def test_puts_flat_and_into_folders(self):
         for name in ('drive-hello-0.1.elemod', '~T a-0.1.elemod', '~T NAV/~T a-0.1.elemod',
                      '~T NAV/~T A/~T b-0.1.elemod', '~T NAV/~T A/~T B/~T c-0.1.elemod'):

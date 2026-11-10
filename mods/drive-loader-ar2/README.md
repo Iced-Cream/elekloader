@@ -27,13 +27,14 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 
 | path | what |
 |---|---|
-| `/mods` | the folders and files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build` and `.status` |
+| `/mods` | the folders and files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build`, `.status` and `.store` |
 | `/mods/<folder>`... | one folder's folders and files, to 3 folders below `/mods` (`DL_DEPTH`). A folder inside a third-level one (made over USB) is left out of its listing and off the MODS page, and no route reaches it or its files (`tests/drive_depth_host.c`, `tests/test_drive_route.py`) |
 | `/mods/<name>`, `/mods/<folder>/.../<name>` | read, upload or Clear one file, in `/mods` or a folder up to 3 deep. Uploads take `*.elemod` (at any depth) and `active` (in `/mods` only); an upload makes the folders it needs. Other files can be read and cleared. A Clear of a folder removes it when it is empty, as SAMPLES' DELETE DIR |
 | `/mods/<folder>/.../.dir` | upload only: an upload (of nothing, `elekloader mods mkdir`) makes the folder, and any parents not there yet, empty, up to 3 deep. No file is written, and a folder already there is kept |
 | `/mods/.mv` | upload only: an upload of `FROM\nTO` (paths below `/mods`; `elekloader mods mv`) moves or renames a `.elemod` file or a folder with everything in it, and rewrites `/mods/active`'s lines naming FROM or a file below it. No file is written |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
 | `/mods/.status` | read only: plain text, the route's last commit or delete, the MODS page's check (`check: n/N /mods/FOLDER`), the boot's time, then the boot linker's records |
+| `/mods/.store` | read only, when there is one: docs/DRIVE.md, "+Drive storage" |
 
 Each transfer goes through stock's data container (31-byte header, body, 12-byte footer with
 CRC-32). An upload's header must say family 2, file type `0x454d4f44` (`'EMOD'`), not

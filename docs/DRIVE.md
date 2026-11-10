@@ -75,8 +75,8 @@ inputs give the same bytes.
 
 `elekloader mods` moves files over USB MIDI (`elekloader/datarpc.py`; on
 Windows through winmm, `elekloader/winmm.py`, as python-rtmidi drops SysEx
-over 1 KB there; elsewhere with `mido` and `python-rtmidi`): `ls [FOLDER]`, `get NAME` (also `.build` and
-`.status`), `put FILES... [--into FOLDER]` (`check` runs them against the unit's `.build` first;
+over 1 KB there; elsewhere with `mido` and `python-rtmidi`): `ls [FOLDER]`, `get NAME` (also `.build`,
+`.status` and `.store`), `put FILES... [--into FOLDER]` (`check` runs them against the unit's `.build` first;
 nothing is uploaded if one is refused; the folders are made as needed), `rm NAME` (a file, or an empty
 folder; the route refuses a folder with anything in it, `Folder not empty`) and `active NAMES...` (writes `/mods/active` when the set loads). A NAME is a path below
 `/mods`, in up to 3 folders (`fx/delays/x.elemod`); the route lists a folder as an item whose
@@ -134,6 +134,20 @@ descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
   code (u8 code, the two names, by code), 0 read as 1. A park moves no bit,
   so it keeps the ID. The ancestors are the last 15 live IDs, then the
   flashed ID and its ancestors, at most 15.
+
+**A later build** keeps the +Drive's codes and CCs free when it is given the
+unit's `.store` (`elekloader mods get .store`, then `elekloader.patch
+--drive-store .store`; the route serves it read only). The lockfile keeps
+what it read under `"drive"` (each scope's low mark, the codes and CCs the
++Drive's fields and parked fields hold), so later builds keep them free too
+until another `.store` replaces it (`--drive-store none` drops it). A new
+flashed code or CC skips the +Drive's, and a freed one is given out again
+only when it is not one of them; only when nothing else is left does the
+build take one, with a note, and the loader gives the +Drive field another.
+Bits can't be kept that way, as the loader reads the build's used bits as
+one mark: a build that grows past a scope's low mark, or repacks a scope the
++Drive keeps bits in, is placed as before, and a note names the scope the
+loader repacks at its next boot.
 
 **/mods/.store** (format 1, big-endian, records 4-aligned), rewritten only
 when its bytes change; a missing, short or bad file (magic, format, size,

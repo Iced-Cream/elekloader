@@ -298,6 +298,18 @@ export function decode(raw: Uint8Array | null): State | null {
 
 const copy = (st: State): State => JSON.parse(JSON.stringify(st))
 
+/** The state (decode()'s) -> what the +Drive keeps, as a build's lockfile keeps it (store.ts, "drive"): the live layout
+ * ID, each scope's low mark, and the codes and CCs its fields and parked fields hold. drive_store.reserve. */
+export function reserve(st: State): store.Drive {
+  const uniq = (v: number[]) => [...new Set(v)].sort((a, b) => a - b)
+  return {
+    id: '0x' + (st.id >>> 0).toString(16).padStart(8, '0'),
+    low: Object.fromEntries(store.SCOPES.map(s => [s, st.scopes[s].low])),
+    codes: uniq([...st.codes, ...st.freed_codes].map(c => c.code)),
+    ccs: uniq([...st.ccs, ...st.freed_ccs].map(c => c.cc)),
+  }
+}
+
 /** FORGET DATA: drop a parked mod's fields, codes and CCs. -> [the new state, whether it changed]. drive_store.forget. */
 export function forget(st: State, mod: string): [State, boolean] {
   const out = copy(st)
