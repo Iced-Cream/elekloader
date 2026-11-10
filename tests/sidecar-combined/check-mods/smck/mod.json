@@ -1,0 +1,17 @@
+{
+ "id": "smck", "version": "0.1", "title": "SMPL machines check", "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "Emulator check for smpl-machines: two SMPL machines by count (SC FREE on any voice; SC REQ, which the SRC machine BD SMPLREQ requires) and that SRC machine by count. Counts engine calls and trigs per voice after the magic SMCK, and logs every key event's code and flags.",
+ "device": "analog-rytm-mk2", "os": "1.74",
+ "sources": ["smck.c"],
+ "machine_knobs": [8],
+ "pool_ids": {"smpl_machines": 2},
+ "subscribe": [{"event": "ev_key", "fn": "smck_key", "order": -2000000}],
+ "contribute": [
+  {"to": "core_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smck_src", 0]]},
+  {"to": "smpl_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smck_free", 0]]},
+  {"to": "smpl_machines", "order": 51, "data": "00000000", "relocs": [[0, "abs32", "sym:smck_req", 0]]}
+ ],
+ "resources": {"core": "0.13"},
+ "requires": ["core", "smpl-machines"]
+}

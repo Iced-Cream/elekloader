@@ -1,0 +1,17 @@
+{
+ "id": "bcnt", "version": "0.1", "title": "By-count check", "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "Emulator check: two machines and one page id given by count.",
+ "device": "analog-rytm-mk2", "os": "1.74",
+ "sources": ["bcnt.c"],
+ "machine_knobs": [8, 4],
+ "pages": 1,
+ "contribute": [
+  {"to": "core_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:bcnt_m0", 0]]},
+  {"to": "core_machines", "order": 51, "data": "00000000", "relocs": [[0, "abs32", "sym:bcnt_m1", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:bcnt_page", 0]]},
+  {"to": "core_view_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:bcnt_view", 0]]}
+ ],
+ "resources": {"core": "0.13"},
+ "requires": ["core"]
+}
