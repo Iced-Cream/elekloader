@@ -6,12 +6,16 @@ column, keeping its tail (the file's name) behind the cut mark, so it never runs
     python tests/test_drive_page.py
 
 Needs a C compiler (cc)."""
+import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+from elekloader import drive_store as ds   # noqa: E402
 LABEL = 48                                         # page.c's label buffer
 
 
@@ -152,6 +156,109 @@ class BuildRows(unittest.TestCase):
         tree = ['%s/' % ('a' * 40), '%s/%s.elemod' % ('a' * 40, 'n' * 50)]
         info = self.lines(['info 0'], 'INFO', tree=tree, active=[tree[1]])[0].split('~')
         self.assertEqual(info, ['<' + ('/mods/' + 'a' * 40)[-29:], 'n' * 30, 'n' * 20 + '.elemod'])
+
+
+class Parked(unittest.TestCase):
+    """Parked data on the MODS page (decided 2026-11-10, +Drive v2 item 6): park.c reads /mods/.store
+    as elekloader/drive_store.py writes it and FORGET DATA rewrites it byte for byte as
+    drive_store.forget then encode; the build list shows each parked mod after the build's rows,
+    and the "!" box spells out storage-room and site refusals (dl.h DL_R_STORE, DL_R_SITE)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work = tempfile.TemporaryDirectory()
+        cls.exe = os.path.join(cls.work.name, 'drive_build_rows_host')
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
+                        '-Wl,--unresolved-symbols=ignore-all'], check=True)
+        with open(os.path.join(HERE, '..', 'js', 'test', 'drivestore-vectors.json'), encoding='utf-8') as fh:
+            runs = json.load(fh)['runs']
+        cls.stores = []
+        for run in runs:
+            for res in run['results']:
+                if isinstance(res, dict) and res.get('store') and res['store'] not in cls.stores:
+                    cls.stores.append(res['store'])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.work.cleanup()
+
+    def lines(self, requests, kind, active=()):
+        r = subprocess.run([self.exe], capture_output=True, text=True, check=True,
+                           input='\n'.join(['--'] + list(active) + ['--'] + requests) + '\n')
+        return [l[len(kind) + 1:] for l in r.stdout.splitlines() if l.startswith(kind + ' ')]
+
+    @staticmethod
+    def parked_mods(st):
+        out = []
+        for k in ('parked', 'freed_codes', 'freed_ccs'):
+            for f in st[k]:
+                if f['mod'] not in out:
+                    out.append(f['mod'])
+        return out
+
+    def test_the_vectors_have_parked_data(self):
+        self.assertTrue(any(ds.decode(bytes.fromhex(h))['parked'] for h in self.stores))
+
+    def test_forget_matches_drive_store(self):
+        for h in self.stores:
+            st = ds.decode(bytes.fromhex(h))
+            mods = self.parked_mods(st) + ['nobody']
+            asks = [[m] for m in mods] + [mods]
+            got = self.lines(['store ' + h] + ['forget ' + '|'.join(a) for a in asks], 'FORGET')
+            for a, g in zip(asks, got):
+                want = st
+                for m in a:
+                    want, _ch = ds.forget(want, m)
+                self.assertEqual(g, ds.encode(want).hex(), (a, h))
+
+    def test_parked_rows_and_their_bits(self):
+        for h in self.stores:
+            st = ds.decode(bytes.fromhex(h))
+            mods = self.parked_mods(st)
+            rows = self.lines(['store ' + h, 'build'], 'BUILD')
+            got = rows[0].split('|') if rows and rows[0] else []
+            self.assertEqual(got, ['%s=PARK' % m for m in mods], h)
+            for i, m in enumerate(mods):
+                info = self.lines(['store ' + h, 'parkinfo %d' % i], 'PARKINFO')[0].split('~')
+                self.assertEqual(info[0], 'PARKED DATA')
+                bits = {}
+                for f in st['parked']:
+                    if f['mod'] == m:
+                        bits[f['scope']] = bits.get(f['scope'], 0) + f['bits']
+                text = ', '.join(info[1:])
+                for scope, b in bits.items():
+                    self.assertIn('%s: %d bits' % (scope, b), text)
+                self.assertTrue(all(len(l) <= 30 for l in info), info)
+
+    def test_a_bad_store_parks_nothing_and_forgets_nothing(self):
+        h = next(h for h in self.stores if ds.decode(bytes.fromhex(h))['parked'])
+        raw = bytearray(bytes.fromhex(h))
+        raw[-1] ^= 1                                       # the CRC no longer matches
+        self.assertEqual(self.lines(['store ' + raw.hex(), 'build'], 'BUILD', active=['x.elemod']), ['x'])
+        self.assertEqual(self.lines(['store ' + raw.hex(), 'forget duck'], 'FORGET'), ['-1'])
+        self.assertEqual(self.lines(['store ' + h[:-8], 'forget duck'], 'FORGET'), ['-1'])   # cut short
+
+    def test_parked_rows_follow_the_build(self):
+        h = next(h for h in self.stores if ds.decode(bytes.fromhex(h))['parked'])
+        mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
+        got = self.lines(['store ' + h, 'build'], 'BUILD', active=['x.elemod'])[0].split('|')
+        self.assertEqual(got, ['x'] + ['%s=PARK' % m for m in mods])
+
+    def test_storage_room_refusals_in_full(self):
+        got = self.lines(['reason 21 0 sound 62 56', 'reason 21 0 codes 3 1', 'reason 21 0 core_handles 3 2'],
+                         'REASON')
+        self.assertEqual(got, ['NO STORAGE ROOM~sound: 62 of 56 bits', 'NO STORAGE ROOM~codes: 3 of 1 free',
+                               'NO STORAGE ROOM~core_handles: 3 of 2 spare'])
+
+    def test_site_refusals_name_the_site_and_who_has_it(self):
+        got = self.lines(['setid 3 fx-sends',
+                          'reason 22 0x100 400a005e', 'reason 22 0x100 400a005e core-ar2',
+                          'reason 22 0x203 40123456', 'reason 22 0x300 40000100', 'reason 22 0x400 4009febc'],
+                         'REASON')
+        self.assertEqual(got, ['SITE 0x400a005e~TAKEN BY THE BUILD', 'SITE 0x400a005e~TAKEN BY core-ar2',
+                               'SITE 0x40123456~TAKEN BY fx-sends', 'SITE 0x40000100~IN A PRE-LINK RANGE',
+                               'SITE 0x4009febc~NOT STOCK BYTES'])
+        self.assertTrue(all(len(l) <= 30 for g in got for l in g.split('~')))
 
 
 class CheckTick(unittest.TestCase):

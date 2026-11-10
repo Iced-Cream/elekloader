@@ -374,6 +374,8 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 18 | `range` | a `pc16` out of range |
 | 19 | `limit` | past the loader's own room (above) |
 | 20 | `count` | more than 256 lines in `/mods/active` |
+| 21 | `store` | storage room short (detail: `WHAT NEED HAVE`, as `sound 62 56`) |
+| 22 | `site` | a site or copied block clashes (argument: kind << 8 \| the other's line, kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: its address in hex) |
 
 When nothing is linked, the loader keeps why:
 

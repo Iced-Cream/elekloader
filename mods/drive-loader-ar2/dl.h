@@ -52,7 +52,10 @@ enum {
     DL_R_RANGE = 18,                     /* a pc16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
     DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
+    DL_R_STORE = 21,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
+    DL_R_SITE = 22,                      /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
 };
+enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };
 
 /* Why nothing was linked (dl_skip_reason). */
 enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT,
