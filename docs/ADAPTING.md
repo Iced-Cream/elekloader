@@ -2639,13 +2639,13 @@ as switches, or as ERR above 7); set `CORE_MACHINE_LOOKS` in the entry's
 `flags` and point `looks` at eight `{look, ui}`, one per knob, to draw one
 as any stock knob (`look`, a stock id; 0 keeps the record's) or with a UI
 record of the mod's own (`ui`, as in `core_knob_looks`). The look's value
-text comes with its graphic, so pick a stock knob whose text fits (FIN's is
--64..+63). The knob keeps its own range and the graphic spans it:
+text comes with its graphic, so pick a stock knob whose both fit (FIN's
+text is -64..+63, LEV's graphic a level bar). The knob keeps its own range and the graphic spans it:
 
 ```c
 static const struct core_machine_look my_looks[8] = {
     {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
-    {101, 0},           /* knobs[6], on F: a 0..127 dial (BD HARD LEV) */
+    {103, 0},           /* knobs[6], on F: a 0..127 dial (BD HARD DEC) */
     {457, 0},           /* knobs[7], on G: a switch */
 };
 const struct core_machine my_machine = {
