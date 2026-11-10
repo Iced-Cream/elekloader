@@ -367,16 +367,24 @@ static void row_draw(void *f, void *row, void *ctx, int32_t x, int32_t y)
     DRAW_TEXT(ctx, MENU_FONT, x + 0x13, y + 2, 2, 0, 0, FMT_S, choice_name());
 }
 
+/* the menu redraws itself after a cursor move (0x40078580 on the view's
+ * widget at +0x38) but not after a turn: stock's own rows are redrawn by the
+ * sound's change notice. Ours is redrawn here, while the view that holds it
+ * is the one it was added to. */
+#define INVALIDATE ((void (*)(void *))0x40078580)
+static void *menu_view, *menu_row;
+
 static void row_turn(void *f, void *row, int32_t delta)
 {
     (void)f;
-    (void)row;
     choice_turn(delta);
+    if (row && row == menu_row && menu_view)
+        INVALIDATE((char *)menu_view + 0x38);
 }
 
-/* gate.s, as the sound setup menu is built, after its MACHINE row; returns
- * the row to add in %d0, or 0 */
-uint32_t smpl_menu_row(void)
+/* gate.s, as the sound setup menu (view) is built, after its MACHINE row;
+ * returns the row to add in %d0, or 0 */
+uint32_t smpl_menu_row(void *view)
 {
     struct functor label = {{0, 0}, (void *)0x400ee470, smpl_row_label_s};
     struct functor press = {{0, 0}, 0, 0};
@@ -386,5 +394,7 @@ uint32_t smpl_menu_row(void)
     if (count_machines() <= 0 || !(row = NEW(0x54)))      /* the menu is built at boot, before a tick */
         return 0;
     ROW_INIT((void *)row, &label, &press, &draw, &turn, -1, 8);
+    menu_view = view;
+    menu_row = (void *)row;
     return row;
 }

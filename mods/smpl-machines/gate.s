@@ -48,7 +48,9 @@ smpl_menu_s:
         move.l  8(%sp),-(%sp)           | view
         jsr     (%a5)                   | 0x400727f2, add a row
         addq.l  #8,%sp
+        move.l  4(%sp),-(%sp)           | view
         jsr     smpl_menu_row
+        addq.l  #4,%sp
         tst.l   %d0
         beq.s   1f
         move.l  %d0,-(%sp)              | our row
