@@ -529,17 +529,16 @@ int smpl_key(void *brain, void *ev)
     const uint8_t *e = (const uint8_t *)ev;
     uint32_t code = *(const uint32_t *)(e + 12), flags = *(const uint32_t *)(e + 16);
     (void)brain;
+    /* a key's release comes as 0x10, or as 0 when it was used with another
+     * key (TRK + a pad): anything without the press bit lets go */
     if (code == KEY_TRK) {
-        if (flags & KEY_RELEASE)
-            trk_down = 0;
-        else if (flags & KEY_PRESS)
-            trk_down = 1;
+        trk_down = (flags & KEY_PRESS) && !(flags & KEY_RELEASE);
         return 0;
     }
     if (code != KEY_SMPL)
         return 0;
     if (smpl_taken) {
-        if (flags & KEY_RELEASE)
+        if (!(flags & KEY_PRESS) || (flags & KEY_RELEASE))
             smpl_taken = 0;
         return 1;
     }
