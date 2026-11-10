@@ -49,8 +49,6 @@ static const unsigned char *volatile applied[12]; /* the sound the audio side la
 static int n_machines = -1;                       /* -1 until the first tick */
 static struct core_knob_face faces[MAX_MACHINES][8];
 static struct core_page pages[MAX_MACHINES];
-static uint8_t blank_ui[84];
-static int blank_ready;
 
 static int count_machines(void)
 {
@@ -140,11 +138,11 @@ static void build(void)
         for (k = 0; k < 8; k++) {
             const struct smpl_knob *n = &m->knobs[k];
             struct core_knob_face *f = &faces[i][k];
-            pages[i].ids[k] = FIRST_REC + k;
+            pages[i].ids[k] = n->label ? FIRST_REC + k : 0;     /* 0: an empty cell */
             f->label = n->label ? n->label : "";
             f->name = n->name ? n->name : f->label;
             f->look = n->look;
-            f->ui = n->label ? 0 : blank_ui;
+            f->ui = 0;
             f->min = n->min;
             f->max = n->max;
             f->def = n->def;
@@ -152,20 +150,13 @@ static void build(void)
     }
 }
 
-/* ev_tick: the faces once (stock's UI records are built by then), and the
+/* ev_tick: the pages and faces once, and the
  * track cache the render reads */
 void smpl_tick(void)
 {
     const unsigned char *kit;
     int t;
     if (n_machines < 0) {
-        if (!blank_ready) {                     /* a copy of TUN's UI record that draws nothing */
-            const uint8_t *src = core_knob_stock_ui(FIRST_REC);
-            for (t = 0; t < 84; t++)
-                blank_ui[t] = src[t];
-            blank_ui[0] = blank_ui[1] = blank_ui[2] = blank_ui[3] = 0;
-            blank_ready = 1;
-        }
         build();
     }
     kit = core_current_kit_item();
