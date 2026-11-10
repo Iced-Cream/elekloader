@@ -2088,6 +2088,15 @@ sites, with `analog-rytm-mk2/moments.h`:
   it, else it is queued (1,024 bytes, at most 128 a message) and sent at
   the next sequencer tick or `ev_tick`, in order. `core_usb_midi_up()`
   says whether USB is on and the host has configured the MIDI port.
+- `core_midi_din_try_send(len, msg)` (core 0.15 or later): the same for the DIN MIDI OUT port,
+  a whole message of up to 256 bytes into stock's DIN sender, 1 sent or 0
+  not now (no room, or OUT PORT FUNC is DIN24 or DIN48); it never waits,
+  from any task or interrupt. `core_midi_din_up()` says whether the port
+  is a MIDI port.
+- `core_track_mutes()` and `core_set_track_mutes(mask)` (core 0.15 or later), bit t for track
+  t (0..12): the mutes as the mute screens show them, set the way
+  Overbridge's settings write sets them (the engine and the screens follow,
+  no MIDI goes out). UI task.
 - `core_current_kit()`, `core_current_track()`, `core_current_pattern()`
   (-1 for none) and `core_current_kit_item()`, `core_current_sound_item()`,
   `core_current_pattern_item()` for `core_store_get` and `core_store_set`,
@@ -2668,7 +2677,12 @@ In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
 trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
 sounding voice alike) and `core_voice_velocity(voice)` is the track's
 velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
-accent.
+accent. `core_voice_released(voice)` (core 0.15 or later) is 1 when the track's note
+ended this block (a pad, key or MIDI note-off, the note's length, the
+sequencer) and 2 when stock cut every track at once (the kit and project
+loads), else 0. It mirrors stock: the stop and the loads send every track a
+note-off, so an end can come for a note that already ended; a mod that
+sends MIDI keeps its own note-on flag.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
