@@ -87,7 +87,7 @@ extern volatile uint32_t core_fx_skip_hold;
 #define STAGING_LONGS (0x210 / 4)     /* the call reads up to 0x110 + 0x100 */
 #define D_LINE 0x4b400000U
 #define D_LINE_BYTES 0x400000U
-#define D_CLEAR_CHUNK 0x4000U
+#define D_CLEAR_CHUNK 0x2000U
 #define D_QUIET_PEAK 1024              /* 4 LSB of 24 bits */
 
 #define LINES 0x4b000000U

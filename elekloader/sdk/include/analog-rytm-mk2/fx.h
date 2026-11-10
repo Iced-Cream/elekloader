@@ -22,7 +22,7 @@
  * so without it the delay skip ends the first time the delay is used. Once
  * nothing feeds the delay and nothing at or above 4 LSB of 24 bits has gone
  * into its line or out of it for a whole turn of the line (about 11 s), core
- * clears the line and the delay's audio state (about 0.2 s, without calling
+ * clears the line and the delay's audio state (about 0.35 s, without calling
  * it), and the delay skip takes over. Its next echoes start from silence.
  *
  * A mod that needs stock's exact FX render while it works calls
