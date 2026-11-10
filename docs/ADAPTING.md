@@ -2697,6 +2697,19 @@ loads), else 0. It mirrors stock: the stop and the loads send every track a
 note-off, so an end can come for a note that already ended; a mod that
 sends MIDI keeps its own note-on flag.
 
+Any stock engine can run this way: `core_track_default_machine(t)`,
+`core_machine_engine(m)` and `core_machine_voices(m)` find one, and
+`core_machine_defaults(m, blk)` fills a block with its knobs' defaults
+(machines.h). Call an engine only on a voice its mask allows, and call
+`core_voice_engine_reset(voice)` when the voice changes engine. An entry
+in slots 44..52 with `CORE_MACHINE_DESTS` in its `flags` offers its knobs
+as LFO, velocity and aftertouch destinations.
+
+`core_track_sound(t)` is the sound a track's last trig played: its kit's
+sound, or a pool sound under a sound lock (`core_track_pool_sound`).
+`core_param_set(t, index, value, out)` sets a sound parameter from the UI
+task as its knob does.
+
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
 not run. `examples/machine-ar2` is the smallest machine: BD COPY, BD

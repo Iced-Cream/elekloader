@@ -399,8 +399,8 @@ so it is not written. Fewer records: SD TEST 9..12, 15, 16; BT TEST
 LEV); BD, RS and CY TEST all eight (machines.h). The TEST records also
 have +0x24 = 0, where 34..42 and every public machine record have 0x600,
 the list kinds that make a record an LFO, velocity and aftertouch
-destination; 0.13 leaves it as it is, so a knob in 44..52 is not offered
-as one of those destinations.
+destination; core copies it from slot 35's record only for an entry
+flagged `CORE_MACHINE_DESTS` (machines.c).
 
 **The trig getters.** `ENGINES[s]` is core's trampoline for slot s (one
 per slot, 19), which latches, for the voice v it is called with, the
@@ -412,12 +412,15 @@ so the latch holds this block's trig. `core_voice_trigged(v)` and
 `core_voice_velocity(v)` read the latch: plain reads, for the engine's own
 voice.
 
-A check mod holding slot 44 on the BD voice and slot 52 on the CY/CB voice
-shows the trampolines, the records' CCs and NRPNs, CC 15 choosing slot 44,
-and one count and the velocity per trig from the sequencer, pads, notes and
-a retrig. A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
+A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
 whole values but its engine word keeps a fraction: read the high byte for
 the display value.
+
+## Stock engines, trig sounds, core_param_set (0.15+)
+
+machines.c (stock engines and knob defaults) and sound.c, sound.s (the
+sound a trig plays, `core_param_set`) carry the 1.74 addresses; machines.h
+the calls.
 
 ## The OS upgrade's restart (0.7)
 
