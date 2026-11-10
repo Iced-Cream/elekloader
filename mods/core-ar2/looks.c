@@ -25,8 +25,15 @@
  * the value and its text the mod's (core_params), and what stock does with
  * a parameter (its sound slot, its lists, MIDI, the +0x24 flags) is not
  * taken from look: only how the knob is drawn. An id without an entry is
- * unchanged (record 0). */
+ * unchanged (record 0).
+ *
+ * (0.15) A stock id whose record a core_machines slot fills (machines.c)
+ * takes the look its knob entry names (machines.h, CORE_MACHINE_LOOKS):
+ * uirec answers look's UI record (or the entry's ui), the range stays the
+ * record's own (core wrote the knob's min..max into it), and the graphic
+ * spans that range on look's scale, as an entry with min < max does. */
 #include <stdint.h>
+#include "analog-rytm-mk2/machines.h"
 
 #define UIRECS ((uint8_t *)0x419a4888)  /* stock's UI records, 84 bytes an id */
 #define UIREC_SIZE 84
@@ -90,6 +97,8 @@ static const struct core_knob_look *look_of(int32_t id)
     return 0;
 }
 
+const struct core_machine_look *core_machine_look_of(int32_t id);   /* machines.c */
+
 /* a stock id's own UI record, record 0 for any other (stock's lookup) */
 const void *core_knob_stock_ui(int32_t id)
 {
@@ -102,12 +111,20 @@ uint32_t core_uirec(int32_t id)
     const struct core_knob_look *l;
     const struct core_knob_face *f;
     const void *p;
-    if ((uint32_t)id < STOCK_IDS && (f = core_knob_face(id, 0)) != 0) {
-        if (f->ui)
-            return (uint32_t)f->ui;
-        return (uint32_t)core_knob_stock_ui(f->look ? f->look : id);
+    const struct core_machine_look *ml;
+    if ((uint32_t)id < STOCK_IDS) {
+        if ((f = core_knob_face(id, 0)) != 0) {
+            if (f->ui)
+                return (uint32_t)f->ui;
+            return (uint32_t)core_knob_stock_ui(f->look ? f->look : id);
+        }
+        if (!(ml = core_machine_look_of(id)))
+            return (uint32_t)core_knob_stock_ui(id);
+        if (ml->ui && (p = ml->ui(id)) != 0)
+            return (uint32_t)p;
+        return (uint32_t)core_knob_stock_ui(ml->look ? ml->look : id);
     }
-    if ((uint32_t)id < STOCK_IDS || !(l = look_of(id)))
+    if (!(l = look_of(id)))
         return (uint32_t)core_knob_stock_ui(id);
     if (l->ui && (p = l->ui(id)) != 0)
         return (uint32_t)p;
@@ -143,21 +160,36 @@ void core_param_range(int32_t *out, int32_t id)
  * the graphic spans the knob's own range: min at its start, max at its end. */
 int32_t core_knob_dial(int32_t id, int32_t value)
 {
-    const struct core_knob_look *l = (uint32_t)id < STOCK_IDS ? 0 : look_of(id);
-    const struct core_knob_face *f = (uint32_t)id < STOCK_IDS ? core_knob_face(id, 0) : 0;
+    const struct core_knob_look *l;
+    const struct core_knob_face *f;
+    const struct core_machine_look *ml;
     const int32_t *r;
-    int32_t lo, hi, min, max, look;
+    int32_t look, min, max, lo, hi;
     uint32_t span, off, out;
     int sh;
-    if (l && l->min < l->max) {
+    if ((uint32_t)id < STOCK_IDS) {
+        if ((f = core_knob_face(id, 0)) != 0 && f->min < f->max) {
+            /* a face: onto its look's range, or the id's own */
+            min = f->min;
+            max = f->max;
+            look = f->look ? f->look : id;
+        } else {
+            /* (0.15) a machine knob's look: its own range onto look's */
+            if (!(ml = core_machine_look_of(id)) || !ml->look || ml->look == id)
+                return value;
+            r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * id);
+            look = ml->look;
+            min = r[0];
+            max = r[1];
+        }
+    } else {
+        if (!(l = look_of(id)))
+            return value;
+        look = l->look;
         min = l->min;
         max = l->max;
-        look = l->look;
-    } else if (f && f->min < f->max) {  /* a face: onto its look's range, or the id's own */
-        min = f->min;
-        max = f->max;
-        look = f->look ? f->look : id;
-    } else
+    }
+    if (min >= max)
         return value;
     r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * ((uint32_t)look < STOCK_IDS ? look : 0));
     lo = r[0];

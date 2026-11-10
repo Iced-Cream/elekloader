@@ -2781,6 +2781,28 @@ parameters in those records (fx-sends, duck, voice-dac) move off them
 for this core; one that still uses a slot's records declares `"machine:<n>"` in
 its resources, and the linker refuses it next to a machine in that slot.
 
+A filled TEST slot's SRC page shows the knobs in the public machines'
+order (core-ar2 0.15), `knobs[1..7]` on A..G and LEV on H (stock's TEST
+pages put LEV on A, mods/core-ar2/README.md "TEST slots: knob order and
+knob looks (0.15)"). A TEST record keeps the test machine's look (some draw
+as switches, or as ERR above 7); set `CORE_MACHINE_LOOKS` in the entry's
+`flags` and point `looks` at eight `{look, ui}`, one per knob, to draw one
+as any stock knob (`look`, a stock id; 0 keeps the record's) or with a UI
+record of the mod's own (`ui`, as in `core_knob_looks`). The look's value
+text comes with its graphic, so pick a stock knob whose both fit (FIN's
+text is -64..+63, LEV's graphic a level bar). The knob keeps its own range and the graphic spans it:
+
+```c
+static const struct core_machine_look my_looks[8] = {
+    {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+    {103, 0},           /* knobs[6], on F: a 0..127 dial (BD HARD DEC) */
+    {457, 0},           /* knobs[7], on G: a switch */
+};
+const struct core_machine my_machine = {
+    45, my_engine, -1, 0xff, CORE_MACHINE_LOOKS, "MY VOICE", "MYVC",
+    {/* knobs */}, my_looks};
+```
+
 The engine is called once per 32-frame block for each voice running the
 machine, from the audio interrupt, as stock's are: `frame` is the analog
 control frame and `blk` the track's parameter block (word k is the

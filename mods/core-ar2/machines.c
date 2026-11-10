@@ -45,6 +45,8 @@
 #define SLOT_TEST 44                /* 44..52: the TEST machines (0.13) */
 #define SLOT_REF 35                 /* a hidden machine with all eight records */
 #define NSLOTS (SLOT_LAST - SLOT_FIRST + 1)
+#define SRC_PAGES ((uint8_t *)0x40288028)   /* (0.15) per machine 0x24: name, ids A..H */
+#define SRC_PAGE_SIZE 0x24
 
 /* (0.13) the per-voice trig getters' sources (README, "Trig getters") */
 #define VOICES 8
@@ -62,6 +64,7 @@ extern const struct core_machine *const core_machines[];
  * has them for this block (trig intake runs before the engines), then calls
  * the mod's engine. */
 static core_engine mod_engine[NSLOTS];
+static const struct core_machine *slot_machine[NSLOTS];
 static volatile uint8_t trigged[VOICES];
 static volatile uint8_t released[VOICES];   /* 1: the trig state's 2, 2: its 3 */
 static volatile uint16_t velocity[VOICES];
@@ -213,6 +216,66 @@ static void file_records(void)
         if (m < MACHINES && k < 8 && rec_of[m][k] == NO_RECORD)
             rec_of[m][k] = id;
     }
+
+/* (0.15) looks.c: the look core_machines gives stock record id, while a
+ * mod fills its slot (CORE_MACHINE_LOOKS; machines.h), else 0 */
+const struct core_machine_look *core_machine_look_of(int32_t id)
+{
+    const uint8_t *r;
+    const struct core_machine *m;
+    const struct core_machine_look *l;
+    int32_t s, k;
+    if ((uint32_t)id >= RECORD_COUNT)
+        return 0;
+    r = RECORDS + RECORD_SIZE * id;
+    s = L(r, 0x00);
+    k = L(r, 0x04) - 9;
+    if (s < SLOT_FIRST || s > SLOT_LAST || k < 0 || k > 7)
+        return 0;
+    m = slot_machine[s - SLOT_FIRST];
+    if (!m || !(m->flags & CORE_MACHINE_LOOKS) || !m->looks || !m->knobs[k].name)
+        return 0;
+    l = &m->looks[k];
+    return l->look || l->ui ? l : 0;
+}
+
+/* (0.15) Which knob of the SRC page shows a record is not in the record:
+ * the machine's entry in the SRC page table (0x40288028 + 0x24m: the
+ * page's name, then the ids on A..H; read through 0x400ff606, for the
+ * knobs' draw and turn, 0x400d35b0) lists them. Every public machine and
+ * the hidden 34..42 put sound index 9 (LEV) on H; the TEST machines put
+ * it on A and the rest in an order of each test's own (44 and 46: 15 and
+ * 16 on E and F). For a TEST slot a mod fills, core writes the public
+ * order: index 10..16 on A..G, 9 on H, a position whose index has no
+ * record getting the entry's own empty value. The sound's words, the CCs
+ * and NRPNs follow the index, not the knob, so they do not move. */
+static void place_knobs(int32_t s)
+{
+    int32_t *ids = (int32_t *)(SRC_PAGES + SRC_PAGE_SIZE * s + 4);
+    int32_t at[8], none = 0;
+    int have_none = 0, k;
+    for (k = 0; k < 8; k++)
+        at[k] = -1;
+    for (k = 0; k < 8; k++) {
+        int32_t id = ids[k], i;
+        uint8_t *r = RECORDS + RECORD_SIZE * id;
+        if ((uint32_t)id < RECORD_COUNT && L(r, 0x00) == s
+                && (i = L(r, 0x04) - 9) >= 0 && i < 8 && at[i] < 0) {
+            at[i] = id;
+        } else {
+            none = id;
+            have_none = 1;
+        }
+    }
+    for (k = 0; k < 8; k++)
+        if (at[k] < 0) {
+            if (!have_none)
+                return;                     /* not a layout core knows: leave it */
+            at[k] = none;
+        }
+    for (k = 0; k < 7; k++)
+        ids[k] = at[k + 1];
+    ids[7] = at[0];
 }
 
 void core_boot_init(void)
@@ -229,12 +292,15 @@ void core_boot_init(void)
             mod_engine[s - SLOT_FIRST] = m->engine;
             ENGINES[s] = tramps[s - SLOT_FIRST];
         }
+        slot_machine[s - SLOT_FIRST] = m;
         AVAIL[2 * s] = (uint8_t)m->home;
         AVAIL[2 * s + 1] = m->voices;
         if (m->name)                    /* 0: the slot's stock names, as they are */
             NAMES[2 * s] = m->name;
         if (m->label)
             NAMES[2 * s + 1] = m->label;
+        if (s >= SLOT_TEST)
+            place_knobs(s);
         for (int id = 0; id < RECORD_COUNT; id++) {
             uint8_t *r = RECORDS + RECORD_SIZE * id;
             int32_t k = L(r, 0x04) - 9;

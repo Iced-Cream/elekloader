@@ -394,9 +394,8 @@ half, LSB 0xffff) and +0x1c (NRPN 1:k, `1 << 7 | k`) from slot 35's record
 at the same sound index, which carries what 34..42 carry. Stock builds its
 CC map (`0x413dd3b4 + 32 m`, one record id per CC 16..23) from the records
 after core's writes. +0x20 is 0 on every hidden record, 34..43 included,
-so it is not written. Fewer records: SD TEST 9..12, 15, 16; BT TEST
-9..13; LT and MT TEST 9..12; HH TEST 9..13, 16; CB TEST 10..12, 16 (no
-LEV); BD, RS and CY TEST all eight (machines.h). The TEST records also
+so it is not written. The TEST machines have fewer records (machines.h),
+and they also
 have +0x24 = 0, where 34..42 and every public machine record have 0x600,
 the list kinds that make a record an LFO, velocity and aftertouch
 destination; core copies it from slot 35's record only for an entry
@@ -421,6 +420,13 @@ the display value.
 machines.c (stock engines and knob defaults) and sound.c, sound.s (the
 sound a trig plays, `core_param_set`) carry the 1.74 addresses; machines.h
 the calls.
+
+## TEST slots: knob order and knob looks (0.15)
+
+The SRC page table `0x40288028 + 0x24 m` (name, ids on A..H) places
+records on knobs: LEV on H, but on A for TEST machines, whose order core
+makes public when a mod fills one (`place_knobs`). Their UI records
+(0x401a7622) are the tests'; `CORE_MACHINE_LOOKS` replaces them (looks.c).
 
 ## The OS upgrade's restart (0.7)
 
