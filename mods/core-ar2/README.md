@@ -1188,7 +1188,7 @@ machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
 
-## Note ends, track mutes and DIN MIDI out (unreleased)
+## Note ends, track mutes and DIN MIDI out (0.15 or later)
 
 No new sites; the traces are in `machines.c` and `voiceio.c`.
 

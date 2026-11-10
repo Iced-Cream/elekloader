@@ -121,6 +121,8 @@ struct core_machine {
 /* core 0.13 */
 int core_voice_trigged(int32_t voice);
 int core_voice_velocity(int32_t voice);
+
+/* core 0.15 or later */
 int core_voice_released(int32_t voice);
 
 #endif
