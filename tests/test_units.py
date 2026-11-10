@@ -2178,6 +2178,7 @@ def test_the_rytm_pre_link_ranges_are_ordered_and_inside_the_main_os():
     assert all(dev.main_load <= lo and hi <= dev.image_end(rel) and k in (1, 2) for lo, hi, k, _w in pre)
     assert any(lo <= 0x401006ee and hi == 0x401009e0 for lo, hi, _k, _w in pre)
     assert not any(lo <= 0x401009e0 < hi for lo, hi, _k, _w in pre)
+    assert sum(k == 1 and w.startswith('constructor') for lo, hi, k, w in pre) == 146   # the table's count
 
 if __name__ == '__main__':
     import traceback
