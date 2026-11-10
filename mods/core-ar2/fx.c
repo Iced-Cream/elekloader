@@ -47,6 +47,8 @@
  *   SKIP    no call while the input is 0: from a cleared state with input 0
  *           the call changes nothing (its LFO and line positions run outside
  *           it, at 0x4010e420 and 0x4010e822, and only move reads of 0).
+ *           In CLEAR and SKIP core keeps the call's tap position
+ *           (0x8000cc2c) current, as the call would.
  * Input that is not 0 gives the reverb back to stock (RUN) in that block. */
 
 #include <stdint.h>
@@ -181,6 +183,18 @@ static uint32_t peak(volatile uint32_t *p, int n)
     return m;
 }
 
+/* the reverb's tap position, as its call works it out (0x4010d7fa..0x4010d820)
+ * from the LFO (0x4010e420 steps it every block) and 0x8000cd14: the call
+ * steps its taps from the last call's position (0x8000cc2c) to this one, so a
+ * block without the call keeps it current, or the next call would step its
+ * taps across the whole time it was left out */
+static void tap_position(void)
+{
+    int32_t lfo = *(volatile int32_t *)0x42fb4ac4;
+    int32_t base = (int32_t)(*(volatile uint32_t *)0x8000cd14 << 18);
+    *(volatile int32_t *)0x8000cc2c = ((lfo >> 10) + base) >> 18;
+}
+
 static void run(void)
 {
     r_mode = RUN;
@@ -200,6 +214,7 @@ void core_fx_reverb(void)
     switch (r_mode) {
     case SKIP:
         if (in0) {
+            tap_position();
             core_fx_skips++;
             return;
         }
@@ -212,6 +227,7 @@ void core_fx_reverb(void)
             REVERB();
             return;
         }
+        tap_position();
         clear_state();
         clear(LINES + r_off, LINES + r_off + CLEAR_CHUNK);
         r_off += CLEAR_CHUNK;
