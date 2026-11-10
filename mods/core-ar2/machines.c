@@ -21,7 +21,8 @@
  *
  * (0.13) The engine table gets core's trampoline for the slot, which latches
  * the voice's trig and velocity for core_voice_trigged and
- * core_voice_velocity and calls the mod's engine. In the audio interrupt
+ * core_voice_velocity (and its note end for core_voice_released) and calls
+ * the mod's engine. In the audio interrupt
  * the trig intake runs before the per-voice engine calls, so the latch
  * holds this block's trig.
  */
@@ -57,6 +58,7 @@ extern const struct core_machine *const core_machines[];
  * the mod's engine. */
 static core_engine mod_engine[NSLOTS];
 static volatile uint8_t trigged[VOICES];
+static volatile uint8_t released[VOICES];   /* 1: the trig state's 2, 2: its 3 */
 static volatile uint16_t velocity[VOICES];
 
 static __attribute__((noinline)) void latch(int32_t v)
@@ -66,16 +68,29 @@ static __attribute__((noinline)) void latch(int32_t v)
     uint32_t t = OWNER[v];
     if (t >= TRACKS) {
         trigged[v] = 0;
+        released[v] = 0;
         velocity[v] = 0;
         return;
     }
-    trigged[v] = TRIG[t] == 1;
+    int32_t state = TRIG[t];
+    trigged[v] = state == 1;
+    released[v] = state == 2 ? 1 : state == 3 ? 2 : 0;
     velocity[v] = VELOCITY[t];
 }
 
 int core_voice_trigged(int32_t voice)
 {
     return (uint32_t)voice < VOICES ? trigged[voice] : 0;
+}
+
+/* The voice's note end this block, from its owner track's trig state: 1
+ * for a release (state 2: a pad, key or MIDI note-off, 0x4011e426; the
+ * note's length running out; the sequencer's note-off), 2 for a cut of
+ * every track at once (state 3: 0x4012171e, which the kit and project
+ * loads call), else 0. Read like core_voice_trigged. */
+int core_voice_released(int32_t voice)
+{
+    return (uint32_t)voice < VOICES ? released[voice] : 0;
 }
 
 int core_voice_velocity(int32_t voice)
