@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2: pad strikes before stock plays them, and pad and
- * key LEDs from mods (docs/ADAPTING.md, "Pads and LEDs (core-ar2, Analog
- * Rytm MKII)"; elekloader/sdk/include/
+/* core-ar2 0.15: pad strikes before stock plays them, and pad and
+ * key LEDs from mods (docs/ADAPTING.md, "Pads and LEDs (core-ar2 0.15,
+ * Analog Rytm MKII)"; elekloader/sdk/include/
  * analog-rytm-mk2/pads.h). Every address is OS 1.74's; nothing of stock's
  * code or tables is copied, core calls it and reads its RAM.
  *

@@ -2246,11 +2246,11 @@ they call. `examples/screen-check-ar2` uses each of them.
   fills its bar and `core_progress_close(h)` takes it away. The box takes
   no keys: catch NO in your `ev_key` and close it.
 
-### Pads and LEDs (core-ar2, Analog Rytm MKII)
+### Pads and LEDs (core-ar2 0.15, Analog Rytm MKII)
 
 A pad strike before stock plays it, and pad and key LEDs a mod colours
-(`analog-rytm-mk2/pads.h`; the internals in `mods/core-ar2/pads.c`'s
-header). Both run in the UI task. `examples/pad-check-ar2` uses each.
+(`analog-rytm-mk2/pads.h`; ask for `"core": "0.15"` in `resources`; the
+internals in `mods/core-ar2/pads.c`'s header). Both run in the UI task. `examples/pad-check-ar2` uses each.
 
 - **`ev_pad`**, `int32_t f(int32_t pad, int32_t value, int32_t flags)`:
   each of the 12 pads' (0 BD .. 11 CB) strikes (`CORE_PAD_DOWN`, value the
