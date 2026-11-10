@@ -159,4 +159,13 @@ void core_voice_engine_reset(int32_t voice);
 void *core_track_sound(int32_t track);
 int core_track_pool_sound(int32_t track);
 
+/* sidecar-engines: set sound index i (0..41) of track t's sound (0..11) in
+ * the current kit as a knob turn does: value is the sound's 16-bit word
+ * (display value << 8, the fine part in the low byte), clamped to the
+ * record's range; the live value, the kit word, a lock while live recording,
+ * the host's notification and the screen follow; out 1 also sends it as
+ * PARAM OUTPUT does. A trig held is not a p-lock here. 1 when set, 0 when
+ * the sound's machine has no such parameter. UI task only. */
+int core_param_set(int32_t track, int32_t index, int32_t value, int32_t out);
+
 #endif
