@@ -216,6 +216,7 @@ static void file_records(void)
         if (m < MACHINES && k < 8 && rec_of[m][k] == NO_RECORD)
             rec_of[m][k] = id;
     }
+}
 
 /* (0.15) looks.c: the look core_machines gives stock record id, while a
  * mod fills its slot (CORE_MACHINE_LOOKS; machines.h), else 0 */
