@@ -2248,7 +2248,7 @@ they call. `examples/screen-check-ar2` uses each of them.
 
 ### Mod folders in the +Drive browser (core-ar2, Analog Rytm MKII)
 
-A folder of a mod's own after the +Drive's root entries in SETTINGS >
+From core-ar2 0.15: a folder of a mod's own after the +Drive's root entries in SETTINGS >
 SAMPLES and the sample slot browser, browsed with the browser's own keys
 (`analog-rytm-mk2/drive.h`; the internals in `mods/core-ar2/drive.c`'s
 header). `examples/drive-check-ar2` uses each part.
