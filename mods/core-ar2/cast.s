@@ -15,11 +15,14 @@
 | Construction and destruction vtables are other pointers, so they are other
 | keys.
 |
-| The memo has 128 entries of 32 bytes, direct-mapped: the vtable pointer,
-| the two types, the hint, the offset and a found flag. A miss runs stock's
-| cast and keeps its answer. Lookup and store run with interrupts masked (a
-| dozen instructions), so tasks that cast at the same time never see half an
-| entry.
+| The memo is 256 sets of 8 entries of 16 bytes (32 KB): the vtable pointer, the two
+| types, and a word with the hint (high half) and the offset (low half;
+| 0x8000 for "no answer"). The idle main screen alone casts with over 200
+| keys, so the sets are 8-way: a new answer goes in front of its set and the
+| set's oldest drops out. A cast whose hint or offset does not fit 16 bits
+| runs stock's and is not kept. Lookup and store run with interrupts masked
+| (at most about 80 instructions), so tasks that cast at the same time never
+| see half an entry.
 |
 | On while core_ui_skip_want is nonzero and core_ui_skip_hold is 0
 | (analog-rytm-mk2/ui.h); off, the site is stock's cast after two tests.
@@ -28,7 +31,10 @@
 | (4e56ffd8 48d7043c), replaced by a jmp here.
 
         .equ    CAST_REST, 0x401b82fa
-        .equ    MEMO_N, 128
+        .equ    SETS_LOG, 8
+        .equ    WAYS, 8
+        .equ    GOLD, 0x9e3779b1
+        .equ    NONE, 0x8000            | the low half of a cast with no answer
 
         .text
         .globl  core_cast_site, core_cast_stock
@@ -39,83 +45,109 @@ core_cast_site:
         beq.w   9f
         tst.l   core_ui_skip_hold
         bne.w   9f
-        lea     -12(%sp),%sp
-        movem.l %d2-%d3/%a2,(%sp)
-        | the arguments: 16(%sp) src, 20 src_type, 24 dst_type, 28 src2dst
-        movea.l 16(%sp),%a0
-        move.l  (%a0),%d1               | the vtable pointer
-        move.l  24(%sp),%d0             | dst_type
-        move.l  %d1,%d2                 | the entry: mix the key's words
-        eor.l   %d0,%d2
-        add.l   28(%sp),%d2
-        move.l  %d2,%d3
-        lsr.l   #7,%d3
-        eor.l   %d3,%d2
-        lsr.l   #2,%d2
-        andi.l  #MEMO_N-1,%d2
-        lsl.l   #5,%d2
-        lea     core_cast_memo,%a1
-        adda.l  %d2,%a1
+        lea     -28(%sp),%sp
+        movem.l %d2-%d6/%a2-%a3,(%sp)
+        | the arguments: 32(%sp) src, 36 src_type, 40 dst_type, 44 src2dst
+        move.l  44(%sp),%d2             | the hint must fit 16 bits
+        move.w  %d2,%d3
+        ext.l   %d3
+        cmp.l   %d2,%d3
+        bne.w   8f
+        swap    %d2
+        clr.w   %d2                     | the hint in the high half
+        movea.l 32(%sp),%a0
+        move.l  (%a0),%d6               | the vtable pointer
+        move.l  40(%sp),%d0             | dst_type
+        movea.l 36(%sp),%a3             | src_type
+        | the set: (dst * GOLD ^ vptr ^ hint) * GOLD, top SETS_LOG bits
+        move.l  #GOLD,%d4
+        move.l  %d0,%d3
+        mulu.l  %d4,%d3
+        eor.l   %d6,%d3
+        eor.l   %d2,%d3
+        mulu.l  %d4,%d3
+        moveq   #32-SETS_LOG,%d4
+        lsr.l   %d4,%d3
+        lsl.l   #7,%d3                  | x 128 bytes a set
+        lea     core_cast_memo,%a2
+        adda.l  %d3,%a2
+        movea.l %a2,%a1
+        moveq   #WAYS,%d4
         move.w  %sr,%d3
         move.w  #0x2700,%sr
-        cmp.l   (%a1),%d1
-        bne.s   5f
+1:      cmp.l   (%a1),%d6
+        bne.s   2f
         cmp.l   8(%a1),%d0
-        bne.s   5f
-        move.l  20(%sp),%d2
-        cmp.l   4(%a1),%d2
-        bne.s   5f
-        move.l  28(%sp),%d2
-        cmp.l   12(%a1),%d2
-        bne.s   5f
-        | a hit
-        move.l  16(%a1),%d0             | the offset
-        move.l  20(%a1),%d2             | found
-        addq.l  #1,core_ui_skip_hits
+        bne.s   2f
+        cmpa.l  4(%a1),%a3
+        bne.s   2f
+        move.l  12(%a1),%d5
+        move.l  %d5,%d1
+        clr.w   %d1
+        cmp.l   %d2,%d1
+        beq.w   3f
+2:      lea     16(%a1),%a1
+        subq.l  #1,%d4
+        bne.s   1b
+        | a miss: stock's cast, then keep its answer in front of the set
+        addq.l  #1,core_ui_skip_misses
         move.w  %d3,%sr
-        tst.l   %d2
-        beq.s   2f
-        add.l   %a0,%d0
-        bra.s   3f
-2:      moveq   #0,%d0
-3:      movem.l (%sp),%d2-%d3/%a2
-        lea     12(%sp),%sp
-        rts
-
-        | a miss: stock's cast, then keep its answer
-5:      addq.l  #1,core_ui_skip_misses
-        move.w  %d3,%sr
-        move.l  %d1,%d2                 | the vtable pointer
-        movea.l %a1,%a2                 | the entry
-        move.l  28(%sp),-(%sp)
-        move.l  28(%sp),-(%sp)
-        move.l  28(%sp),-(%sp)
-        move.l  28(%sp),-(%sp)
+        move.l  44(%sp),-(%sp)
+        move.l  44(%sp),-(%sp)
+        move.l  44(%sp),-(%sp)
+        move.l  44(%sp),-(%sp)
         bsr.w   9f
         lea     16(%sp),%sp
+        move.l  #NONE,%d1
+        tst.l   %d0
+        beq.s   4f
+        move.l  %d0,%d1
+        sub.l   32(%sp),%d1             | the offset must fit 16 bits, not NONE
+        move.w  %d1,%d5
+        ext.l   %d5
+        cmp.l   %d1,%d5
+        bne.w   7f
+        cmpi.l  #-0x8000,%d1
+        beq.w   7f
+        andi.l  #0xffff,%d1
+4:      or.l    %d2,%d1                 | the stored word
         move.w  %sr,%d3
         move.w  #0x2700,%sr
-        move.l  %d2,(%a2)
-        move.l  20(%sp),%d1
-        move.l  %d1,4(%a2)
-        move.l  24(%sp),%d1
-        move.l  %d1,8(%a2)
-        move.l  28(%sp),%d1
+        lea     (WAYS-1)*16(%a2),%a1    | ways 0..6 move down one
+        moveq   #WAYS-1,%d4
+5:      move.l  -16(%a1),(%a1)
+        move.l  -12(%a1),4(%a1)
+        move.l  -8(%a1),8(%a1)
+        move.l  -4(%a1),12(%a1)
+        lea     -16(%a1),%a1
+        subq.l  #1,%d4
+        bne.s   5b
+        move.l  %d6,(%a2)
+        move.l  %a3,4(%a2)
+        move.l  40(%sp),%d5
+        move.l  %d5,8(%a2)
         move.l  %d1,12(%a2)
-        moveq   #0,%d1
-        tst.l   %d0
-        beq.s   6f
-        moveq   #1,%d1
-        move.l  %d0,%d2
-        sub.l   16(%sp),%d2
-        move.l  %d2,16(%a2)
-        bra.s   7f
-6:      clr.l   16(%a2)
-7:      move.l  %d1,20(%a2)
         move.w  %d3,%sr
-        movem.l (%sp),%d2-%d3/%a2
-        lea     12(%sp),%sp
+        bra.w   7f
+
+        | a hit
+3:      addq.l  #1,core_ui_skip_hits
+        move.w  %d3,%sr
+        ext.l   %d5                     | the offset
+        cmpi.l  #-0x8000,%d5
+        beq.s   6f
+        move.l  %d5,%d0
+        add.l   %a0,%d0
+        bra.w   7f
+6:      moveq   #0,%d0
+7:      movem.l (%sp),%d2-%d6/%a2-%a3
+        lea     28(%sp),%sp
         rts
+
+        | a hint stock's search takes but the memo can't key: stock's cast
+8:      movem.l (%sp),%d2-%d6/%a2-%a3
+        lea     28(%sp),%sp
+        | fall through
 
 | stock's cast: the two instructions the site replaced, then the rest
 core_cast_stock:
@@ -137,7 +169,7 @@ core_ui_skip_hold_release:
         .globl  core_ui_skip_want, core_ui_skip_hold
         .globl  core_ui_skip_hits, core_ui_skip_misses
 core_cast_memo:
-        .space  MEMO_N*32
+        .space  (1 << SETS_LOG) * WAYS * 16
 core_ui_skip_hold:
         .space  4
 core_ui_skip_hits:
