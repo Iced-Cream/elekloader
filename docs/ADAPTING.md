@@ -1950,7 +1950,7 @@ the mod's `"knobs"`.
 Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
 with other mods may give the mod other ids.
 
-### Knob looks (core-ar2 0.12, Analog Rytm MKII)
+### Knob looks (core-ar2 0.13, Analog Rytm MKII)
 
 A knob id of the mod's own (555 up) has no stock records: without more,
 stock draws it as record 0's dial with a range of 0..0, so its pointer

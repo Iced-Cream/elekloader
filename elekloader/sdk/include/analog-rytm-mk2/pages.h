@@ -134,7 +134,7 @@ struct core_param {
 #define CORE_KNOBS extern char __knobs[]
 #define CORE_KNOB(k) ((int32_t)__knobs + (k))
 
-/* core-ar2 0.12: knob looks. A mod's own id (555 up) has no stock records,
+/* core-ar2 0.13: knob looks. A mod's own id (555 up) has no stock records,
  * so stock draws its knob as record 0's dial on record 0's range. An entry
  * in core_knob_looks gives the ids the look of any stock knob, or a UI
  * record of the mod's own:
