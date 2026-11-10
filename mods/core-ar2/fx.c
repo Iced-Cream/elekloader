@@ -8,8 +8,8 @@
  * sent or not. Both routines leave the MAC unit as they found it (MACSR 0xa0,
  * the accumulators cleared), so a call left out leaves it the same.
  *
- * Two switches (analog-rytm-mk2/fx.h), off at boot and written only by the
- * mod that offers them as settings; core_fx_skip_hold holds both off:
+ * Three switches (analog-rytm-mk2/fx.h), off at boot and written only by the
+ * mod that offers them as settings; core_fx_skip_hold holds all off:
  *   - core_fx_skip_want: the send trim (fx.s) and the delay skip. Exact: the
  *     output is stock's, bit for bit.
  *   - core_reverb_clear_want (with core_fx_skip_want): the reverb clear and
@@ -17,6 +17,8 @@
  *     decays to 0 (a limit cycle about +-117 of full scale 2^31, which leaves
  *     main L at -1), so core clears it once it is that quiet and then skips
  *     it; its next tail starts from silence, as after a power-on.
+ *   - core_delay_clear_want (with core_fx_skip_want): the delay clear. Not
+ *     exact, for the same reason (below).
  *
  * The delay, skipped while all of these hold:
  *   - its bus (0x80007a44, 32 stereo frames) is 0;
@@ -30,6 +32,18 @@
  *     512K frames, so the whole 4 MB line is 0, and a call would read 0.
  * A skipped block leaves the staging block as the eDMA prefetched it, from
  * the line, so 0 goes back into the line, as a call would write.
+ *
+ * Stock's delay, once it has had input, never decays to exactly 0 either (its
+ * output keeps a few hundred of 2^31), so that rule alone holds only until the
+ * delay is first fed. core_delay_clear_want (with core_fx_skip_want) adds a
+ * clear, like the reverb's: input 0 and nothing at or above D_QUIET_PEAK (4 LSB
+ * of 24 bits) written into the line or the output for LINE_BLOCKS blocks, so
+ * the whole line is that quiet; then core clears the line (0x4b400000, 4 MB,
+ * D_CLEAR_CHUNK bytes a block) and the audio state, without the call, and the
+ * rule above takes over. Not exact: the next echo tail starts from silence.
+ * A first call after a clear that writes anything but 0 is a failure; after
+ * MAX_FAILS, no clear again until the input moves. The time, gains and
+ * parameter state (0x8000e008..0x8000e01b, 0x8000ca00..) are left as they are.
  *
  * The reverb, on its bus (0x80007b44) after the delay's add:
  *   RUN     stock's call. Input 0 for QUIET_BLOCKS blocks with the output
@@ -53,7 +67,7 @@
 
 #include <stdint.h>
 
-extern volatile uint8_t core_fx_skip_want, core_reverb_clear_want;
+extern volatile uint8_t core_fx_skip_want, core_reverb_clear_want, core_delay_clear_want;
 extern volatile uint32_t core_fx_skip_hold;
 
 #define DELAY ((void (*)(void))0x4010da24)
@@ -70,6 +84,11 @@ extern volatile uint32_t core_fx_skip_hold;
 #define D_STATE_B ((volatile uint32_t *)0x8000dff0)
 #define D_STATE_B_N ((0x8000e12cU - 0x8000dff0U) / 4)
 #define LINE_BLOCKS (16384 + 16)
+#define STAGING_LONGS (0x210 / 4)     /* the call reads up to 0x110 + 0x100 */
+#define D_LINE 0x4b400000U
+#define D_LINE_BYTES 0x400000U
+#define D_CLEAR_CHUNK 0x4000U
+#define D_QUIET_PEAK 1024              /* 4 LSB of 24 bits */
 
 #define LINES 0x4b000000U
 #define LINES_BYTES 0x98000U
@@ -86,8 +105,8 @@ uint32_t core_fx_skips;
 
 static uint16_t d_params[DELAY_PARAM_N];
 static uint32_t d_state[D_STATE_A_N + D_STATE_B_N];
-static uint32_t d_zero_blocks;
-static uint8_t d_still;
+static uint32_t d_zero_blocks, d_quiet, d_off;
+static uint8_t d_still, d_clearing, d_cleared, d_fails;
 
 static uint8_t r_mode, r_fails;
 static uint32_t r_count, r_off;
@@ -105,6 +124,18 @@ static int zero(volatile uint32_t *p, int n)
     return a == 0;
 }
 
+static void clear(uint32_t from, uint32_t to)
+{
+    volatile uint32_t *p = (volatile uint32_t *)from, *e = (volatile uint32_t *)to;
+    while (p < e) {
+        p[0] = 0;
+        p[1] = 0;
+        p[2] = 0;
+        p[3] = 0;
+        p += 4;
+    }
+}
+
 /* the 0x8000e1c8 counter: blocks since a call last wrote anything but 0 */
 static void d_count(int zero_written)
 {
@@ -114,14 +145,58 @@ static void d_count(int zero_written)
         d_zero_blocks++;
 }
 
+static uint32_t peak(volatile uint32_t *p, int n);
+
+/* the delay clear (core_delay_clear_want): the line holds only what the calls
+ * wrote into it, so once LINE_BLOCKS blocks have written nothing at or above
+ * D_QUIET_PEAK, with the input 0 and the output below it all along, the whole
+ * line is that quiet. Then core clears it, D_CLEAR_CHUNK bytes a block, with
+ * the audio state (the gate, the tap's scratch, the filter), the staging block
+ * and the output, without the call; the eDMA, idle while core runs, then moves
+ * only zeros. Then the exact rule above takes over: the next call, from the
+ * cleared state, must write 0 and change nothing, or the clear has failed. */
+static void d_clear_step(void)
+{
+    clear(0x8000dff0U, 0x8000e000U);    /* the gate */
+    ((volatile uint32_t *)0x8000e000U)[0] = 0;
+    ((volatile uint32_t *)0x8000e000U)[1] = 0;
+    clear(0x8000e01cU, 0x8000e12cU);    /* the tap's scratch, the filter */
+    volatile uint32_t *st = STAGING;
+    for (int i = 0; i < STAGING_LONGS; i++)
+        st[i] = 0;
+    for (int i = 0; i < BUS_LONGS; i++)
+        DELAY_OUT[i] = 0;
+    clear(D_LINE + d_off, D_LINE + d_off + D_CLEAR_CHUNK);
+    d_off += D_CLEAR_CHUNK;
+}
+
 /* 0x4010e7c4: in place of `jsr 0x4010da24` */
 void core_fx_delay(void)
 {
     if (!on() || !zero(DELAY_BUS, BUS_LONGS)) {
         d_still = 0;
         d_zero_blocks = 0;
+        d_quiet = 0;
+        d_fails = 0;
+        d_clearing = 0;
         DELAY();
         return;
+    }
+    if (d_clearing) {
+        if (core_delay_clear_want) {
+            d_clear_step();
+            core_fx_skips++;
+            if (d_off >= D_LINE_BYTES) {
+                d_clearing = 0;
+                d_cleared = 1;
+                d_still = 0;
+                d_zero_blocks = LINE_BLOCKS;
+            }
+            return;
+        }
+        /* switched off half way: the line is part cleared, part quiet */
+        d_clearing = 0;
+        d_quiet = 0;
     }
     int same = d_still;
     for (int i = 0; i < DELAY_PARAM_N; i++) {
@@ -146,17 +221,24 @@ void core_fx_delay(void)
         still = d_state[D_STATE_A_N + i] == D_STATE_B[i];
     d_still = (uint8_t)still;
     d_count(written0);
-}
-
-static void clear(uint32_t from, uint32_t to)
-{
-    volatile uint32_t *p = (volatile uint32_t *)from, *e = (volatile uint32_t *)to;
-    while (p < e) {
-        p[0] = 0;
-        p[1] = 0;
-        p[2] = 0;
-        p[3] = 0;
-        p += 4;
+    if (d_cleared) {
+        /* the first call after a clear */
+        d_cleared = 0;
+        if (!written0)
+            d_fails++;
+        d_quiet = 0;
+        return;
+    }
+    if (!core_delay_clear_want || d_fails >= MAX_FAILS)
+        return;
+    if (!written0 && (peak(STAGING, BUS_LONGS) >= D_QUIET_PEAK
+                      || peak(DELAY_OUT, BUS_LONGS) >= D_QUIET_PEAK)) {
+        d_quiet = 0;
+        return;
+    }
+    if (++d_quiet >= LINE_BLOCKS) {
+        d_clearing = 1;
+        d_off = 0;
     }
 }
 
