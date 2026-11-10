@@ -1,13 +1,13 @@
 {
  "id": "mchk", "version": "0.1", "title": "Machine slot check", "category": "Examples",
  "license": "GPL-2.0-or-later",
- "description": "Emulator check for core-ar2 0.12: machines in slots 44 and 52 and the per-voice trig getters.",
+ "description": "Emulator check for core-ar2 0.13: machines in slots 44 and 52 and the per-voice trig getters.",
  "device": "analog-rytm-mk2", "os": "1.74",
  "sources": ["mchk.c"],
  "contribute": [
   {"to": "core_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:mchk_44", 0]]},
   {"to": "core_machines", "order": 51, "data": "00000000", "relocs": [[0, "abs32", "sym:mchk_52", 0]]}
  ],
- "resources": {"core": "0.12"},
+ "resources": {"core": "0.13"},
  "requires": ["core"]
 }
