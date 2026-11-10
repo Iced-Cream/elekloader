@@ -11,8 +11,8 @@ and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable paramet
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
 defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
-itself (below), and from 0.12 the silent-voice skip in `idle.c` and `idle.s` (below). On its own it changes nothing
-the unit does, apart from that restart, which it makes safe, and from 0.12 the skip, which starts a silent voice's next
+itself (below), and from 0.14 the silent-voice skip in `idle.c` and `idle.s` (below). On its own it changes nothing
+the unit does, apart from that restart, which it makes safe, and from 0.14 the skip, which starts a silent voice's next
 note from its power-on state.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -1076,7 +1076,7 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
-## The silent-voice skip (0.12)
+## The silent-voice skip (0.14)
 
 `idle.c` and `idle.s`, at 0x40121208 in the render's slot loop: stock calls
 each of the 8 voice slots' machine routines every block from the slot's

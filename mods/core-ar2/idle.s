@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.12: the silent-voice skip's site (idle.c has the rules).
+| core-ar2 0.14: the silent-voice skip's site (idle.c has the rules).
 |
 | 0x40121208, in the render's slot loop (0x40121152): `movea.l
 | (0,%a5,%d4.l),%a1; tst.l %a1`, before stock's `beq.b 0x40121248`, which

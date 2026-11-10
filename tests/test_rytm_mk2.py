@@ -199,9 +199,9 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the silent-voice skip's (0.12)
+    # (0.11, ev_seq_step), and the silent-voice skip's (0.14)
     assert len(mod['sites']) == 123
-    # 0.12: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
+    # 0.14: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
     # returns to stock's beq, which takes the skip when the site leaves %a1 at 0
     x = [x for x in mod['sites'] if x.get('target') == 'core_voice_site'][0]
     assert (x['addr'], x['op'], x['stock']) == ('0x40121208', 'jsr', '227548004a89'), x
@@ -314,7 +314,7 @@ def test_core_ar2_sites():
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
     ins = sorted((x['order'], x['fn']) for x in mod['subscribe'] if x['event'] == 'ev_render_in')
-    # and (0.12) the voice skip's boot snapshot just after it
+    # and (0.14) the voice skip's boot snapshot just after it
     assert ins == [(0, 'core_load_in'), (1, 'core_voice_boot')], ins
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
     # mod storage's own sites, with the FX and sound edits' writes into the stored kit (0.9)

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * core-ar2 0.12: the silent-voice skip's switch (mods/core-ar2/idle.c,
- * mods/core-ar2/README.md, "The silent-voice skip (0.12)").
+ * core-ar2 0.14: the silent-voice skip's switch (mods/core-ar2/idle.c,
+ * mods/core-ar2/README.md, "The silent-voice skip (0.14)").
  *
  * The skip runs only when a mod asks for it and no mod holds it off:
  * core_voice_skip_want nonzero and core_voice_skip_hold 0. It is off at boot.

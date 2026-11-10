@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.12: the silent-voice skip (README, "The silent-voice skip
- * (0.12)"). Every address is OS 1.74's.
+/* core-ar2 0.14: the silent-voice skip (README, "The silent-voice skip
+ * (0.14)"). Every address is OS 1.74's.
  *
  * The render calls one machine routine per voice slot (8 slots) every block
  * through 0x419ca110, from the slot's first SYN trig until the power goes
