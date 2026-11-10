@@ -2246,6 +2246,31 @@ they call. `examples/screen-check-ar2` uses each of them.
   fills its bar and `core_progress_close(h)` takes it away. The box takes
   no keys: catch NO in your `ev_key` and close it.
 
+### Mod folders in the +Drive browser (core-ar2, Analog Rytm MKII)
+
+A folder of a mod's own after the +Drive's root entries in SETTINGS >
+SAMPLES and the sample slot browser, browsed with the browser's own keys
+(`analog-rytm-mk2/drive.h`; the internals in `mods/core-ar2/drive.c`'s
+header). `examples/drive-check-ar2` uses each part.
+
+- Contribute a `struct core_drive_folder` to `core_drive_folders`: its
+  name and `list`, `entry`, `parent` and `load`. Folder 0 is the mod's
+  folder; the mod numbers the others (1..1022) and gives each folder's
+  entries in order, subfolders and files (at most 1023).
+- `list(folder)` runs in the UI task at each read of the folder, and for
+  folder 0 when the root is listed. It must not wait: answer -1 while the
+  listing is not in, ask for it, and call `core_drive_refill(f, folder)`
+  (any task) once it is complete; the browser reads the folder again at its
+  next UI tick.
+- `load(folder, i)`: LOAD TO PROJ on a file. Nonzero takes it (it counts
+  as loaded, nothing reaches the Rytm's sample memory), 0 refuses it.
+- The folder is read-only, as core owns stock's filesystem calls: no
+  CREATE DIR, RENAME, DELETE, MOVE or UPLOAD in it, no path for its
+  entries, and no real root entry with its name. Real paths pass through
+  unchanged, and the USB transfer and the Drive Loader never see a mod
+  folder. At most 8 show; a name is 1..23 characters, never `mods`, and a
+  real root entry of the same name hides the mod's.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,
