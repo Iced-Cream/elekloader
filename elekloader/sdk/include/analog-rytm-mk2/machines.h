@@ -112,7 +112,9 @@ struct core_machine {
  *           record's own
  *     ui    an 84-byte UI record of the mod's own, or 0 for look's
  *
- * The range stays the knob's (min..max), and the graphic spans it. The look
+ * The look brings look's value text with its graphic (a FIN look shows
+ * -64..+63, a switch 0/1): pick one whose text fits the knob. The range
+ * stays the knob's (min..max), and the graphic spans it. The look
  * belongs to the record while the mod fills the slot, so it shows wherever
  * the machine is on a track and nowhere else. A knob whose name is 0 keeps
  * the stock record and its look. */

@@ -5,15 +5,15 @@
  *
  *   TL PLAITS, slot 44 (BD TEST's records): A ENG, B HRM, C TIM, D MOR,
  *     E DEC, F LPG, G TUN, H LEV. LPG and TUN, a switch and a select on
- *     BD TEST's own records, draw as dials (looks 40 and 100).
+ *     BD TEST's own records, draw as dials (looks 101 and 100).
  *   TL SAMPLE, slot 45 (SD TEST's, no records for 13 and 14): A SMP, B TUN,
  *     C STA, D and E empty, F END, G LOP, H LEV. END draws as a 0..127 dial
- *     (look 40), LOP as a switch (look 457, voice-dac POL's).
+ *     (look 101), LOP as a switch (look 457, voice-dac POL's).
  *
  * The knobs without a look keep the test machine's own. */
 #include "analog-rytm-mk2/machines.h"
 
-#define LOOK_DIAL 40        /* a 0..127 dial */
+#define LOOK_DIAL 101       /* BD HARD LEV: a 0..127 dial, unsigned text */
 #define LOOK_TUNE 100       /* BD HARD's TUN: a centred dial */
 #define LOOK_SWITCH 457     /* an off/on switch */
 
