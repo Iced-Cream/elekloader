@@ -11,7 +11,7 @@ import * as desc from './desc.ts'
 import { ModError, cmpVersions, formatOf, isDict, pyEq } from './elemod.ts'
 import { FORMAT2, Mod2 } from './link.ts'
 import { JSONDecodeError, UnicodeDecodeError, decodeUtf8, loads } from './pyjson.ts'
-import { repr, str, truthy } from './py.ts'
+import { pyInt as pyIntOf, repr, str, truthy } from './py.ts'
 import { crc32 } from './zip.ts'
 
 export const MAX_MODS = 256                // lines of /mods/active, and status records
@@ -21,38 +21,43 @@ export const NAME_MAX = 128                // a path below /mods in /mods/active
 export const RECORD = 32
 // the boot linker's own room (dl.h DL_POOL_*, dlink.c pools()): each pool per started MB of the +Drive area (at least
 // 1), the symbols past the flashed build's own names, each capped at POOL_CAP; past one a mod is refused with LIMIT
-export const POOL_PER_MB = { arena: 12288, lists: 1024, syms: 1024, contribs: 256 }
+export const POOL_PER_MB = { arena: 12288, lists: 1024, syms: 1024, contribs: 256, sites: 256, sdata: 4096 }
 export const POOL_CAP = 0xfff0
 export const INIT = 'drive_init'
+export const SITE_MAIN_LO = 0x40000400    // dl.h DL_MAIN_LO: the Rytm MKII's main_load, where a site may start
 
 export const NONE = 0, LOADED = 1, REFUSED = 2, DROPPED = 3
 export const STATES: Record<number, string> = { 0: 'none', 1: 'loaded', 2: 'refused', 3: 'dropped' }
-export const CODES: [string, string][] = [
-  ['ok', 'loaded'],
-  ['missing', 'the file is not in /mods'],
-  ['changed', 'the file is not the one chosen (its CRC-32 differs)'],
-  ['too-big', 'the file is larger than the staging buffer'],
-  ['json', 'not a JSON object'],
-  ['format', 'not a format-2 mod the loader can read'],
-  ['target', 'made for another device or OS'],
-  ['feature', 'uses {detail}, which a +Drive mod cannot'],
-  ['duplicate', '{detail} is flashed already, or chosen twice'],
-  ['core', 'needs core {detail} or newer'],
-  ['requires', 'requires {detail}'],
-  ['conflicts', 'conflicts with {detail}'],
-  ['export', 'exports {detail}, which another mod exports'],
-  ['claim', 'claims {detail}, which another mod claims'],
-  ['import', 'imports {detail}, which nothing exports'],
-  ['table', 'adds to the table {detail}, which takes no +Drive entries of that size'],
-  ['full', 'the table {detail} is full ({arg} spare)'],
-  ['room', 'the +Drive area is {arg} KB short'],
-  ['range', 'a 16-bit PC-relative reference is out of range'],
-  ['limit', 'past the loader\'s own limits'],
-  ['count', 'more than 256 mods are chosen'],
-]
-export const CODE: Record<string, number> = Object.fromEntries(CODES.map(([n], i) => [n, i]))
+export const CODES: Record<number, [string, string]> = {
+  0: ['ok', 'loaded'],
+  1: ['missing', 'the file is not in /mods'],
+  2: ['changed', 'the file is not the one chosen (its CRC-32 differs)'],
+  3: ['too-big', 'the file is larger than the staging buffer'],
+  4: ['json', 'not a JSON object'],
+  5: ['format', 'not a format-2 mod the loader can read'],
+  6: ['target', 'made for another device or OS'],
+  7: ['feature', 'uses {detail}, which a +Drive mod cannot'],
+  8: ['duplicate', '{detail} is flashed already, or chosen twice'],
+  9: ['core', 'needs core {detail} or newer'],
+  10: ['requires', 'requires {detail}'],
+  11: ['conflicts', 'conflicts with {detail}'],
+  12: ['export', 'exports {detail}, which another mod exports'],
+  13: ['claim', 'claims {detail}, which another mod claims'],
+  14: ['import', 'imports {detail}, which nothing exports'],
+  15: ['table', 'adds to the table {detail}, which takes no +Drive entries of that size'],
+  16: ['full', 'the table {detail} is full ({arg} spare)'],
+  17: ['room', 'the +Drive area is {arg} KB short'],
+  18: ['range', 'a 16-bit PC-relative reference is out of range'],
+  19: ['limit', 'past the loader\'s own limits'],
+  20: ['count', 'more than 256 mods are chosen'],
+  22: ['site', 'site 0x{detail}: {why}'],
+}
+export const CODE: Record<string, number> = Object.fromEntries(Object.entries(CODES).map(([i, [n]]) => [n, Number(i)]))
+// DL_R_SITE's kind (its argument's high byte; the low byte is the other mod's line for SITE_MOD)
+export const SITE_CORE = 1, SITE_MOD = 2, SITE_PRELINK = 3, SITE_STOCK = 4
 export const SKIPS = ['none', 'key', 'armed', 'drive', 'abi', 'unstable', 'count', 'memory']
 export const NO_FIELDS = ['sites', 'collections', 'copied', 'storage', 'sharc']
+export const SITE_FIELDS = ['sites', 'copied']   // ... except these on a build with a site map (ABI 1.2)
 const RSIZE: Record<string, number> = { abs32: 4, pc32: 4, pc16: 2 }
 
 const utf8 = new TextEncoder()
@@ -71,6 +76,13 @@ const cmp = (a: string, b: string) => {                                         
 
 /** A status's line, for a person. drive.message. */
 export function message(code: number, detail = '', arg = 0): string {
+  if (code === CODE.site) {
+    const sp = detail.indexOf(' ')
+    const addr = sp < 0 ? detail : detail.slice(0, sp), owner = sp < 0 ? '' : detail.slice(sp + 1)
+    const why = ({ [SITE_CORE]: `taken by ${owner || 'the build'}`, [SITE_MOD]: `taken by another +Drive mod (line ${(arg & 0xff) + 1})`,
+      [SITE_PRELINK]: 'in a pre-link range', [SITE_STOCK]: 'not stock bytes' } as Record<number, string>)[arg >> 8] ?? 'refused'
+    return CODES[code][1].replace('{detail}', addr).replace('{why}', why)
+  }
   return CODES[code][1].replace('{detail}', detail).replace('{arg}', String(arg))
 }
 
@@ -94,6 +106,9 @@ export class Build {
   globals: Map<string, Global>
   nsyms: number
   pools: Record<keyof typeof POOL_PER_MB, number>
+  siteMap: [number, number, number, number][]
+  prelink: [number, number, number][]
+  mainLo: number; mainHi: number
 
   constructor(d: desc.Decoded) {
     this.d = d
@@ -116,7 +131,15 @@ export class Build {
       + d.tables.reduce((n, t) => n + ([...t.name].length < 60 ? 2 : 1), 0) + 1
     const mb = this.hi > this.lo ? Math.max(1, Math.floor((this.hi - this.lo + 0xfffff) / 0x100000)) : 1
     const pool = (k: keyof typeof POOL_PER_MB) => Math.min(POOL_CAP, POOL_PER_MB[k] * mb + (k === 'syms' ? this.nsyms : 0))
-    this.pools = { arena: pool('arena'), lists: pool('lists'), syms: pool('syms'), contribs: pool('contribs') }
+    this.pools = { arena: pool('arena'), lists: pool('lists'), syms: pool('syms'), contribs: pool('contribs'),
+      sites: pool('sites'), sdata: pool('sdata') }
+    // the main OS a +Drive site may change: from the device's main_load to the boot copier (the site map's kind 4);
+    // 0 on a descriptor without a site map (ABI 1.0 and 1.1)
+    this.siteMap = d.abi[1] >= 2 ? (d.sites ?? []) : []
+    this.prelink = d.prelink ?? []
+    const boots = this.siteMap.filter(x => x[2] === desc.SITE_BOOT).map(x => x[0])
+    this.mainLo = SITE_MAIN_LO
+    this.mainHi = boots.length && Math.min(...boots) > SITE_MAIN_LO ? Math.min(...boots) : 0
   }
 
   label(): string {
@@ -143,6 +166,7 @@ export class Choice {
   mod: Mod2 | null = null
   id: string | null = null
   exports: string[] = []
+  sites: [number, number, boolean][] = []   // [lo, hi, is a site]: its sites, then its copied blocks
   alive = false
 
   constructor(line: number, name: string, raw: Uint8Array | null) {
@@ -204,7 +228,91 @@ function fromhexLen(v: unknown): number | null {
   return n
 }
 
-type State = { syms: number; contribs: number; arena: number; lists: number }
+type State = { syms: number; contribs: number; arena: number; lists: number; sites: number; sdata: number }
+
+/** A number as the boot linker's js_int reads it: a JSON integer or a string int(v, 0) reads, within 32 bits signed.
+ * drive._num. */
+function num32(v: unknown): number | null {
+  const n = typeof v === 'boolean' ? null : typeof v === 'number' ? (Number.isInteger(v) ? v : null)
+    : typeof v === 'string' ? pyIntOf(v) : null
+  return n !== null && n >= -0x80000000 && n < 0x80000000 ? n : null
+}
+
+const overlap = (a: number, b: number, lo: number, hi: number) => a < hi && lo < b
+
+/** A refused site's detail: 8 hex digits, then the flashed owner (at most 22 bytes of its name). drive._site_detail. */
+function siteDetail(addr: number, owner = ''): string {
+  let d = (addr >>> 0).toString(16).padStart(8, '0')
+  if (owner) d += ' ' + new TextDecoder().decode(utf8.encode(owner).slice(0, 22)).replace(/\uFFFD$/, '')
+  return d
+}
+
+/** Pass 1's part for "sites" and "copied", after the exports: drive._scan_sites without the stock bytes (a
+ * descriptor alone has none). -> [lo, hi, is a site][], or null after refusing c. */
+function scanSites(build: Build, c: Choice, doc: Record<string, any>, state: State): [number, number, boolean][] | null {
+  const out: [number, number, boolean][] = []
+  let sdata = 0
+  if (!build.mainHi) return out
+  for (const [copied, key] of [[false, 'sites'], [true, 'copied']] as [boolean, string][]) {
+    const v = g(doc, key)
+    if (empty(v)) continue
+    if (!Array.isArray(v)) { c.refuse('format', '', 0, key); return null }
+    for (const x of v) {
+      if (!isDict(x)) { c.refuse('format', '', 0, key); return null }
+      let lo: number, hi: number
+      if (!copied) {
+        const addr = num32(g(x, 'addr')), n = num32(g(x, 'len'))
+        const nw = typeof g(x, 'new') === 'string' ? fromhexLen(x.new) : null
+        const sha = g(x, 'stock_sha256')
+        let ok = addr !== null && n !== null && nw !== null && (g(x, 'kind') === 'code' || g(x, 'kind') === 'data')
+          && typeof sha === 'string' && /^[0-9a-fA-F]{64}$/.test(sha) && n > 0 && nw === n
+          && build.mainLo <= addr && addr < build.mainHi && n <= build.mainHi - addr
+        if (ok && 'relocs' in x) {
+          const rel = x.relocs
+          if (!Array.isArray(rel)) ok = false
+          else for (const r of rel) {
+            const size = Array.isArray(r) && r.length === 4 && typeof r[1] === 'string' ? RSIZE[r[1]] : undefined
+            const off = size ? num32(r[0]) : null
+            if (!size || off === null || off < 0 || off + size > n! || typeof r[2] !== 'string' || num32(r[3]) === null) { ok = false; break }
+          }
+        }
+        if (!ok) { c.refuse('format', '', 0, `a site ${repr(g(x, 'addr'))}`); return null }
+        lo = addr!; hi = addr! + n!
+      } else {
+        const l = num32(g(x, 'lo')), h = num32(g(x, 'hi')), to = num32(g(x, 'to'))
+        if (l === null || h === null || to === null || !(l < h) || l < build.mainLo || h > build.mainHi) {
+          c.refuse('format', '', 0, 'a copied block'); return null
+        }
+        lo = l; hi = h
+      }
+      if (state.sites + out.length >= build.pools.sites || (!copied && state.sdata + sdata + (hi - lo) > build.pools.sdata)) {
+        c.refuse('limit', '', 0, 'sites'); return null
+      }
+      out.push([lo, hi, !copied])
+      if (!copied) sdata += hi - lo
+    }
+  }
+  const names = build.modules.map(m => m.name)
+  for (const [lo, hi, isSite] of out) {
+    if (!isSite) continue
+    for (const [a, b, kind, mi] of build.siteMap) {
+      if (overlap(lo, hi, a, b)) {
+        const owner = (kind === desc.SITE_SITE || kind === desc.SITE_COPIED) && mi < names.length ? names[mi] : ''
+        c.refuse('site', siteDetail(lo, owner), SITE_CORE << 8); return null
+      }
+    }
+    for (const [a, b] of build.prelink) if (overlap(lo, hi, a, b)) { c.refuse('site', siteDetail(lo), SITE_PRELINK << 8); return null }
+  }
+  for (const [lo, hi, isSite] of out) {
+    if (isSite) continue
+    for (const [a, b, kind, mi] of build.siteMap) {
+      if (kind === desc.SITE_SITE && overlap(lo, hi, a, b)) {
+        c.refuse('site', siteDetail(lo, mi < names.length ? names[mi] : ''), SITE_CORE << 8); return null
+      }
+    }
+  }
+  return out
+}
 
 /** Pass 1, one file: what the boot linker's scan tells from the file and the build alone, in its order. drive.pass1. */
 export function pass1(build: Build, c: Choice, state: State): boolean {
@@ -240,7 +348,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   const tgt = g(doc, 'target')
   if (!isDict(tgt) || g(tgt, 'device') !== build.deviceKey || g(tgt, 'os') !== build.os)
     return c.refuse('target', '', 0, isDict(tgt) ? `${str(g(tgt, 'device'))} ${str(g(tgt, 'os'))}` : 'no target')
-  for (const f of NO_FIELDS) if (!empty(g(doc, f))) return c.refuse('feature', f)
+  for (const f of NO_FIELDS) if (!(build.mainHi && SITE_FIELDS.includes(f)) && !empty(g(doc, f))) return c.refuse('feature', f)
   const secs = g(doc, 'sections')
   if (!isDict(secs)) return c.refuse('format', '', 0, 'its sections')
   for (const s of Object.keys(secs)) if (s !== '.run' && s !== '.bss') return c.refuse('feature', s)
@@ -292,6 +400,8 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     if (state.syms + exports.length >= build.pools.syms || !keep(x)) return c.refuse('limit', '', 0, 'symbols')
     exports.push(x)
   }
+  const sites = scanSites(build, c, doc, state)
+  if (sites === null) return false
   let m: Mod2
   try {                                     // the host's own reading of the file, a last check
     m = new Mod2(doc, c.name, c.raw)
@@ -299,9 +409,11 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     if (e instanceof ModError) return c.refuse('format', '', 0, e.message)
     throw e
   }
-  c.mod = m; c.exports = exports
+  c.mod = m; c.exports = exports; c.sites = sites
   state.syms += exports.length
   state.contribs += contribs
+  state.sites += sites.length
+  state.sdata += sites.reduce((n, [lo, hi, isSite]) => n + (isSite ? hi - lo : 0), 0)
   c.alive = true
   return true
 }
@@ -337,8 +449,15 @@ function round(build: Build, order: Choice[]): number {
       const x = m.imports.find(x => !(build.globals.has(x) || alive.some(o => o.exports.includes(x))) && !m.weak.has(x))
       if (x !== undefined) why = ['import', x]
     }
+    let arg = 0
+    if (!why) {                               // sites against earlier living mods' sites and copied blocks
+      for (const [lo, hi, mine] of c.sites) {
+        const o = earlier.find(o => o.sites.some(([a, b, theirs]) => (mine || theirs) && overlap(lo, hi, a, b)))
+        if (o !== undefined) { why = ['site', siteDetail(lo)]; arg = SITE_MOD << 8 | o.line; break }
+      }
+    }
     if (why) {
-      c.refuse(why[0], why[1])
+      c.refuse(why[0], why[1], arg)
       refused++
     }
   })
@@ -397,7 +516,7 @@ export function check(build: Build, files: [string, Uint8Array | null][]): Resul
     for (const c of choices) c.refuse('count', '', 0, '', NONE)
     return r
   }
-  const state: State = { syms: build.nsyms, contribs: 0, arena: 1, lists: 0 }
+  const state: State = { syms: build.nsyms, contribs: 0, arena: 1, lists: 0, sites: 0, sdata: 0 }
   for (const c of choices) {
     if (c.raw === null) c.refuse('missing', '', 0, '', DROPPED)
     else if (build.stagingSize && c.raw.length > build.stagingSize) c.refuse('too-big')
@@ -493,10 +612,10 @@ export function parseActive(text: string): [string, number][] | null {
 // ---- the catalogue -----------------------------------------------------------------------------------------------
 
 /** Can this mod ever load from +Drive? -> null, or the first feature only a flashed build can carry (pass 1's
- * feature checks, which need no build). For a page that marks each mod "+Drive" or "flash". */
+ * feature checks, which need no build; sites and copied blocks load on a build with a site map). For a page that marks each mod "+Drive" or "flash". */
 export function flashOnly(doc: unknown): string | null {
   if (!isDict(doc) || !pyEq(g(doc, 'elemod'), FORMAT2)) return 'format 1'
-  for (const f of NO_FIELDS) if (!empty(g(doc, f))) return f
+  for (const f of NO_FIELDS) if (!SITE_FIELDS.includes(f) && !empty(g(doc, f))) return f
   if (isDict(doc.sections)) for (const s of Object.keys(doc.sections)) if (s !== '.run' && s !== '.bss') return s
   if (isDict(doc.resources) && !empty(g(doc.resources, 'regions'))) return 'regions'
   if (Array.isArray(doc.contribute) && doc.contribute.some(x => isDict(x) && !empty(g(x, 'claims')))) return 'claims'

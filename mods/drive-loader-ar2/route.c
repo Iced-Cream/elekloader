@@ -80,6 +80,14 @@ extern int dl_status_n __attribute__((weak));
 extern unsigned char dl_skip_reason __attribute__((weak));
 extern char (*dl_detail)[32] __attribute__((weak));     /* a refusal's name argument */
 extern unsigned dl_boot_us[] __attribute__((weak));     /* the boot's time: whole, checks, link, inits */
+/* the sites the boot applied (dl.h, struct dl_site): address, length, its mod's line */
+struct dl_site_rec {
+    unsigned addr;
+    unsigned short len, line;
+    unsigned orig;
+};
+extern struct dl_site_rec *dl_sites __attribute__((weak));
+extern unsigned dl_sites_n __attribute__((weak));
 extern volatile int dl_check_n __attribute__((weak));   /* the MODS page's check: files done, -1 none yet */
 extern volatile int dl_check_all __attribute__((weak)); /* ... of the open folder's files */
 extern char dl_check_dir[] __attribute__((weak));       /* ... that folder, below DL_DIR */
@@ -93,6 +101,7 @@ static char *dl_status_text;                  /* from the heap, sized to the boo
 static unsigned dl_status_cap;
 #define STATUS_HEAD 512                        /* the lines before the records */
 #define STATUS_LINE 84                         /* id 28, state, code, arg, detail 32, at most */
+#define STATUS_SITE 56                         /* "site ", id 28, " 0x", 8 digits, " ", len */
 static unsigned dl_dir_obj[0x130 / 4];         /* under dl_lock */
 
 /* ---- small helpers (no libc) ---- */
@@ -471,7 +480,8 @@ static int status_text(void)
     unsigned want;
     if (!&dl_status || !dl_status)
         n = 0;
-    want = STATUS_HEAD + STATUS_LINE * (unsigned)n;
+    want = STATUS_HEAD + STATUS_LINE * (unsigned)n
+         + STATUS_SITE * (&dl_sites_n && &dl_sites && dl_sites ? dl_sites_n : 0);
     if (want > dl_status_cap) {              /* the records are the boot's: this happens once */
         char *t = NEW(want);
         if (!t)
@@ -548,6 +558,28 @@ static int status_text(void)
             at = cat(cat(at, end, " "), end, d);
         }
         at = cat(at, end, "\n");
+    }
+    if (&dl_sites_n && &dl_sites && dl_sites) {   /* each applied site, by its mod, in id order */
+        unsigned k;
+        for (k = 0; k < dl_sites_n; k++) {
+            const struct dl_site_rec *t = &dl_sites[k];
+            char id[29];
+            int d;
+            if (t->line < n)
+                copy(id, dl_status[t->line].id, 28);
+            else
+                id[0] = 0;
+            id[28] = 0;
+            at = cat(cat(at, end, "site "), end, id[0] ? id : "?");
+            at = cat(at, end, " 0x");
+            for (d = 28; d >= 0; d -= 4) {
+                char h[2] = {"0123456789abcdef"[t->addr >> d & 15], 0};
+                at = cat(at, end, h);
+            }
+            at = cat(at, end, " ");
+            at = num(at, end, t->len);
+            at = cat(at, end, "\n");
+        }
     }
     return 1;
 }

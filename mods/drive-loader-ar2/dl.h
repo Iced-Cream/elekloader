@@ -55,7 +55,7 @@ enum {
     DL_R_STORE = 21,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
     DL_R_SITE = 22,                      /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
 };
-enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };
+enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_SITE's kind */
 
 /* Why nothing was linked (dl_skip_reason). */
 enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT,
@@ -134,6 +134,26 @@ extern u32 *dl_inits;                    /* dl_status_n of them, from the heap *
 extern u32 dl_inits_n;
 extern u32 dl_used_lo, dl_used_hi;
 
+/* ---- +Drive sites (docs/DRIVE.md, "Sites") -------------------------------------------- */
+/* The main OS a site may change runs from DL_MAIN_LO (the Rytm's main_load) to the build's boot
+ * copier, the first byte the flashed build appends (its site map's kind 4). */
+#define DL_MAIN_LO 0x40000400u
+/* The sites the boot applied, in id order and each mod's own order: dl_sites_n of them, with
+ * their stock bytes from dl_site_orig + orig, kept from the boot on (the heap). A later check
+ * reads a site's stock bytes through them, and /mods/.status lists them. */
+struct dl_site {
+    u32 addr;
+    u16 len;
+    u16 line;                            /* its mod's line in /mods/active (dl_status[line]) */
+    u32 orig;                            /* offset of its stock bytes in dl_site_orig */
+};
+extern struct dl_site *dl_sites;
+extern u8 *dl_site_orig;
+extern u32 dl_sites_n;
+/* Write one site's bytes: interrupts masked (SR 0x2700), then the data cache's lines over it
+ * pushed (flush.s). dl_flush after the last one invalidates the instruction cache. */
+void dl_apply_site(u32 addr, const u8 *src, u32 len);
+
 /* The MODS page's check of a set (design steps 4 to 6: pass 1, the checks, the layout),
  * which writes nothing but its own records: st and det (n each, n <= DL_MAX_MODS) as
  * dl_status and dl_detail, with DL_ST_LOADED for a mod that would load, and each file's
@@ -181,6 +201,8 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out);
 #define DL_POOL_CONTRIBS 256                 /* +Drive table contributions */
 #define DL_POOL_EDATA 2048                   /* their bytes */
 #define DL_POOL_ERELOCS 256                  /* their relocations */
+#define DL_POOL_SITES 256                    /* +Drive sites and copied blocks */
+#define DL_POOL_SDATA 4096                   /* the sites' bytes */
 #define DL_POOL_CAP 0xFFF0                   /* every pool's most */
 
 #endif

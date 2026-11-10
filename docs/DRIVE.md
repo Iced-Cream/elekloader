@@ -58,6 +58,8 @@ The link runs in this order:
    touches nothing. Then `/mods/.store` is written, as `.store.tmp` and a
    rename under the loader's mutex, when its bytes changed. `.status` has a
    line `store: id 0x..., N fields, M parked, kept|written|write failed`.
+7. *Sites*: each loaded mod's sites, in id order, written over the running
+   main OS (below, "Sites").
 
 **Status records**: one of 32 bytes for each line of `/mods/active` (none
 past 256 lines): u8 state, u8 code, u16 argument, then the id (the file
@@ -75,6 +77,47 @@ in one file, 256 entries and 2,048 bytes of them with 256 relocations. A
 merge has room for the biggest table +Drive entries can go to. Global names
 are found through hash buckets, in the order a scan would find them.
 
+## Sites
+
+On a build whose descriptor has a site map (ABI 1.2), a +Drive mod may
+change the main OS with `sites` and read it with `copied` blocks, as a
+flashed mod does. The checks:
+
+- *Pass 1*, after the exports, each file alone: every site's form (`addr`,
+  `len`, `new` of that length, `kind` `code` or `data`, a 64-digit
+  `stock_sha256`, relocations `abs32`, `pc32` or `pc16` inside it) and
+  every copied block's (`lo` < `hi`, `to`), each inside the main OS (from
+  its load address to the build's boot copier), else `format`; past the
+  loader's room for them, `limit`. Then, refused `site`: a site that
+  overlaps a range of the site map (kind 1: the flashed build's sites,
+  copied blocks, protected and kept ranges and appended code) or a
+  pre-link range (kind 3), then a site whose bytes aren't its
+  `stock_sha256` (kind 4), then a copied block over a flashed site (kind 1).
+- *Check rounds*, after the imports: a site or copied block that shares a
+  byte with an earlier living mod's site, or a site that shares one with an
+  earlier mod's copied block (kind 2, the line the earlier mod's): the
+  later in id order goes. Two copied blocks may overlap.
+- *Pass 2*: each site's `new` bytes, its relocations applied at the site's
+  own address (a `pc16` out of range is `range`).
+
+A `site` refusal's argument is its kind << 8, plus the earlier mod's line
+for kind 2; its detail is the site's or block's address as 8 hex digits,
+then for kind 1 the flashed owner's name when the site map names a module.
+
+After the merge, the loader keeps each site's stock bytes (`dl_sites`, from
+the heap; with no room, nothing loads: skip `memory`), then writes each
+site with interrupts masked (SR 0x2700) and pushes the data cache's lines
+over it; the cache flush after the link invalidates the instruction cache.
+A later check of a set (the MODS page's) reads a site's stock bytes through
+the ones kept, so the mods the boot loaded still pass. `/mods/.status`
+lists every applied site (`site ID 0xADDRESS LENGTH`), and after a boot that
+applied one the crash guard (`/mods/.armed`) stays on until 60 s have passed
+and the MODS page doesn't show, whichever is later.
+
+On the computer, `link --device-layout` writes each site's bytes to
+`sites/ADDRESS.bin` and lists them in `summary.json`; the stock bytes are
+checked only against a built image (a `.build` file alone has none).
+
 ## On the computer
 
 `elekloader/drive.py` links the same way on the computer:
@@ -85,7 +128,8 @@ as `elekloader mods get .build` saves it), which is enough to check but not
 for the tables' flashed bytes. The twin writes `area.bin` (the area from its
 start to the layout's end), `tables/NAME.bin` for each table it rewrites
 (its capacity + 1 entries, the address in `summary.json`), `status.bin` and
-`detail.bin` (the status records, "The boot link" above), `status.txt` and `summary.json`. The same
+`detail.bin` (the status records, "The boot link" above), `sites/ADDRESS.bin` (each site's
+patched bytes, "Sites" above), `status.txt` and `summary.json`. The same
 inputs give the same bytes.
 
 `elekloader mods` moves files over USB MIDI (`elekloader/datarpc.py`; on

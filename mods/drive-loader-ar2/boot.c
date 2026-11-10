@@ -26,6 +26,7 @@ typedef u32 (*held_fn)(u32 code);
 #define KEY_NO 0x45
 
 #define CRASH_TICKS 200                              /* ev_tick is about 20 Hz: 10 s */
+#define CRASH_TICKS_SITES 1200                       /* 60 s, after a boot that applied sites */
 #define DTCN0 (*(volatile u32 *)0xfc07000c)          /* bus clock count (dl.h, "boot time") */
 
 extern char core_desc[];
@@ -371,7 +372,8 @@ static void boot(void)
     write_armed();                       /* before the link, so a link that faults or hangs is
                                           * caught too: the next boot skips the set */
     loaded = dl_link((u32)core_desc, dl_boot_choice, n, (u8 *)drive_staging, DL_STAGING_SIZE);
-    dl_flush();
+    dl_flush();                          /* after the area, the tables and the sites (each site's
+                                          * lines already pushed by dl_apply_site) */
     write_store();                       /* a set that left none loaded parks its fields too */
     t_link = DTCN0;
     if (loaded <= 0) {
@@ -386,13 +388,17 @@ static void boot(void)
 }
 
 /* ev_tick: the MODS page's frames (page.c), and the crash guard comes off 10 s into
- * ticking. */
+ * ticking; after a boot that applied a site (dl_sites_n), 60 s in and once the MODS page
+ * doesn't show, whichever is later, so a site that breaks a page or the audio is caught. */
 void dl_page_tick(void *ctrl);
+int dl_page_shown(void);
 
 void dl_tick(void *ctrl)
 {
     dl_page_tick(ctrl);
-    if (!armed || ++armed_ticks < CRASH_TICKS)
+    if (!armed || ++armed_ticks < (dl_sites_n ? CRASH_TICKS_SITES : CRASH_TICKS))
+        return;
+    if (dl_sites_n && dl_page_shown())
         return;
     armed = 0;
     dl_lock();

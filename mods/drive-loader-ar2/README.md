@@ -166,9 +166,9 @@ tables the link rewrites.
 - **The cache.** `dl_flush` pushes every data-cache line by set and way (the V4's CPUSHL takes
   an index, not an address), then sets CACR to `0xA40CE100`: stock's value without DCINVA.
 - **The crash guard.** With a set chosen, it writes `/mods/.armed` before the link, so a link
-  that faults or hangs is caught as well as the mods' inits. When the link loads nothing it
+  that faults or hangs is caught, and inits. When the link loads nothing it
   deletes `.armed` at once; otherwise it calls each `drive_init` in id order and deletes
-  `.armed` 200 `ev_tick`s (about 10 s) later.
+  `.armed` 200 `ev_tick`s (10 s; sites: DRIVE.md) on.
 - **The time.** `dl_boot` reads DTIM0's count (`0xfc07000c`, free running from the 132 MHz bus
   clock; stock's own clock at `0x401006bc` reads it) as it starts, after the checks, after the
   link and the flush, and as it ends. `/mods/.status` shows it as `boot: N us (checks N, link N, inits N)`
@@ -195,7 +195,7 @@ background checks and firmware calls are in [PAGE.md](PAGE.md).
 - `route.c`, `route.s`, `names.inc` (the name rules), `fs.c` (ekFS calls and the mutex): the
   route. Tests: `tests/drive_route_names_host.c`, `tests/drive_depth_host.c` (the 3-deep
   limit), `tests/drive_move_host.c` (moves on a made-up ekFS), `tests/test_drive_route.py`.
-- `flush.s`, `boot.c`, `dlink.c`, `json.c`: the boot link. Tests: `tests/drive_link_host.c`,
+- `flush.s`, `boot.c`, `dlink.c`, `json.c`, `sha256.c`: the boot link. Tests: `tests/drive_link_host.c`,
   `tests/test_drive_link.py`.
 - `page.c`, `page.s`, `clip.inc` (the build list's label clip), `park.c` (parked data): the
   MODS page. Tests: `tests/drive_page_clip_host.c`, `tests/drive_build_rows_host.c` (the build
