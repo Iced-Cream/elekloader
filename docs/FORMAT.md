@@ -323,10 +323,9 @@ may hold; the boot link and the computer's tools are in
 [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
-relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of
-`collections`, `sharc`, `resources.regions` or a contribution's `claims`;
-`storage` only with +Drive storage, and `sites` and `copied` only on a
-build with a site map (DRIVE.md). It adds entries only to tables whose descriptor
+relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `collections`,
+`sharc`, `resources.regions` or `claims`; `storage`, `sites` and `copied`
+only where the build takes them (DRIVE.md). It adds entries only to tables whose descriptor
 flags say more may be added (not a DSP table), in whole entries, at an
 order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
 names and `NAME_n` (the count after the merge), `core_desc`, and the other
