@@ -33,11 +33,18 @@ from test_link_refusals import Bench                                      # noqa
 STAGING = 0x10000
 
 
-def flashed(B, pad=0):
+def flashed(B, pad=0, store=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
     core['exports'] = ['core_fn', 'core_zero']
+    if store:                                   # +Drive storage: core-ar2 0.14's side of it
+        core['imports'] = ['__store_gen', '__store_gen2']
+        core['collections'].update({k: {'entry': e} for k, e in (('core_store_ids', 4), ('core_lock_codes', 8),
+                                                                 ('core_lock_ccs', 8), ('core_field_inits', 4))})
+        core['sections']['.bss'] = {'align': 4, 'size': 8}
+        core['symbols']['core_store_gens'] = ['.bss', 0]
+        core['exports'].append('core_store_gens')
     loader = B.other('drive-loader', imports=['core_desc'],
                      relocs=[['.run', 4, 'abs32', 'sym:core_desc', 0]])
     loader['sections']['.bss'] = {'size': STAGING + pad}   # pad: a bigger build, a smaller area
@@ -54,6 +61,9 @@ def flashed(B, pad=0):
 def built(B, area=None):
     """The flashed build, and the Build the boot linker sees; with `area`, its loader's .bss grown
     until the +Drive area is about that many bytes (its pools are sized to the area)."""
+    if area == 'store':                         # a build that keeps +Drive storage
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, store=True)], B.img)
+        return out, drive.load_build(out.image)
     out = link.link([link.Mod2(d, d['id']) for d in flashed(B)], B.img)
     b = drive.load_build(out.image)
     if area is not None:
@@ -355,6 +365,13 @@ def test_the_boot_linkers_other_rooms_refuse_as_limit():
 def _(B):
     good = [dmod(B, 'm%03d' % i) for i in range(256)]
     return files(*(good + [dmod(B, 'm256')])), files(*good)
+
+
+@row('store', 1, detail='sound 60 56', arg=0, deep=True, area='store')
+def _(B):
+    a = dmod(B, 'st-a', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 32, 'lock': True}])
+    b = dmod(B, 'st-b', storage=[{'sym': 'st_b', 'scope': 'sound', 'bits': 28}])
+    return files(a, b), files(a)
 
 
 def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():

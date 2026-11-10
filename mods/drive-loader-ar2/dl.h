@@ -109,6 +109,7 @@ u32 dl_strlen(const char *s);
 u32 dl_crc32(const u8 *p, u32 n);
 u32 dl_crc32_add(u32 c, const u8 *p, u32 n);   /* the register carried on: ~0 to start, ~ at the end */
 u32 dl_hash(const char *s, u32 n);       /* FNV-1a, 32 bits */
+void dl_sha256(const u8 *p, u32 n, u8 out[32]);   /* FIPS 180-4 (sha256.c) */
 
 /* ---- what the linker asks of its host ------------------------------------------------ */
 /* Read /mods/<name> into buf (at most max bytes). -> its length, -1 missing, -2 larger

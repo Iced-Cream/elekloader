@@ -22,7 +22,7 @@ import struct
 import sys
 import zlib
 
-from . import container, desc, devices, link as linker
+from . import container, desc, devices, drive_store as ds, link as linker, store as mstore
 from .elemod import ModError, format_of, version_key
 from .link import _align, by_id, entry_key, lay_out, put_reloc
 
@@ -64,16 +64,27 @@ CODES = {
     18: ('range', 'a 16-bit PC-relative reference is out of range'),
     19: ('limit', 'past the loader\'s own limits'),
     20: ('count', 'more than 256 mods are chosen'),
+    21: ('store', 'storage: {what} needs {need} of {have}'),
 }
 CODE = {name: c for c, (name, _m) in CODES.items()}
 BOOT_ONLY = ('missing', 'changed')     # the host has the files it is given
 SKIPS = {0: 'none', 1: 'key', 2: 'armed', 3: 'drive', 4: 'abi', 5: 'unstable', 6: 'count', 7: 'memory'}
 SKIP = {v: k for k, v in SKIPS.items()}
 NO_FIELDS = ('sites', 'collections', 'copied', 'storage', 'sharc')   # pass 1 refuses them, in order
+# +Drive storage (docs/DRIVE.md, "+Drive storage"): a build keeps it with these, and core 0.14's
+# generations (dlink.c store_base); a mod's fields go in the boot's room for them (drive_store.py)
+STORE_TABLES = (mstore.IDS_TABLE, mstore.CODES_TABLE, mstore.CCS_TABLE, mstore.INITS_TABLE, mstore.HANDLES_TABLE)
+STORE_GENS = 'core_store_gens'
+MAX_FIELDS = 512                # dstore.h DS_MAX_FIELDS: the fields of every file pass 1 reads
+FIELD_KEYS = ('sym', 'scope', 'bits', 'init', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'handle')
+FIELD_FLAGS = (('lock', 1), ('cc', 2), ('lfo', 4), ('mod', 16), ('handle', 32))
 
 
 def message(code, detail='', arg=0):
-    """A status's line, for a person."""
+    """A status's line, for a person. A storage refusal's detail is "WHAT NEED HAVE"."""
+    if CODES[code][0] == 'store':
+        w = (str(detail).split() + ['?', '?', '?'])[:3]
+        return CODES[code][1].format(what=w[0], need=w[1], have=w[2])
     return CODES[code][1].format(detail=detail, arg=arg)
 
 
@@ -117,11 +128,18 @@ class Build:
         self.nsyms = sum(len(m['exports']) for m in self.modules) + sum(
             2 if len(t['name']) < 60 else 1 for t in self.tables) + 1
         self.pools = pools(self)
+        exports = {nm: a for m in self.modules for nm, a in m['exports']}
+        scopes = d['storage']['scopes']
+        self.store = (all(t in self.table for t in STORE_TABLES) and STORE_GENS in exports
+                      and [x[0] for x in scopes] == list(mstore.SCOPES)
+                      and self.tables[self.table[mstore.IDS_TABLE]]['count'] >= 1)
+        self.gens_at = exports.get(STORE_GENS)
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
         self.main_load = dev.main_load if dev else None
         self.image, self._ram, self.desc_at = image, None, None
         if image is not None:
             self._ram = self._locate(image, at)
+        self.base = ds.Base.from_build(self) if self.store else None
 
     def _locate(self, image, at):
         """The image offset of RAM address 0 (the RAM image is copied whole): the descriptor sits
@@ -201,6 +219,7 @@ class Choice:
         self.label = name                       # the record's id: the file name, then the mod's id
         self.mod = self.id = None
         self.exports = []
+        self.fields = []                        # its +Drive storage fields (drive_store's documents)
         self.alive = False
 
     def refuse(self, code, detail='', arg=0, note='', state=REFUSED):
@@ -252,6 +271,76 @@ def _section_len(d):
     return n
 
 
+def _is_c_name(s):
+    return bool(s) and (s[0].isascii() and (s[0].isalpha() or s[0] == '_')) and \
+        all(ch.isascii() and (ch.isalnum() or ch == '_') for ch in s)
+
+
+def _storage(v, fields, exports, state, build, keep):
+    """A mod's "storage", as the boot linker reads it (dlink.c storage()): each field into fields,
+    its symbol a global name (in exports). -> None, or (code, note)."""
+    if _empty(v):
+        return None
+    if not isinstance(v, list):
+        return 'format', 'storage'
+    for f in v:
+        if not isinstance(f, dict):
+            return 'format', 'storage'
+        sym = scope = bits = None
+        init, has_init, has_smooth, flags = 0, False, False, 0
+        on = {}
+        for k, x in f.items():                  # in the file's order, as the boot linker reads it
+            if k == 'sym':
+                if not isinstance(x, str):
+                    return 'format', 'storage'
+                if not keep(x):
+                    return 'limit', 'storage'
+                sym = x
+            elif k == 'scope':
+                if x not in mstore.SCOPES:
+                    return 'format', 'storage'
+                scope = mstore.SCOPES.index(x) + 1
+            elif k == 'bits':
+                if type(x) is not int or not -0x80000000 <= x <= 0x7FFFFFFF:
+                    return 'format', 'storage'
+                bits = x
+            elif k == 'init':
+                if type(x) is not int or not 0 <= x <= 0xFFFFFFFF:
+                    return 'format', 'storage'
+                init, has_init = x, True
+            elif k in FIELD_KEYS:
+                if type(x) is not bool:
+                    return 'format', 'storage'
+                on[k] = x
+                if k == 'smooth':
+                    has_smooth = True
+            else:
+                return 'format', 'storage'      # "track" too: the Rytm has no CV track
+        if sym is None or scope is None or bits is None or not 1 <= bits <= mstore.MAX_BITS \
+                or not _is_c_name(sym) or len(sym.encode('utf-8')) > ds.NAME_MAX:
+            return 'format', 'storage'
+        lock = on.get('lock', False)
+        if ((on.get('cc') or on.get('lfo') or on.get('mod') or has_smooth) and not lock) \
+                or (on.get('handle') and (lock or init)) or (lock and scope > 2) \
+                or (on.get('mod') and scope == 2) or (has_init and bits < 32 and init >> bits):
+            return 'format', 'storage'
+        if any(g['sym'] == sym for g in fields):
+            return 'format', 'storage'
+        if state['fields'] + len(fields) >= MAX_FIELDS or state['syms'] + len(exports) >= build.pools['syms']:
+            return 'limit', 'storage'
+        doc = {'sym': sym, 'scope': mstore.SCOPES[scope - 1], 'bits': bits}
+        for k, _bit in FIELD_FLAGS:
+            if on.get(k):
+                doc[k] = True
+        if on.get('smooth') is False:
+            doc['smooth'] = False
+        if init:
+            doc['init'] = init
+        fields.append(doc)
+        exports.append(sym)
+    return None
+
+
 def pass1(build, c, state):
     """Pass 1, one file: what the boot linker's scan tells from the file and the build alone, in
     its order. `state` counts the boot linker's shared room: symbols and contributions, which a
@@ -293,7 +382,7 @@ def pass1(build, c, state):
         return c.refuse('target', note='%s %s' % (tgt.get('device'), tgt.get('os'))
                         if isinstance(tgt, dict) else 'no target')
     for f in NO_FIELDS:
-        if not _empty(doc.get(f)):
+        if not (f == 'storage' and build.store) and not _empty(doc.get(f)):
             return c.refuse('feature', f)
     secs = doc.get('sections')
     if not isinstance(secs, dict):
@@ -363,12 +452,18 @@ def pass1(build, c, state):
         if state['syms'] + len(exports) >= build.pools['syms'] or not keep(x):
             return c.refuse('limit', note='symbols')
         exports.append(x)
+    fields = []
+    if build.store:
+        why = _storage(doc.get('storage'), fields, exports, state, build, keep)
+        if why:
+            return c.refuse(why[0], note=why[1])
     try:                                        # the host's own reading of the file, a last check
         m = linker.Mod2(doc, c.name, c.raw)
     except ModError as e:
         return c.refuse('format', note=str(e))
-    c.mod, c.exports = m, exports
+    c.mod, c.exports, c.fields = m, exports, fields
     state['syms'] += len(exports)
+    state['fields'] += len(fields)
     state['contribs'] += contribs
     c.alive = True
     return True
@@ -438,6 +533,71 @@ def _round(build, order):
     return refused
 
 
+def _want(order):
+    """The living mods' storage, as drive_store takes it."""
+    return ds.Want([{'id': c.id, 'storage': c.fields} for c in order if c.alive])
+
+
+def _fit(build, order):
+    """The room (drive_store.fit), one refusal, as the boot linker makes it: the first short resource,
+    and the last living mod in id order that uses it. -> 1 when it refused one."""
+    if not build.store:
+        return 0
+    w = _want(order)
+    if not w.decls:
+        return 0
+    for what, n, have, uses in ds._needs(build.base, w):
+        if n <= have:
+            continue
+        users = {d[0] for d in w.decls if uses((d[0], d[1]))}
+        last = [c for c in order if c.alive and c.id in users]
+        if not last:
+            continue
+        last[-1].refuse('store', '%s %d %d' % (what, n, max(have, 0)))
+        return 1
+    return 0
+
+
+def _settle(build, order):
+    """Check rounds and the room, until neither refuses a mod."""
+    while True:
+        while _round(build, order):
+            pass
+        if not _fit(build, order):
+            return
+
+
+def _place(build, order, prev):
+    """The living mods' fields placed from the .store bytes prev (dlink.c place_store). -> Placed."""
+    st = ds.decode(prev) if prev is not None else None
+    return ds.allocate(build.base, st, _want(order))
+
+
+def _store_tables(build, p):
+    """What the boot writes from a placement: each loader-only table's bytes (flashed entries, the
+    +Drive ones, zeros to its end) and core_store_gens' 6 bytes. -> ({name: table}, gens)."""
+    out = {}
+    adds = {mstore.CODES_TABLE: p.code_entries, mstore.CCS_TABLE: p.cc_entries,
+            mstore.INITS_TABLE: p.init_entries, mstore.HANDLES_TABLE: p.handle_entries}
+    for name in STORE_TABLES:
+        t = build.tables[build.table[name]]
+        e, cnt, cap = t['entry'], t['count'], t['capacity']
+        if name == mstore.IDS_TABLE:
+            ids = [p.id] + p.ancestors[:cap - 1]
+            raw, rows = b''.join(struct.pack('>I', i) for i in ids), len(ids)
+            entries = [('drive-loader', desc.LINKER_ORDER)] * rows
+        else:
+            new = adds[name][:cap - cnt]
+            flashed = build.ram(t['address'], cnt * e)
+            raw = (flashed if flashed is not None else bytes(cnt * e)) + b''.join(new)
+            entries = [(build.flashed[mi], o) for o, mi in t['entries']] + \
+                [('drive-loader', desc.LINKER_ORDER)] * len(new)
+        raw += bytes(e * (cap + 1) - len(raw))
+        out[name] = {'address': t['address'], 'entry': e, 'capacity': cap,
+                     'bytes': raw if build.image is not None else None, 'entries': entries}
+    return out, bytes(p.generations[s] for s in mstore.SCOPES)
+
+
 def _layout(build, order):
     """In id order from the area's start: every .run at its alignment, then every .bss. -> (base,
     end), or None after refusing the last living mod for room."""
@@ -471,8 +631,9 @@ def _globals(build, order, base):
         elif build.desc_at is not None:
             glob[nm] = (lambda: build.desc_at)
     for c in alive:
+        mine = {f['sym'] for f in c.fields}     # storage fields: their descriptors, once placed
         for x in c.exports:
-            if x not in glob:
+            if x not in glob and x not in mine:
                 sec, off = c.mod.symbols[x]
                 v = off if sec == 'abs' else base.get((c.id, sec), 0) + off
                 glob[x] = (lambda v=v: v)
@@ -589,22 +750,25 @@ class Result:
     pass
 
 
-def check(build, files, deep=False):
+def check(build, files, deep=False, store=None):
     """Pass 1, the check rounds and the layout; with `deep`, pass 2 and the merge too (link()).
     `files`: [(file name, bytes, or None for a missing file)] in /mods/active's order. -> Result:
-    .choices (each with its state), .live (the mods that load, in id order), .base, .end, .skip."""
+    .choices (each with its state), .live (the mods that load, in id order), .base, .end, .skip.
+    `store`: /mods/.store's bytes as the boot reads them (None: none); a link gives .placed, the
+    +Drive storage's placement (drive_store.Placed, None on a build without +Drive storage)."""
     r = Result()
     r.build, r.skip = build, 'none'
     choices = [Choice(i, n, raw) for i, (n, raw) in enumerate(files)]
     r.choices, r.live, r.base, r.end, r.area, r.tables, r.inits, r.glob = \
         choices, [], {}, build.lo, b'', {}, [], {}
+    r.placed, r.gens = None, None
     if len(choices) > MAX_MODS:                 # the loader reads none of them
         r.skip = 'count'
         r.choices = choices[:MAX_MODS]
         for c in r.choices:
             c.refuse('count', state=NONE)
         return r
-    state = {'syms': build.nsyms, 'contribs': 0, 'arena': 1, 'lists': 0}   # the arena's 0 is ""
+    state = {'syms': build.nsyms, 'contribs': 0, 'arena': 1, 'lists': 0, 'fields': 0}   # the arena's 0 is ""
     for c in choices:
         if c.raw is None:
             c.refuse('missing', state=DROPPED)
@@ -615,14 +779,20 @@ def check(build, files, deep=False):
     order = by_id(c for c in choices if c.alive)          # stable: of one id, the earlier line first
     lay = placed = glob = None
     for _ in range(4 * MAX_MODS):
-        while _round(build, order):
-            pass
+        _settle(build, order)
         lay = _layout(build, order)
         if lay is None:
             continue
         if not deep:
             break
+        if build.store:
+            r.placed = _place(build, order, store)
         glob = _globals(build, order, lay[0])
+        if r.placed is not None:
+            for c in order:
+                if c.alive:
+                    for f in c.fields:
+                        glob[f['sym']] = (lambda v=r.placed.descriptors[(c.id, f['sym'])]: v)
         placed, edata, again = {}, [0, 0], False   # entry bytes, entry relocations
         for c in order:
             if not c.alive:
@@ -642,6 +812,10 @@ def check(build, files, deep=False):
         r.skip = 'unstable'
         for c in live:
             c.refuse('limit')
+        if deep and build.store:                # nothing loads: every field parks
+            r.placed = _place(build, order, store)
+            st_tables, r.gens = _store_tables(build, r.placed)
+            r.tables = st_tables
         return r
     base, end = lay
     r.live, r.base, r.end = live, base, end if live else build.lo
@@ -653,6 +827,9 @@ def check(build, files, deep=False):
                 o = base[(c.id, '.run')] - build.lo
                 area[o:o + len(run)] = run
         r.area, r.tables = bytes(area), merged
+        if r.placed is not None:
+            st_tables, r.gens = _store_tables(build, r.placed)
+            r.tables.update(st_tables)
         r.glob = {x: glob[x]() for c in live for x in c.exports}
     for c in live:
         c.state, c.code = LOADED, 0
@@ -662,11 +839,11 @@ def check(build, files, deep=False):
     return r
 
 
-def link(build, files):
+def link(build, files, store=None):
     """Pass 1 to the merge. -> Result, as check()'s, and .area (bytes from the area's start to
     .end), .tables ({name: {'address', 'entry', 'capacity', 'bytes' (None without an image),
     'entries': [(module, order)]}}), .inits ([(mod id, address)] in id order), .glob."""
-    return check(build, files, deep=True)
+    return check(build, files, deep=True, store=store)
 
 
 def records(r):
@@ -718,6 +895,12 @@ def summary(r, linked=False):
                          for n, t in sorted(r.tables.items())}
         st, dt = records(r)
         out['status_sha256'], out['detail_sha256'] = _sha(st), _sha(dt)
+        if r.placed is not None:
+            p = r.placed
+            out['store'] = {'id': '0x%08x' % p.id, 'ancestors': ['0x%08x' % a for a in p.ancestors],
+                            'generations': p.generations, 'fields': len(p.state['fields']),
+                            'parked': len(p.state['parked']), 'sha256': _sha(p.bytes),
+                            'gens_at': '0x%08x' % b.gens_at, 'notes': p.notes}
     return out
 
 
@@ -743,6 +926,9 @@ def write_layout(r, out_dir):
         if t['bytes'] is not None:
             put(os.path.join('tables', n + '.bin'), t['bytes'])
     st, dt = records(r)
+    if r.placed is not None:
+        put('store.bin', r.placed.bytes)        # /mods/.store as the boot writes it
+        put('store_gens.bin', r.gens)           # core_store_gens
     put('status.bin', st)
     put('detail.bin', dt)
     put('status.txt', status_text(r))
@@ -830,6 +1016,7 @@ def main(argv=None):
     p.add_argument('mods', nargs='*')
     p.add_argument('--device')
     p.add_argument('--out', required=True, help='the folder for area.bin, tables/, status.* and summary.json')
+    p.add_argument('--store', help='/mods/.store as the unit has it (+Drive storage); store.bin is the new one')
     p = sub.add_parser('mods', help='the unit\'s /mods over USB (the Drive Loader\'s Data route)')
     from . import datarpc
     datarpc.add_arguments(p)
@@ -846,7 +1033,11 @@ def main(argv=None):
             else:
                 print_result(r)
             return 0 if all(c.state == LOADED for c in r.choices) else 1
-        r = link(build, files)
+        prev = None
+        if a.store:
+            with open(a.store, 'rb') as fh:
+                prev = fh.read()
+        r = link(build, files, prev)
     except (OSError, ModError) as e:
         print('REFUSED: %s' % e)
         return 2

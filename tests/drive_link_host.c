@@ -8,11 +8,14 @@
  * STOCK.bin the main OS image at STOCK_BASE (stock parts copy from it). MODS_DIR holds the
  * files and `active`. OUT.bin gets the RAM afterwards; stdout a JSON summary. With
  * DL_HOST_CHECK set it runs the MODS page's dl_check instead of dl_link: the same summary
- * from the check's own records, plus each file's version. */
+ * from the check's own records, plus each file's version. A file MODS_DIR/.store is the
+ * +Drive storage's /mods/.store as the boot reads it; the link's new one goes to OUT.bin.store
+ * (on a build that keeps +Drive storage). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../mods/drive-loader-ar2/dl.h"
+#include "../mods/drive-loader-ar2/dstore.h"
 
 static u8 *ram, *stock;
 static u32 ram_base, ram_len, stock_base, stock_len;
@@ -168,10 +171,18 @@ int main(int argc, char **argv)
         printf("], \"boot_status_n\": %u}\n", dl_status_n);
         return 0;
     }
+    snprintf(path, sizeof path, "%s/.store", dir);
+    dl_store_prev = slurp(path, &dl_store_prev_n);
     loaded = dl_link(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging);
     f = fopen(argv[7], "wb");
     fwrite(ram, 1, ram_len, f);
     fclose(f);
+    if (dl_store_out.bytes) {
+        snprintf(path, sizeof path, "%s.store", argv[7]);
+        f = fopen(path, "wb");
+        fwrite(dl_store_out.bytes, 1, dl_store_out.nbytes, f);
+        fclose(f);
+    }
     printf("{\"loaded\": %d, \"skip\": %d, \"used\": [%u, %u], \"inits\": [", loaded, dl_skip_reason,
            dl_used_lo, dl_used_hi);
     for (i = 0; i < dl_inits_n; i++)

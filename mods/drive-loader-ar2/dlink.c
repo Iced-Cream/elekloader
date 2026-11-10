@@ -15,13 +15,14 @@
  * through DL_MEM and files only through dl_read_file (dl.h), so the same code runs on the
  * computer in tests. */
 #include "json.h"
+#include "dstore.h"
 
 /* ---- the link state ------------------------------------------------------------------------
  * The header lives in .bss; the mods and the pools come from the heap for each dl_link and
  * dl_check, sized to the set (the mods) and to the +Drive area (the pools, dl.h DL_POOL_*),
  * and go back when it returns. The merge's room is the descriptor's biggest table. */
 
-enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT };
+enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE };
 enum { R_ABS32, R_PC32, R_PC16 };
 #define FLASHED 0xFFFF
 #define NONE 0xFFFF
@@ -55,6 +56,14 @@ struct dmod {
     u16 ctr_first, ctr_n;                /* its contributions */
     u8 init_sec;                         /* drive_init, if it has one */
     u32 init_off;
+    u16 fld_first, fld_n;                /* its storage fields */
+};
+
+struct fld {                             /* a +Drive storage field a mod declares */
+    u16 mod;
+    u16 sym;                             /* its name in the arena */
+    u8 scope, bits, flags, pad;
+    u32 init;
 };
 
 struct contrib {
@@ -112,6 +121,17 @@ static struct {
     struct erel *erel;
     struct item *items;
     u8 *mdata;
+    /* +Drive storage (dstore.h): the flashed build's side, the fields, their descriptors */
+    int store;                           /* the build keeps +Drive storage */
+    struct ds_base sb;
+    u32 sb_anc[DS_MAX_IDS + 1];
+    int t_ids, t_codes, t_ccs, t_inits, t_handles;   /* their tables' indexes */
+    u32 gens_at;                         /* core_store_gens */
+    struct fld *fld;
+    u32 nfld;
+    u32 *fdesc;                          /* each field's descriptor, once placed */
+    struct ds_want *want;                /* the living mods' fields, for dstore */
+    u16 *want_fld;
     struct dl_status *st;                /* where the records go: dl_status, or a check's */
     char (*det)[32];
     u32 crc_table[256];
@@ -123,6 +143,9 @@ u32 dl_status_n;
 u8 dl_skip_reason;
 u32 *dl_inits;
 u32 dl_inits_n;
+const u8 *dl_store_prev;
+u32 dl_store_prev_n;
+struct ds_out dl_store_out;
 u32 dl_used_lo, dl_used_hi;
 
 /* ---- small helpers ---------------------------------------------------------------------- */
@@ -310,6 +333,8 @@ static u32 sym_value(const struct sym *s)
         return s->val;
     case SEC_TABLE:
         return table_addr(s->val);
+    case SEC_STORE:                      /* a storage field: its descriptor */
+        return L.fdesc ? L.fdesc[s->val] : 0;
     case SEC_COUNT: {                    /* NAME_n: the count after the merge */
         u32 n = table_count(s->val), i, k;
         for (i = 0; i < (u32)L.nmods; i++)
@@ -651,6 +676,135 @@ static int target_ok(const char *p, const u8 *buf, u32 len)
     return dev && os && !j.err;
 }
 
+/* ---- +Drive storage fields (store.parse_decls, as the device takes them) ----------------- */
+static const char *const SCOPE_NAMES[DS_SCOPES] = {"sound", "kit", "global", "track", "pattern", "project"};
+
+static int c_name(const char *s)
+{
+    if (!((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z') || *s == '_'))
+        return 0;
+    for (s++; *s; s++)
+        if (!((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z') || (*s >= '0' && *s <= '9') || *s == '_'))
+            return 0;
+    return 1;
+}
+
+/* a JSON whole number 0..0xFFFFFFFF (not a string, not a fraction) */
+static int js_u32(js_t *j, u32 *v)
+{
+    const char *p;
+    u32 x = 0, n = 0;
+    if (js_peek(j) != '0' || *j->p == '-')
+        return 0;
+    for (p = j->p; p < j->end && *p >= '0' && *p <= '9'; p++, n++) {
+        if (x > 429496729u || (x == 429496729u && *p > '5'))
+            return 0;
+        x = x * 10 + (u32)(*p - '0');
+    }
+    if (!n || (n > 1 && *j->p == '0') || (p < j->end && (*p == '.' || *p == 'e' || *p == 'E')))
+        return 0;
+    j->p = p;
+    *v = x;
+    return 1;
+}
+
+/* A mod's "storage" -> its fields, each a global name of kind SEC_STORE. -> 0, or DL_R_FORMAT
+ * (a field the core can't keep), DL_R_LIMIT (past the loader's room). */
+static int storage(struct dmod *m, const char *p, const u8 *buf, u32 len)
+{
+    js_t j;
+    const char *s;
+    u32 n, q;
+    int first = 1;
+    m->fld_first = (u16)L.nfld;
+    m->fld_n = 0;
+    if (empty(p, buf, len))
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return DL_R_FORMAT;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1, v, has_smooth = 0, has_init = 0, scope = -1;
+        s32 bits = -1;
+        u32 init = 0;
+        u16 sym = NONE;
+        u8 flags = 0, lock = 0, cc = 0, lfo = 0, route = 0, handle = 0;
+        struct fld *f;
+        if (!js_open(&j, '{'))
+            return DL_R_FORMAT;
+        while (js_next(&j, '}', &f2)) {
+            if (!js_key(&j, &s, &n))
+                return DL_R_FORMAT;
+            if (js_eq(s, n, "sym")) {
+                if (!js_str(&j, &s, &n))
+                    return DL_R_FORMAT;
+                if ((sym = keep(s, n)) == NONE)
+                    return DL_R_LIMIT;
+            } else if (js_eq(s, n, "scope")) {
+                if (!js_str(&j, &s, &n))
+                    return DL_R_FORMAT;
+                for (scope = DS_SCOPES - 1; scope >= 0 && !js_eq(s, n, SCOPE_NAMES[scope]); scope--)
+                    ;
+                if (scope < 0)
+                    return DL_R_FORMAT;
+            } else if (js_eq(s, n, "bits")) {
+                if (!js_int32(&j, &bits))
+                    return DL_R_FORMAT;
+            } else if (js_eq(s, n, "init")) {
+                if (!js_u32(&j, &init))
+                    return DL_R_FORMAT;
+                has_init = 1;
+            } else if (js_eq(s, n, "lock") || js_eq(s, n, "cc") || js_eq(s, n, "lfo") || js_eq(s, n, "smooth")
+                       || js_eq(s, n, "mod") || js_eq(s, n, "handle")) {
+                char c0 = s[0], c1 = s[1];
+                if (!js_bool(&j, &v))
+                    return DL_R_FORMAT;
+                if (c0 == 'l' && c1 == 'o')
+                    lock = (u8)v;
+                else if (c0 == 'c')
+                    cc = (u8)v;
+                else if (c0 == 'l')
+                    lfo = (u8)v;
+                else if (c0 == 's') {
+                    has_smooth = 1;
+                    if (!v)
+                        flags |= DS_ROUGH;
+                } else if (c0 == 'm')
+                    route = (u8)v;
+                else
+                    handle = (u8)v;
+            } else {
+                return DL_R_FORMAT;      /* "track" too: the Rytm has no CV track */
+            }
+        }
+        if (j.err || sym == NONE || scope < 0 || bits < 1 || bits > DS_MAX_BITS || !c_name(L.arena + sym)
+            || dl_strlen(L.arena + sym) > DS_NAME_MAX)
+            return DL_R_FORMAT;
+        if (((cc || lfo || route || has_smooth) && !lock) || (handle && (lock || init))
+            || (lock && scope > 1) || (route && scope == 1) || (has_init && bits < 32 && init >> bits))
+            return DL_R_FORMAT;
+        for (q = 0; q < m->fld_n; q++)
+            if (!dl_strcmp(L.arena + L.fld[m->fld_first + q].sym, L.arena + sym))
+                return DL_R_FORMAT;      /* declared twice */
+        if (L.nfld >= DS_MAX_FIELDS || L.nsyms >= L.SYMS)
+            return DL_R_LIMIT;
+        f = &L.fld[L.nfld];
+        f->mod = (u16)(m - L.mods);
+        f->sym = sym;
+        f->scope = (u8)(scope + 1);
+        f->bits = (u8)bits;
+        f->init = init;
+        f->flags = flags | (lock ? DS_LOCK : 0) | (cc ? DS_CC : 0) | (lfo ? DS_LFO : 0) | (route ? DS_ROUTE : 0)
+                   | (handle ? DS_HANDLE : 0);
+        add_sym(dl_hash(L.arena + sym, dl_strlen(L.arena + sym)), (u16)(m - L.mods), SEC_STORE, L.nfld);
+        L.syms[L.nsyms - 1].name = sym;
+        L.nfld++;
+        m->fld_n++;
+        m->exp_n++;                      /* a global name, as an export is */
+    }
+    return j.err ? DL_R_FORMAT : 0;
+}
+
 /* Pass 1: read one file into m. -> 0, or a refusal code (detail in *what). */
 static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 {
@@ -679,7 +833,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     if (!target_ok(k[K_TARGET], buf, len))
         return DL_R_TARGET;
     for (i = 0; i < sizeof(nok) / sizeof(nok[0]); i++)
-        if (!empty(k[nok[i]], buf, len)) {
+        if (!(nok[i] == K_STORAGE && L.store) && !empty(k[nok[i]], buf, len)) {
             *what = no[i];
             return DL_R_FEATURE;
         }
@@ -871,6 +1025,8 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         if (j.err)
             return DL_R_FORMAT;
     }
+    if (L.store && (i = (u32)storage(m, k[K_STORAGE], buf, len)) != 0)
+        return (int)i;
     m->init_sec = 0xFF;
     {
         u8 sec;
@@ -1494,10 +1650,11 @@ static void *take(u32 n) { return dl_alloc(n ? n : 4); }
 /* Every block begin() took goes back. */
 static void finish(void)
 {
-    void **p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.arena, (void **)&L.lists,
-                  (void **)&L.syms, (void **)&L.sym_next, (void **)&L.sym_head, (void **)&L.locals,
-                  (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
-                  (void **)&L.items, (void **)&L.mdata};
+    static void **const p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.arena, (void **)&L.lists,
+                               (void **)&L.syms, (void **)&L.sym_next, (void **)&L.sym_head, (void **)&L.locals,
+                               (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
+                               (void **)&L.items, (void **)&L.mdata, (void **)&L.fld, (void **)&L.fdesc,
+                               (void **)&L.want, (void **)&L.want_fld};
     u32 i;
     for (i = 0; i < sizeof p / sizeof p[0]; i++) {
         dl_free(*p[i]);
@@ -1549,6 +1706,14 @@ static int pools(int n)
     L.erel = take(L.ERELOCS * sizeof *L.erel);
     L.items = take(L.MERGE * sizeof *L.items);
     L.mdata = take(L.MDATA);
+    if (L.store) {
+        L.fld = take(DS_MAX_FIELDS * sizeof *L.fld);
+        L.fdesc = take(DS_MAX_FIELDS * sizeof *L.fdesc);
+        L.want = take(DS_MAX_FIELDS * sizeof *L.want);
+        L.want_fld = take(DS_MAX_FIELDS * sizeof *L.want_fld);
+        if (!L.fld || !L.fdesc || !L.want || !L.want_fld)
+            return 0;
+    }
     return L.mods && L.order && L.arena && L.lists && L.syms && L.sym_next && L.locals && L.ctr
            && L.ent && L.edata && L.erel && L.items && L.mdata;
 }
@@ -1567,6 +1732,188 @@ static s32 load(struct dmod *m, const struct dl_choice *ch)
         return -DL_R_CHANGED;
     (void)m;
     return len;
+}
+
+/* ---- +Drive storage ------------------------------------------------------------------------ */
+static int find_named(const char *name)
+{
+    u32 i;
+    for (i = 0; i < n_tables(); i++)
+        if (!dl_strcmp(table_name(i), name))
+            return (int)i;
+    return -1;
+}
+
+static u32 flashed_export(const char *name)
+{
+    u32 e;
+    for (e = 0; e < n_exports(); e++)
+        if (!dl_strcmp(pool(D32(o_export(e))), name))
+            return D32(o_export(e) + 4);
+    return 0;
+}
+
+/* Does the build keep +Drive storage, and what does it give it (drive_store.Base.from_build)?
+ * It does with the six scopes in its storage record, the tables core_store_ids, core_lock_codes,
+ * core_lock_ccs, core_field_inits and core_handles, and core 0.14's core_store_gens. Read before
+ * the boot rewrites anything: the flashed entries are each table's first `count`. */
+static void store_base(void)
+{
+    u32 o = D32(0x40), i;
+    L.store = 0;
+    L.t_ids = find_named("core_store_ids");
+    L.t_codes = find_named("core_lock_codes");
+    L.t_ccs = find_named("core_lock_ccs");
+    L.t_inits = find_named("core_field_inits");
+    L.t_handles = find_named("core_handles");
+    L.gens_at = flashed_export("core_store_gens");
+    if (L.t_ids < 0 || L.t_codes < 0 || L.t_ccs < 0 || L.t_inits < 0 || L.t_handles < 0 || !L.gens_at
+        || D16(o + 8) != DS_SCOPES || table_count(L.t_ids) < 1)
+        return;
+    for (i = 0; i < DS_SCOPES; i++) {
+        if (dl_strcmp(pool(D32(o + 12 + 16 * i)), SCOPE_NAMES[i]))
+            return;
+        L.sb.room[i] = D32(o + 12 + 16 * i + 4);
+        L.sb.used[i] = D32(o + 12 + 16 * i + 8);
+        L.sb.gen[i] = D32(o + 12 + 16 * i + 12);
+    }
+    L.sb.flashed_id = dl_rd32(DL_MEM(table_addr(L.t_ids)));
+    L.sb.nanc = table_count(L.t_ids) - 1;
+    if (L.sb.nanc > DS_MAX_IDS)
+        L.sb.nanc = DS_MAX_IDS;
+    for (i = 0; i < L.sb.nanc; i++)
+        L.sb_anc[i] = dl_rd32(DL_MEM(table_addr(L.t_ids) + 4 * (i + 1)));
+    L.sb.anc = L.sb_anc;
+    L.sb.codes = DL_MEM(table_addr(L.t_codes));
+    L.sb.ncodes = table_count(L.t_codes);
+    L.sb.ccs = DL_MEM(table_addr(L.t_ccs));
+    L.sb.nccs = table_count(L.t_ccs);
+    L.sb.inits = table_count(L.t_inits);
+    L.sb.spare[DS_T_CODES] = (s32)(table_cap(L.t_codes) - table_count(L.t_codes));
+    L.sb.spare[DS_T_CCS] = (s32)(table_cap(L.t_ccs) - table_count(L.t_ccs));
+    L.sb.spare[DS_T_INITS] = (s32)(table_cap(L.t_inits) - table_count(L.t_inits));
+    L.sb.spare[DS_T_HANDLES] = (s32)(table_cap(L.t_handles) - table_count(L.t_handles));
+    L.store = 1;
+}
+
+/* The living mods' fields in id order, each mod's in its order (dstore.h). -> how many. */
+static u32 wanted(void)
+{
+    u32 n = 0, q;
+    int i;
+    for (i = 0; i < L.nmods; i++) {
+        const struct dmod *m = &L.mods[L.order[i]];
+        if (!m->alive)
+            continue;
+        for (q = 0; q < m->fld_n; q++) {
+            const struct fld *f = &L.fld[m->fld_first + q];
+            struct ds_want *w = &L.want[n];
+            w->mod = astr(m->id);
+            w->sym = L.arena + f->sym;
+            w->scope = f->scope;
+            w->bits = f->bits;
+            w->flags = f->flags;
+            w->init = f->init;
+            L.want_fld[n++] = (u16)(m->fld_first + q);
+        }
+    }
+    return n;
+}
+
+static char *put_num(char *p, u32 v)
+{
+    char t[10];
+    int k = 0;
+    do
+        t[k++] = (char)('0' + v % 10);
+    while (v /= 10);
+    while (k)
+        *p++ = t[--k];
+    return p;
+}
+
+/* The room (drive_store.fit), one refusal: the last living mod in id order that needs what is
+ * short. -> 1 when it refused one. */
+static int fit_round(void)
+{
+    struct ds_short sh;
+    char d[32], *p = d;
+    const char *w;
+    u32 n;
+    if (!L.store || !(n = wanted()) || !ds_fit_one(&L.sb, L.want, n, 0, &sh))
+        return 0;
+    for (w = ds_what[sh.what]; *w;)
+        *p++ = *w++;
+    *p++ = ' ';
+    p = put_num(p, (u32)sh.need);
+    *p++ = ' ';
+    p = put_num(p, sh.have < 0 ? 0 : (u32)sh.have);
+    *p = 0;
+    refuse(&L.mods[L.fld[L.want_fld[sh.victim]].mod], DL_R_STORE, 0, d);
+    return 1;
+}
+
+/* Check rounds and the room, until neither refuses a mod. */
+static void settle(void)
+{
+    do
+        while (check_round())
+            ;
+    while (fit_round());
+}
+
+/* The living mods' fields placed from /mods/.store (drive_store.allocate): their descriptors for
+ * pass 2, and dl_store_out for the boot. -> 1, 0 when the heap has no room. */
+static int place_store(void)
+{
+    u32 n, i;
+    if (!L.store)
+        return 1;
+    ds_out_free(&dl_store_out);
+    n = wanted();
+    if (ds_allocate(&L.sb, dl_store_prev, dl_store_prev_n, L.want, n, &dl_store_out))
+        return 0;
+    for (i = 0; i < n; i++)
+        L.fdesc[L.want_fld[i]] = dl_store_out.desc[i];
+    return 1;
+}
+
+/* One loader-only table: the flashed entries, then ours (bytes, or with words the u32s), then
+ * zeros to its end. */
+static void put_entries(int t, const u8 *data, const u32 *words, u32 n)
+{
+    u32 esz = table_entry(t), cnt = table_count(t), cap = table_cap(t), i;
+    u8 *tab = DL_MEM(table_addr(t));
+    if (cnt + n > cap)
+        n = cap - cnt;
+    for (i = 0; i < n; i++)
+        if (words)
+            dl_wr32(tab + (cnt + i) * esz, words[i]);
+        else
+            dl_memcpy(tab + (cnt + i) * esz, data + i * esz, esz);
+    dl_memset(tab + (cnt + n) * esz, 0, (cap + 1 - cnt - n) * esz);
+}
+
+/* The placement into the core's tables: the live layout ID and its ancestors, each scope's
+ * generation, and the +Drive fields' codes, CCs, inits and handles. */
+static void write_store(void)
+{
+    u8 *ids;
+    u32 i, cap;
+    const struct ds_out *o = &dl_store_out;
+    if (!L.store || !o->bytes)
+        return;
+    ids = DL_MEM(table_addr(L.t_ids));   /* the ID, its ancestors, then zeros */
+    cap = table_cap(L.t_ids);
+    dl_memset(ids, 0, 4 * (cap + 1));
+    dl_wr32(ids, o->id);
+    for (i = 0; i < o->nanc && i + 1 < cap; i++)
+        dl_wr32(ids + 4 * (i + 1), o->anc[i]);
+    dl_memcpy(DL_MEM(L.gens_at), o->gen, DS_SCOPES);
+    put_entries(L.t_codes, o->codes, 0, o->ncodes);
+    put_entries(L.t_ccs, o->ccs, 0, o->nccs);
+    put_entries(L.t_inits, 0, o->inits, o->ninits);
+    put_entries(L.t_handles, 0, o->handles, o->nhandles);
 }
 
 /* The link state for n lines and the flashed build's names: the first part of a link and a
@@ -1591,6 +1938,7 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
     L.pool = D32(0x18);
     L.area_lo = D32(D32(0x3c) + 4);
     L.area_hi = D32(D32(0x3c) + 8);
+    store_base();
     if (!pools(n))
         return -1;
     L.arena_n = 1;                       /* offset 0 holds "" */
@@ -1644,6 +1992,8 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
         set_status(m, DL_ST_REFUSED, code, 0, what);
         if (m->exp_n)
             L.nsyms = m->exp_first;
+        if (m->fld_n)
+            L.nfld = m->fld_first;
         if (m->ctr_n)
             L.nctr = m->ctr_first;
         return;
@@ -1710,8 +2060,7 @@ static int check_end(int n, char (*ver)[DL_VER_MAX])
         }
     }
     for (rounds = 0; rounds < 4 * DL_MAX_MODS; rounds++) {
-        while (check_round())
-            ;
+        settle();
         if (layout())
             break;
     }
@@ -1855,10 +2204,19 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
     /* check, layout and pass 2, until a pass 2 refuses nothing */
     for (rounds = 0; rounds < 4 * DL_MAX_MODS; rounds++) {
         int restart = 0;
-        while (check_round())
-            ;
+        settle();
         if (!layout())
             continue;
+        if (!place_store()) {
+            dl_skip_reason = DL_SKIP_MEMORY;
+            for (i = 0; i < L.nmods; i++)
+                if (L.mods[i].alive)
+                    refuse(&L.mods[i], DL_R_LIMIT, 0, 0);
+            if (dirty_hi > dl_used_lo)
+                dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
+            dl_used_hi = dl_used_lo;
+            return 0;
+        }
         L.nent = L.edata_n = L.nerel = 0;
         if (dirty_hi < dl_used_hi)       /* an earlier round's pass 2 may have written past */
             dirty_hi = dl_used_hi;       /* this layout's end: zero that too */
@@ -1893,9 +2251,12 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         if (dirty_hi > dl_used_lo)
             dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
         dl_used_hi = dl_used_lo;
+        if (place_store())               /* nothing loads: every field parks */
+            write_store();
         return 0;
     }
     bind(1);
+    write_store();
     for (i = 0; i < L.nmods; i++) {
         struct dmod *m = &L.mods[L.order[i]];
         if (!m->alive)
@@ -1918,6 +2279,7 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
     int loaded;
     dl_inits_n = 0;
     dl_used_lo = dl_used_hi = 0;
+    ds_out_free(&dl_store_out);
     if (n < 0 || n > DL_MAX_MODS) {
         records(0);
         dl_skip_reason = DL_SKIP_COUNT;
