@@ -138,6 +138,9 @@ def test_core_ar2_sites():
                     ((76, 0x400a86dc), (60, 0x400a98b4), (64, 0x400a9926), (68, 0x400a99c2), (72, 0x400a8560))}
             ptrs.update({0x401dcea0 + o: v for o, v in
                          ((76, 0x400a870c), (60, 0x400a9a26), (64, 0x400a9a98), (68, 0x400a9b0e), (72, 0x400a8560))})
+            # the SampleManager views' tick through their list's vtable (+0x30; 0x401e84f8 and
+            # 0x401e71cc, stock's thunk 0x400e4db6), for the mod folders' refill
+            ptrs.update({0x401e84f8 + 0x30: 0x400e4db6, 0x401e71cc + 0x30: 0x400e4db6})
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -202,8 +205,10 @@ def test_core_ar2_sites():
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
     # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and
     # the pads' three (ev_pad: strike, release, pressure) and the LEDs' two (led_set's and
-    # led_colour's slot colour sends), and the engine push's sound (0.15+: core_trig_sound)
-    assert len(mod['sites']) == 131
+    # led_colour's slot colour sends), and the engine push's sound (0.15+: core_trig_sound), and
+    # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
+    # DIR's calls, and the two SampleManager vtables' tick)
+    assert len(mod['sites']) == 145
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x
@@ -575,6 +580,65 @@ def test_core_ar2_pads_and_leds():
     with tempfile.TemporaryDirectory() as tmp:
         core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
         app = sdkbuild.build(os.path.join(ROOT, 'examples', 'pad-check-ar2'), SYX, tmp)[0]
+        patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
+
+
+if __name__ == '__main__':
+    import traceback
+    ok = skipped = failed = 0
+    for n in sorted(k for k in globals() if k.startswith('test_')):
+        try:
+            globals()[n]()
+            print('ok      %s' % n)
+            ok += 1
+        except Skip as e:
+            print('SKIP    %s (%s)' % (n, e))
+            skipped += 1
+        except Exception:
+            print('FAIL    %s' % n)
+            traceback.print_exc()
+            failed += 1
+    print('%d passed, %d failed, %d skipped' % (ok, failed, skipped))
+    sys.exit(1 if failed else 0)
+
+
+def test_core_ar2_drive_folders():
+    """the mod folders' sites are stock's first instructions, calls and vtable slots, the
+    collection holds 8, and drive-check links (the build needs the cross toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    want = {'0x4007c0b4': 'core_drive_readdir_site', '0x40080504': 'core_drive_resolve_site',
+            '0x400807d2': 'core_drive_exists', '0x40080910': 'core_drive_size',
+            '0x400808b6': 'core_drive_count', '0x400b719a': 'core_drive_load',
+            '0x4007c640': 'core_drive_path_site', '0x40080060': 'core_drive_check',
+            '0x4007b41c': 'core_drive_link_site', '0x4007c1dc': 'core_drive_mkdir',
+            '0x400ea820': 'core_drive_ref_site', '0x400ea6b2': 'core_drive_mkdir_site',
+            '0x401e8528': 'core_drive_list_tick', '0x401e71fc': 'core_drive_list_tick'}
+    got = {x['addr']: x for x in j['sites'] if x.get('target', '').startswith('core_drive_')}
+    assert sorted(got) == sorted(want), sorted(got)
+    for addr, target in want.items():
+        assert got[addr]['target'] == target, got[addr]
+    assert got['0x400ea820']['stock'] == '4eb94007e698' and got['0x400ea820']['op'] == 'jsr'
+    assert got['0x400ea6b2']['stock'] == '4eb94007c1dc' and got['0x400ea6b2']['op'] == 'jsr'
+    for addr in ('0x401e8528', '0x401e71fc'):
+        assert got[addr]['op'] == 'ptr' and got[addr]['stock'] == '400e4db6'
+    assert j['collections']['core_drive_folders'] == {'entry': 4, 'spare': 8, 'max': 8}
+    assert 'drive.c' in j['sources'] and 'drive.s' in j['sources']
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 mod folders are for 1.74')
+    for x in got.values():
+        o = int(x['addr'], 16) - DEV.main_load
+        assert img[o:o + len(x['stock']) // 2].hex() == x['stock'], x
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'drive-check-ar2'), SYX, tmp)[0]
         patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
 
 
