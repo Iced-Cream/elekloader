@@ -1152,14 +1152,17 @@ walks the class tree and compares type names with strcmp. On the emulator
 that is about two thirds of the CPU the UI uses outside the audio render,
 on every page and whether or not Overbridge is linked.
 
-With the skip on, the cast keeps its answers in a memo: 128 entries,
-direct-mapped, keyed by the source subobject's vtable pointer, the source
+With the skip on, the cast keeps its answers in a memo: 256 sets of 8
+entries (32 KB), keyed by the source subobject's vtable pointer, the source
 and target types and the hint, holding the offset from the source to the
-answer (or "no answer"). The vtable pointer fixes the complete type and
+answer (or "no answer"). The idle main screen alone casts with over 200
+keys (11 view types x 20 targets x 2 hints), so the sets are 8-way: a new
+answer goes in front of its set and the set's oldest drops out. A cast
+whose hint or offset doesn't fit 16 bits always runs stock's search. The vtable pointer fixes the complete type and
 where the subobject sits in it, and vtables and type infos are in flash, so
 the memo's answer is always the one stock's search gives. A miss runs
 stock's search and keeps its answer. Lookup and store run with interrupts
-masked for a dozen instructions, so casts from different tasks never see
+masked for at most about 80 instructions, so casts from different tasks never see
 half an entry. **It changes nothing the unit does or shows**, only the CPU.
 
 **Off at boot: on only if asked and nobody holds it off**
