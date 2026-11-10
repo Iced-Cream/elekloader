@@ -1132,9 +1132,15 @@ from the frozen words.
 Each slot's cost at the site, per block, in the emulator's count: stock 2;
 off 11; on, a sounding voice 14, a skipped slot 110 to 160 (with its call
 made and checked every 256th block), a watched slot about 120, against 1100
-to 1400 for an idle machine call. A knob, an LFO or a kit's values on a
-skipped slot reach the voice at its next check (at most 256 blocks, 170 ms;
-a machine change in the next block); the voice is silent by then.
+to 1400 for an idle machine call. A checked call (core making the call and
+comparing the 0x3d8-byte frame) costs about 5 % of a block, so at most one
+slot makes one in a block; the turn starts at slot `core_block & 7`, and a
+watched slot without it gets stock's call. Without that limit, a STOP (a trig
+to every track) or the skip's switch-on put the slots in step, and every
+256th block made five or six checked calls and ran past the block's time
+(T238). A knob, an LFO or a kit's values on a skipped slot reach the voice at
+its next check (at most 264 blocks, 176 ms; a machine change in the next
+block); the voice is silent by then.
 
 ## Checked so far
 
