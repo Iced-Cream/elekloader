@@ -12,6 +12,8 @@ their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the sm
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
 defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
 itself (below), and from 0.14 the silent-voice skip in `idle.c` and `idle.s` and the sample-layer skip in `sample.s` (below). On its own it changes nothing
+
+itself (below), and from 0.14 the silent-voice skip in `idle.c` and `idle.s` and the UI skip in `cast.s` (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe, and from 0.14 the skip, which starts a silent voice's next
 note from its power-on state.
 
@@ -1218,6 +1220,40 @@ What still runs for every slot: the fetch and its DMA (shared by all
 slots in one pipeline), the per-slot rate (0x4011c1e0) and the amp envelope
 (0x40109940, not part of the sample layer). In the emulator the three steps
 the skip leaves out cost about 1 point of render load per idle slot.
+
+## The UI skip (0.14)
+
+`cast.s`, at 0x401b82f2, the entry of stock's `__dynamic_cast` (libstdc++).
+The main screen's refresh (0x400c9272) asks "is view X open?" about twenty
+times, each by casting every entry of the open-view list (the finders
+0x401a1ed6..0x401a2d02). The views use multiple inheritance, so every cast
+walks the class tree and compares type names with strcmp. On the emulator
+that is about two thirds of the CPU the UI uses outside the audio render,
+on every page and whether or not Overbridge is linked.
+
+With the skip on, the cast keeps its answers in a memo: 128 entries,
+direct-mapped, keyed by the source subobject's vtable pointer, the source
+and target types and the hint, holding the offset from the source to the
+answer (or "no answer"). The vtable pointer fixes the complete type and
+where the subobject sits in it, and vtables and type infos are in flash, so
+the memo's answer is always the one stock's search gives. A miss runs
+stock's search and keeps its answer. Lookup and store run with interrupts
+masked for a dozen instructions, so casts from different tasks never see
+half an entry. **It changes nothing the unit does or shows**, only the CPU.
+
+**Off at boot: on only if asked and nobody holds it off**
+(`analog-rytm-mk2/ui.h`):
+
+| symbol | what |
+|---|---|
+| `core_ui_skip_want` | `uint8_t`, 0 at boot: the user's choice, written by the one mod that offers it as a setting; any context, any time (read once per cast) |
+| `core_ui_skip_hold` | `uint32_t`, 0 at boot: the count of holds; the skip runs only while it is 0 |
+| `core_ui_skip_hold_add()`, `core_ui_skip_hold_release()` | a mod that measures stock's UI load adds a hold when it starts and releases it when it ends, once each; one instruction each, any context |
+| `core_ui_skip_hits`, `core_ui_skip_misses` | the casts answered from the memo and those that ran stock's search, since boot, while the skip is on |
+
+Off, the site costs two tests more than stock's cast. The memo keeps its
+entries while the skip is off; they stay right, because they never depend
+on anything that changes.
 
 ## Checked so far
 
