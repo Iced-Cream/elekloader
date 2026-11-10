@@ -117,7 +117,7 @@ static void d_count(int zero_written)
 /* 0x4010e7c4: in place of `jsr 0x4010da24` */
 void core_fx_delay(void)
 {
-    if (!on() || !zero(DELAY_BUS, BUS_LONGS)) {
+    if (!on() || (core_fx_skip_want & 4) /* TEST ONLY: 4 = no delay skip */ || !zero(DELAY_BUS, BUS_LONGS)) {
         d_still = 0;
         d_zero_blocks = 0;
         DELAY();
