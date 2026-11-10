@@ -2656,7 +2656,7 @@ const struct smpl_machine my_smpl = {
 - `voices`: bit v lets voice v run it (`CORE_VOICE_*`). A track whose voice
   is left out is not offered it.
 - `bind`, `src`: `SMPL_FREE` is chosen in the sound setup menu's SMPL
-  MACHINE row only; `SMPL_DEFAULT` runs on AUTO for sounds of SRC machine
+  MACHINE row or the list TRK + SMPL opens only; `SMPL_DEFAULT` runs on AUTO for sounds of SRC machine
   `src`; `SMPL_REQUIRED` always runs for them, and the row doesn't turn.
   `src` is a slot, `CORE_MACHINE(i)` for a mod's own SRC machine.
 - `engine`: called in the audio interrupt once a block for each voice that

@@ -79,3 +79,25 @@ smpl_row_label_s:
         unlk    %a6
         rts
 
+
+| the machine list's row label: stock's label functor invoker, (out in %a0,
+| functor, row) -> the std::string at out, from smpl_list_label(row)
+        .globl  smpl_list_label_s
+        .align  2
+smpl_list_label_s:
+        link.w  %a6,#-4
+        move.l  %d2,-(%sp)
+        move.l  %a0,%d2                 | out
+        move.l  12(%a6),-(%sp)          | the row
+        jsr     smpl_list_label
+        addq.l  #4,%sp
+        pea     -1(%a6)                 | the allocator
+        move.l  %d0,-(%sp)
+        move.l  %d2,-(%sp)
+        jsr     STRING_INIT
+        lea     12(%sp),%sp
+        move.l  %d2,%d0
+        movea.l %d2,%a0
+        move.l  -8(%a6),%d2
+        unlk    %a6
+        rts

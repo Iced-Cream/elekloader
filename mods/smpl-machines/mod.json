@@ -21,7 +21,7 @@
  ],
  "exports": ["smpl_track_machine"],
  "collections": {"smpl_machines": 4},
- "subscribe": [{"event": "ev_tick", "fn": "smpl_tick", "order": 40}],
+ "subscribe": [{"event": "ev_tick", "fn": "smpl_tick", "order": 40}, {"event": "ev_key", "fn": "smpl_key", "order": 40}],
  "contribute": [
   {"to": "core_page_fns", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_page_fn4", 0]]},
   {"to": "core_page_fns", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_page_fn5", 0]]},

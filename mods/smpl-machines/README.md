@@ -10,7 +10,8 @@ engine. Mods such as PLAITS, DAISYSP and DSP SAMPLE add their machines here
 and list smpl-machines as a dependency, so they combine in one build.
 
 On its own, and for a sound that runs no SMPL machine, it changes nothing
-but one extra row, SMPL MACHINE, in the sound setup menu.
+but one extra row, SMPL MACHINE, in the sound setup menu, and the machine
+list TRK + SMPL opens.
 
 | | |
 |---|---|
@@ -35,8 +36,11 @@ Which machine a sound runs:
 1. **Required**: one whose `bind` is `SMPL_REQUIRED` for the sound's SRC
    machine. The menu row then shows it and doesn't turn.
 2. **Chosen**: the sound's `smpl_choice`, picked in the sound setup menu's
-   SMPL MACHINE row, under MACHINE: AUTO, STOCK, then the machines the
-   track's voice may run.
+   SMPL MACHINE row, under MACHINE, or in the list SMPL opens while TRK is
+   held: AUTO, STOCK, then the machines the track's voice may run. The list
+   is stock's SRC machine list with these rows: UP and DOWN choose as you
+   go, YES keeps the choice and NO puts the first one back. With a required
+   machine, or no machines, TRK + SMPL is stock's.
 3. **Auto**: on AUTO, one whose `bind` is `SMPL_DEFAULT` for the SRC
    machine, else stock's.
 
@@ -70,5 +74,4 @@ sound that names it plays stock's.
 - Defaults on choosing a machine wait for `core_param_set` (core-ar2's
   engines work); until then a machine's `def` is the knob's default on a
   new sound and in the pop-up, not a value written on choosing.
-- TRK + SMPL, a machine list like SRC's, is still to come.
 

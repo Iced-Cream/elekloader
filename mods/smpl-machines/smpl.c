@@ -389,3 +389,167 @@ uint32_t smpl_menu_row(void *view)
     menu_row = (void *)row;
     return row;
 }
+
+/* ---- the machine list: TRK + SMPL ---------------------------------------
+ * Stock's MachineListView (the SRC page's list), built as the SRC page
+ * builds it (0x400d3f1c), with its rows replaced by the choices this track
+ * offers: AUTO, STOCK and the machines that fit it, each row's id its
+ * choice. UP/DOWN step the choice (the view's step callback, as stock's
+ * steps the SRC machine), YES keeps it, NO puts the first one back (the
+ * view's revert callback), and stock's own listeners close it when the
+ * track changes. */
+#define LIST_CTOR ((void (*)(void *, int32_t, int32_t, uint32_t, uint32_t, uint32_t, uint32_t, \
+                             int32_t, int32_t, int32_t))0x400def76)
+#define LIST_SIZE 0x1e8
+#define LIST_CTRL_VT 0x401e38d8         /* its shared_ptr's control block */
+#define LIST_SELECT ((void (*)(void *, int32_t))0x400dea5e)
+#define LIST_ON_STEP ((void (*)(void *, struct functor *))0x400df428)
+#define LIST_ON_REVERT ((void (*)(void *, struct functor *))0x400df3b2)
+#define MODEL_CLEAR ((void (*)(void *))0x40072914)
+#define MODEL_ADD ((void (*)(void *, uint32_t))0x400727f2)
+#define ROW_ID(row) (((const int32_t *)(row))[1])
+#define UI_ROOT ((uint32_t (*)(void))0x401822f6)
+#define UI_PUSH ((uint32_t (*)(uint32_t, uint32_t *, int32_t))0x400a1ef8)
+#define SP_RELEASE ((void (*)(uint32_t *))0x40170bd8)
+#define WP_ALIVE ((uint32_t (*)(uint32_t *))0x40181af4)
+#define WP_RELEASE ((void (*)(uint32_t))0x401819cc)
+#define EMPTY_FN_MANAGER ((void *)0x400ee514)  /* stock's, for a functor that holds nothing */
+#define KEY_TRK 0x86
+#define KEY_SMPL 0x32
+#define KEY_PRESS 0x01
+#define KEY_REPEAT 0x08
+#define KEY_RELEASE 0x10
+
+extern char smpl_list_label_s[];                                    /* gate.s */
+static void *list_view;
+static uint32_t list_ctrl;              /* a weak hold on the open list */
+static int trk_down, smpl_taken;
+static char list_text[16];
+
+/* the row's label: its choice, padded as stock pads machine names */
+uint32_t smpl_list_label(const void *row)
+{
+    int c = ROW_ID(row), i = 0;
+    const struct smpl_machine *m;
+    const char *s = c == CHOICE_AUTO ? "AUTO" : c == CHOICE_STOCK ? "STOCK"
+                  : (m = by_id(c - CHOICE_FIRST)) != 0 ? m->name : "----";
+    while (i < 15 && s[i]) {
+        list_text[i] = s[i];
+        i++;
+    }
+    while (i < 15)
+        list_text[i++] = ' ';
+    list_text[15] = 0;
+    return (uint32_t)list_text;
+}
+
+static void list_step(void *f, int32_t dir)
+{
+    unsigned char *s = core_current_sound_item();
+    int t = core_current_track();
+    unsigned c;
+    (void)f;
+    if (!s || t < 0 || t >= 12 || !dir || !list_view)
+        return;
+    c = core_store_get(STORE(smpl_choice), s, 0);
+    c = step_choice(c, dir > 0 ? 1 : -1, t);
+    core_store_set(STORE(smpl_choice), s, 0, c);
+    LIST_SELECT(list_view, (int32_t)c);
+}
+
+static void list_revert(void *f, int32_t first)
+{
+    unsigned char *s = core_current_sound_item();
+    (void)f;
+    if (s && first >= 0 && first < CHOICE_FIRST + MAX_MACHINES)
+        core_store_set(STORE(smpl_choice), s, 0, (unsigned)first);
+}
+
+static void list_add(void *model, int32_t c)
+{
+    struct functor label = {{0, 0}, (void *)0x400ee470, smpl_list_label_s};
+    struct functor none = {{0, 0}, 0, 0};
+    uint32_t row = NEW(0x54);
+    if (!row)
+        return;
+    ROW_INIT((void *)row, &label, &none, &none, &none, c, 8);
+    MODEL_ADD(model, row);
+}
+
+static void list_open(void)
+{
+    unsigned char *s = core_current_sound_item();
+    int t = core_current_track(), k;
+    unsigned c;
+    uint32_t view, ctrl, sp[2];
+    struct functor step = {{0, 0}, EMPTY_FN_MANAGER, (void *)list_step};
+    struct functor revert = {{0, 0}, EMPTY_FN_MANAGER, (void *)list_revert};
+    if (!s || t < 0 || t >= 12 || n_machines <= 0)
+        return;
+    if (list_ctrl && WP_ALIVE(&list_ctrl))
+        return;                                     /* open already */
+    c = core_store_get(STORE(smpl_choice), s, 0);
+    if (!(view = NEW(LIST_SIZE)))
+        return;
+    LIST_CTOR((void *)view, t, (int32_t)c, 0, 0, 0, 0, 0x46, 0x3a, 1);
+    if (!(ctrl = NEW(16))) {
+        /* the view stays: freeing it needs its own destructor; it is not
+         * pushed, so nothing draws it */
+        return;
+    }
+    ((uint32_t *)ctrl)[0] = LIST_CTRL_VT;
+    ((uint32_t *)ctrl)[1] = 1;
+    ((uint32_t *)ctrl)[2] = 2;                      /* ours: a weak hold */
+    ((uint32_t *)ctrl)[3] = view;
+    if (list_ctrl)
+        WP_RELEASE(list_ctrl);
+    list_ctrl = ctrl;
+    list_view = (void *)view;
+    MODEL_CLEAR((char *)view + 0x4c);
+    list_add((char *)view + 0x4c, CHOICE_AUTO);
+    list_add((char *)view + 0x4c, CHOICE_STOCK);
+    for (k = 0; k < MAX_MACHINES; k++) {
+        const struct smpl_machine *m = by_id(k);
+        if (m && fits(m, t))
+            list_add((char *)view + 0x4c, CHOICE_FIRST + k);
+    }
+    LIST_SELECT((void *)view, (int32_t)c);
+    LIST_ON_STEP((void *)view, &step);
+    LIST_ON_REVERT((void *)view, &revert);
+    sp[0] = view;
+    sp[1] = ctrl;
+    UI_PUSH(UI_ROOT(), sp, 0);
+    SP_RELEASE(&sp[1]);
+}
+
+/* ev_key: SMPL while TRK is held opens the list; the SMPL key's events are
+ * taken until it is let go, so stock's SMPL page doesn't open under it */
+int smpl_key(void *brain, void *ev)
+{
+    const uint8_t *e = (const uint8_t *)ev;
+    uint32_t code = *(const uint32_t *)(e + 12), flags = *(const uint32_t *)(e + 16);
+    (void)brain;
+    if (code == KEY_TRK) {
+        if (flags & KEY_RELEASE)
+            trk_down = 0;
+        else if (flags & KEY_PRESS)
+            trk_down = 1;
+        return 0;
+    }
+    if (code != KEY_SMPL)
+        return 0;
+    if (smpl_taken) {
+        if (flags & KEY_RELEASE)
+            smpl_taken = 0;
+        return 1;
+    }
+    if (trk_down && (flags & KEY_PRESS) && !(flags & (KEY_REPEAT | KEY_RELEASE))) {
+        unsigned char *s = core_current_sound_item();
+        if (n_machines <= 0 || !s || bound((signed char)s[SOUND_MACHINE], SMPL_REQUIRED))
+            return 0;                               /* nothing to choose: stock's SMPL */
+        smpl_taken = 1;
+        list_open();
+        return 1;
+    }
+    return 0;
+}
