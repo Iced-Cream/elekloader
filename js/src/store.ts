@@ -69,7 +69,9 @@ export type Lock = {
   ccs?: Cc[]; freed_ccs?: Cc[]
   knobs?: Knob[]; freed_knobs?: Knob[]; next_knob?: number
   machines?: Machine[]; freed_machines?: Machine[]
+  pool_ids?: PoolId[]; freed_pool_ids?: PoolId[]
 }
+export type PoolId = { pool: string; mod: string; index: number; id: number }
 export type Knob = { mod: string; first: number; count: number }
 export type Machine = { mod: string; index: number; slot: number; knobs: number }
 export type Code = { mod: string; sym: string; code: number; kind?: string }
@@ -424,6 +426,79 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
   }
   checkKnobs(lock)
   checkMachines(lock)
+  checkPoolIds(lock)
+}
+
+function checkPoolIds(lock: Record<string, any>): void {
+  if (!['pool_ids', 'freed_pool_ids'].some(k => Object.hasOwn(lock, k))) return
+  const seen = new Set<string>(), ids = new Set<string>()
+  for (const k of ['pool_ids', 'freed_pool_ids']) {
+    const rs = lock[k]
+    if (!Array.isArray(rs)) throw new ModError(`lockfile: "${k}" is a list`)
+    for (const r of rs) {
+      if (!isDict(r) || !sameKeys(r, ['pool', 'mod', 'index', 'id']) || typeof r.pool !== 'string' || typeof r.mod !== 'string'
+        || !['index', 'id'].every(x => whole(r[x]))
+        || (k === 'pool_ids' && (seen.has(r.pool + '\0' + r.mod + '\0' + r.index) || ids.has(r.pool + '\0' + r.id))))
+        throw new ModError(`lockfile: a bad entry in "${k}"`)
+      if (k === 'pool_ids') { seen.add(r.pool + '\0' + r.mod + '\0' + r.index); ids.add(r.pool + '\0' + r.id) }
+    }
+  }
+}
+
+/** Give each mod in want (mod id -> n) n ids of the pool named pool, span = [first, last], in lock (changed in place;
+ * {} for a build without a lockfile). -> [mod id -> [id, ...], notes]. Throws ModError. store.pool_ids. */
+export function poolIds(lock: Partial<Lock>, pool: string, want: Map<string, number>, span: [number, number]): [Map<string, number[]>, string[]] {
+  const [first, last] = span
+  const mine = (lock.pool_ids ?? []).filter(r => r.pool === pool)
+  const freed0 = (lock.freed_pool_ids ?? []).filter(r => r.pool === pool)
+  if (!want.size && !mine.length && !freed0.length) return [new Map(), []]
+  const notes: string[] = [], held: PoolId[] = []
+  let freed: PoolId[] = []
+  for (const r of mine) {
+    if (r.index < (want.get(r.mod) ?? 0) && first <= r.id && r.id <= last) held.push({ ...r })
+    else {
+      freed.push({ ...r })
+      notes.push(`${r.mod}: id ${r.id} of pool ${pool} freed, kept for it until the unused ids run out`)
+    }
+  }
+  freed.push(...freed0.filter(r => first <= r.id && r.id <= last).map(r => ({ ...r })))
+  const kept = new Set(held.map(r => r.mod + '\0' + r.index))
+  for (const mod of [...want.keys()].sort(cmpStr)) {
+    for (let i = 0; i < want.get(mod)!; i++) {
+      if (kept.has(mod + '\0' + i)) continue
+      const taken = new Set(held.map(r => r.id))
+      const back = freed.filter(r => r.mod === mod && r.index === i && !taken.has(r.id))
+      freed = freed.filter(r => !(r.mod === mod && r.index === i))
+      let at: number
+      if (back.length) {
+        at = back[back.length - 1].id
+        notes.push(`${mod}: id ${at} of pool ${pool} back`)
+      } else {
+        const busy = new Set([...taken, ...freed.map(r => r.id)])
+        let fit: number[] = []
+        for (let v = first; v <= last; v++) if (!busy.has(v)) fit.push(v)
+        if (!fit.length && freed.length) {
+          notes.push(`pool ${pool}: ids freed by ${[...new Set(freed.map(r => r.mod))].sort(cmpStr).join(', ')} given out again`)
+          freed = []
+          fit = []
+          for (let v = first; v <= last; v++) if (!taken.has(v)) fit.push(v)
+        }
+        if (!fit.length) throw new ModError(`${mod} asks for more ids from the pool ${pool} than it has free (${first}..${last})`)
+        at = fit[0]
+        notes.push(`${mod}: id ${at} of pool ${pool}`)
+      }
+      held.push({ pool, mod, index: i, id: at })
+    }
+  }
+  lock.pool_ids = [...(lock.pool_ids ?? []).filter(r => r.pool !== pool), ...held]
+    .sort((a, b) => cmpStr(a.pool, b.pool) || a.id - b.id)
+  lock.freed_pool_ids = [...(lock.freed_pool_ids ?? []).filter(r => r.pool !== pool), ...freed]
+  const out = new Map<string, number[]>()
+  for (const r of [...held].sort((a, b) => cmpStr(a.mod, b.mod) || a.index - b.index)) {
+    if (!out.has(r.mod)) out.set(r.mod, [])
+    out.get(r.mod)!.push(r.id)
+  }
+  return [out, notes]
 }
 
 function checkMachines(lock: Record<string, any>): void {

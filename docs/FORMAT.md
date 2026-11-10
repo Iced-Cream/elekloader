@@ -76,6 +76,8 @@ A format-2 mod is a relocatable object:
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
 | `machine_knobs` | the machines this mod adds by count: a list of up to 64, each the knobs it needs, 0..16; the linker gives each a machine slot (the Analog Rytm MKII; "Machine slots and page ids" below) |
 | `pages` | a count of page ids, 0..256, the linker gives this mod (the Analog Rytm MKII; "Machine slots and page ids" below) |
+| `id_pools` | ids this mod hands out to other mods: `{"name": [first, last]}`, 0..65535, at most 4096 a pool ("Id pools" below) |
+| `pool_ids` | ids this mod asks for from another mod's pool: `{"name": n}`, 1..4096 ("Id pools" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 | `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
@@ -267,7 +269,8 @@ each program on its own.
    build's lockfile ("Mod storage" below) and defines each field's `sym`
    as an absolute symbol, its descriptor. When a mod declares `knobs`, the
    linker gives it its run of ids ("Knob ids" below), and likewise for
-   `machine_knobs` and `pages` ("Machine slots and page ids" below).
+   `machine_knobs` and `pages` ("Machine slots and page ids" below), and
+   `pool_ids` ("Id pools" below).
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -447,6 +450,28 @@ the lockfile does not keep them: they can change from one build to the
 next. The manifest carries them as `pages` (`{mod: [first, count]}`).
 `"machine_knobs"` or `"pages"` on a device without them, or a mod that defines
 `__machines` or `__pages` itself, is refused.
+
+### Id pools
+
+A mod may hand out ids of its own to the other mods of a build: a framework
+mod's machines, say, whose number each sound saves (smpl-machines' SMPL
+machines on the Analog Rytm MKII). It declares the pool,
+`"id_pools": {"smpl_machines": [1, 30]}`, and a mod that adds to it asks
+for a count, `"pool_ids": {"smpl_machines": 2}`. A relocation to
+`__pool_<name>` with addend i (`abs32` or `abs16`) is written as that mod's
+i-th id, not as a sum. The linker (`store.pool_ids`, the same in
+`js/src/store.ts`) gives each new id, by mod id, the lowest of the pool's
+never-used ids. An id is stored data, so the lockfile keeps them in
+`pool_ids` and `freed_pool_ids` (`pool`, `mod`, `index`, `id`), outside the
+layout ID: an id stays with its mod while the mod asks for it; one whose mod
+leaves (or asks for fewer) moves to `freed_pool_ids` and comes back when it
+returns; freed ids are given out again, lowest first, only when no
+never-used id is left. Without a lockfile the ids are given out the same
+way. The manifest carries them as `pool_ids` (`{pool: {mod: [id, ...]}}`).
+Two mods declaring one pool, a mod asking for ids from a pool no given mod
+declares, a reference to a pool the mod asks nothing from, more ids asked
+for than a pool has, and a mod that defines a `__pool_` symbol itself are
+refused.
 
 ### DSP code
 

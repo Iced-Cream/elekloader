@@ -44,6 +44,10 @@ mod.json:
                                                      many knobs; __machines + i is the i-th slot
      "pages": 2,                                      page ids by count (core-ar2): ids from 12
                                                      up; __pages is the first
+     "id_pools": {"smpl": [1, 30]},                   ids this mod hands out to others (any device
+                                                     with a lockfile), kept in the lockfile
+     "pool_ids": {"smpl": 2},                         2 ids from another mod's pool; __pool_smpl + i
+                                                     is the i-th
      "ports": {"1.54": {"defsym": {...}, "sites": [...]}}}   optional: other OS versions
 
 A port builds the same mod for another release of the device: for that OS,
@@ -641,6 +645,9 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         doc['machine_knobs'] = mod['machine_knobs']
     if mod.get('pages'):                    # page ids the linker gives out (link.py)
         doc['pages'] = mod['pages']
+    for k in ('id_pools', 'pool_ids'):      # id pools: a mod's to hand out, a mod's ids from one (link.py)
+        if mod.get(k):
+            doc[k] = mod[k]
     raw = (json.dumps(doc, indent=1) + '\n').encode()
     try:
         m = link.Mod2(json.loads(raw), mid)                # the loader's own validation
