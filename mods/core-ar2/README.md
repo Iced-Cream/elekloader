@@ -11,7 +11,7 @@ and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable paramet
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
 defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
-itself (below), and from 0.14 the silent-voice skip in `idle.c` and `idle.s` (below). On its own it changes nothing
+itself (below), and from 0.14 the silent-voice skip in `idle.c` and `idle.s` and the sample-layer skip in `sample.s` (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe, and from 0.14 the skip, which starts a silent voice's next
 note from its power-on state.
 
@@ -1141,6 +1141,40 @@ to every track) or the skip's switch-on put the slots in step, and every
 (T238). A knob, an LFO or a kit's values on a skipped slot reach the voice at
 its next check (at most 264 blocks, 176 ms; a machine change in the next
 block); the voice is silent by then.
+
+## The sample-layer skip (0.14)
+
+`sample.s`, at 0x4011cc08 and 0x4011cd46 in the sample layer's slot loop
+(0x4011c6b8): stock resamples, filters (2:1) and scales every voice slot's
+sample every block, 32 frames into 0x800067f8 + 0x80 x slot, whether a
+sample plays or not. A slot that plays none fetches from a zero buffer, so
+with its filter history at zero all of that gives zeros and leaves the
+history at zero. The skip leaves it out for such a slot and writes what it
+would have written: the phase words (+0x1c, +0x20, +0x04), the gain word
+(+0x10) and 32 zeros. **The sound is unchanged, bit for bit.**
+
+**Off at boot: on only if asked and nobody holds it off**
+(`analog-rytm-mk2/voice.h`):
+
+| symbol | what |
+|---|---|
+| `core_sample_skip_want` | `uint8_t`, 0 at boot: the user's choice, written by the one mod that offers it as a setting; any context, any time (read once per slot per block) |
+| `core_voice_skip_hold` | the silent-voice skip's hold count (above) holds this skip off too |
+| `core_sample_skips` | the slot-blocks skipped since boot |
+
+A slot is skipped in a block when all of these hold:
+
+| test | why |
+|---|---|
+| the slot is not playing (+0x28 is 0) | its fetch is the zero buffer |
+| its bit is clear in this block's and the last block's trig masks (0x8000586c, 0x80005868) | a trig sets the slot up one block late and ramps its gain to 0 in the trig block |
+| the filter history, 12 longs at +0x2c..+0x5b, is all 0 | zero in and zero history give exactly zero out and keep the history at zero; a trig clears it, a sample that has ended may leave it nonzero until the next trig |
+| the MAC unit is in stock's mode (MACSR & 0xf0 is 0x20) | the mode the steps are exact in |
+
+What still runs for every slot: the fetch and its DMA (shared by all
+slots in one pipeline), the per-slot rate (0x4011c1e0) and the amp envelope
+(0x40109940, not part of the sample layer). In the emulator the three steps
+the skip leaves out cost about 1 point of render load per idle slot.
 
 ## Checked so far
 
