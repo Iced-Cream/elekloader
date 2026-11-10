@@ -15,7 +15,9 @@ The link runs in this order:
    file's own rules, first failure wins: JSON, format (`elemod` 2, the id,
    the version), target (`target.device` and `target.os` against the
    descriptor's), the fields above, sections, regions, relocations,
-   contributions, exports.
+   contributions, exports, then storage fields (on a build that keeps
+   +Drive storage: each a global name, as an export is; a field the core
+   can't keep is a `format` refusal).
 2. *Check rounds* over the living mods in id order (UTF-8 bytes; of two
    files with one id the earlier line counts first), again until a round
    refuses nothing; a mod refused earlier in a round stops counting.
@@ -28,11 +30,14 @@ The link runs in this order:
    import is none of the names above and not weak. Then each table in
    descriptor order: while its count plus the living mods' entries pass its
    capacity, the last living mod in id order with an entry there is
-   refused.
+   refused. Then the storage room ("+Drive storage", `fit`), one refusal
+   at a time (`store`), and the rounds again, until neither refuses.
 3. *Layout* from the area's start: every `.run` in id order at its
    alignment (at least 4), then every `.bss` likewise, each block ending
    4-aligned. Past the area's end, the last living mod is refused and the
-   check runs again.
+   check runs again. Then the living mods' storage fields are placed from
+   `/mods/.store` ("+Drive storage"), which gives each field's symbol its
+   descriptor.
 4. *Pass 2*, in id order: `.run` decoded into place (a `stock` part is
    copied from the running OS), `.bss` zeroed, relocations applied (a
    symbol is the mod's own first, then a global name, then `core_zero` for
@@ -43,6 +48,16 @@ The link runs in this order:
    or the contribution's index and entry), the entries' relocations applied
    at their final address, then zero entries to capacity + 1. Other tables
    are not touched.
+6. *Storage*: `core_store_ids` gets the live layout ID and its ancestors,
+   `core_store_gens` each scope's live generation, and `core_lock_codes`,
+   `core_lock_ccs`, `core_field_inits` and `core_handles` the +Drive fields'
+   entries after their flashed ones. This happens on every boot that links,
+   also when nothing loads (every field then parks) or no set is chosen
+   but `/mods/.store` is there, and on a boot with [NO] held (no mods, the
+   fields parked, `.store` not written); a boot the crash guard skips
+   touches nothing. Then `/mods/.store` is written, as `.store.tmp` and a
+   rename under the loader's mutex, when its bytes changed. `.status` has a
+   line `store: id 0x..., N fields, M parked, kept|written|write failed`.
 
 **Status records**: one of 32 bytes for each line of `/mods/active` (none
 past 256 lines): u8 state, u8 code, u16 argument, then the id (the file
@@ -93,7 +108,20 @@ so saves, write-through, SysEx and library sounds carry them as they carry
 flashed fields. The loader places them at boot; `elekloader/drive_store.py`
 is that allocator on the computer, and `js/src/drivestore.ts` its port (the
 same placements, `.store` bytes and notes: `js/test/drivestore.test.ts`).
-Pass 1 still refuses `storage` until the loader runs it.
+The loader (`mods/drive-loader-ar2/dstore.c`) is its port to C, checked
+against the same vectors (`tests/test_drive_store_host.py`, which also runs
+random sets against `drive_store.py`), and `elekloader link --device-layout
+--store FILE` runs it inside the boot link's twin (`store.bin`,
+`store_gens.bin` and the five tables; `tests/test_drive_link_store.py`
+compares the C link and the twin through a run of boots). A build keeps
++Drive storage when its descriptor has the six scopes, the five tables and
+core 0.14's `core_store_gens`; elsewhere pass 1 refuses `storage` as before. A field the core can't keep (a
+`"track"`, a `"mod"` kit field, FORMAT.md's "Mod storage" rules) is a `format`
+refusal; a room refusal (`store`) has the detail `WHAT NEED HAVE`: a scope,
+`codes` or a table (`core_lock_codes`, `core_field_inits`, `core_handles`),
+what the set needs and what there is.
+A `.store` past the loader's own room (64 KB, 512 fields or parked fields,
+256 of each code and CC list) reads as none, as a bad one does.
 
 It reads only what the unit can read: each scope's room, used bits and
 generation (the descriptor's storage record), the layout ID and ancestors

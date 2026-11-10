@@ -83,6 +83,8 @@ extern unsigned dl_boot_us[] __attribute__((weak));     /* the boot's time: whol
 extern volatile int dl_check_n __attribute__((weak));   /* the MODS page's check: files done, -1 none yet */
 extern volatile int dl_check_all __attribute__((weak)); /* ... of the open folder's files */
 extern char dl_check_dir[] __attribute__((weak));       /* ... that folder, below DL_DIR */
+extern unsigned char dl_store_io __attribute__((weak)); /* /mods/.store: 0 none, 1 kept, 2 written, 3 failed */
+extern unsigned dl_store_info[] __attribute__((weak));  /* ... the live layout ID, fields, parked fields */
 
 static char dl_note[64];
 static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
@@ -154,6 +156,17 @@ static char *cat(char *at, char *end, const char *s)
 {
     while (*s && at < end - 1)
         *at++ = *s++;
+    *at = 0;
+    return at;
+}
+
+static char *hex8(char *at, char *end, unsigned v)
+{
+    static const char hx[] = "0123456789abcdef";
+    int k;
+    at = cat(at, end, "0x");
+    for (k = 28; k >= 0 && at < end - 1; k -= 4)
+        *at++ = hx[(v >> k) & 15];
     *at = 0;
     return at;
 }
@@ -495,6 +508,18 @@ static int status_text(void)
             at = num(at, end, dl_boot_us[i]);
         }
         at = cat(at, end, ")\n");
+    }
+    if (&dl_store_io && dl_store_io) {   /* +Drive storage (boot.c, dstore.h) */
+        static const char *const io[] = {"-", "kept", "written", "write failed"};
+        at = cat(at, end, "store: id ");
+        at = hex8(at, end, dl_store_info[0]);
+        at = cat(at, end, ", ");
+        at = num(at, end, dl_store_info[1]);
+        at = cat(at, end, " fields, ");
+        at = num(at, end, dl_store_info[2]);
+        at = cat(at, end, " parked, ");
+        at = cat(at, end, dl_store_io < 4 ? io[dl_store_io] : "-");
+        at = cat(at, end, "\n");
     }
     if (&dl_skip_reason && dl_skip_reason) {
         at = cat(at, end, "skipped: ");

@@ -16,6 +16,8 @@
   "boot.c",
   "dlink.c",
   "json.c",
+  "sha256.c",
+  "dstore.c",
   "page.c",
   "park.c",
   "page.s"
