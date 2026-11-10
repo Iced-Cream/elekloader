@@ -86,10 +86,34 @@ struct core_machine {
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
     uint8_t voices;         /* bit v: physical voice v may run it (0 BD, 1 BT,
                                2 SD, 3 LT, 4 CH/OH, 5 MT/HT, 6 CY/CB, 7 RS/CP) */
-    uint16_t pad;
+    uint16_t flags;         /* CORE_MACHINE_*; 0 before core 0.15 */
     const char *name;       /* "BD TX-9" */
     const char *label;      /* four letters: "BDT9" */
     struct core_machine_knob knobs[8];  /* sound indices 9..16: LEV, then A..H's order */
+    const struct core_machine_look *looks;  /* CORE_MACHINE_LOOKS: 8, knobs[]' order */
+};
+
+/* flags (core 0.15+) */
+#define CORE_MACHINE_LOOKS 0x0002   /* looks follows knobs[] */
+
+/* core 0.15+: a knob's look (docs/ADAPTING.md, "Machines (core-ar2 0.5,
+ * Analog Rytm MKII)"). A slot's records keep the UI record stock built for
+ * them at boot (a TEST record's is its test machine's: a dial where the
+ * machine wants a switch, a switch where it wants a dial). With
+ * CORE_MACHINE_LOOKS set, looks[k] gives knobs[k] the look of any stock knob,
+ * as core_knob_looks does for a mod's own ids (pages.h):
+ *
+ *     look  the stock id (1..468) whose knob it is drawn as; 0 keeps the
+ *           record's own
+ *     ui    an 84-byte UI record of the mod's own, or 0 for look's
+ *
+ * The range stays the knob's (min..max), and the graphic spans it. The look
+ * belongs to the record while the mod fills the slot, so it shows wherever
+ * the machine is on a track and nowhere else. A knob whose name is 0 keeps
+ * the stock record and its look. */
+struct core_machine_look {
+    int32_t look;
+    const void *(*ui)(int32_t id);
 };
 
 #define CORE_VOICE_BD 0x01
