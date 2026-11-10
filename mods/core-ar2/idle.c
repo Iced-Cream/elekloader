@@ -64,6 +64,8 @@
 
 #include <stdint.h>
 
+extern volatile uint32_t core_block;    /* load.s: the render's block count */
+
 typedef uint32_t u32a2 __attribute__((aligned(2), may_alias));
 
 #define MACH_REC ((volatile uint32_t *)0x419ca0d0)  /* + slot: the recorded machine */
@@ -132,6 +134,13 @@ static uint32_t frame_before[FRAME_LONGS];
 static uint8_t snapped;
 /* blocks skipped, for the emulator checks and a meter */
 uint32_t core_voice_skips;
+/* the block whose checked call (a quiet call or a probe) has been made: at
+ * most one slot makes one in a block. A checked call costs the machine's
+ * call plus a copy and a compare of the 0x3d8-byte frame; eight in one
+ * block (every slot watched from the same block, as after a STOP's trig to
+ * every track, and their probes then 256 blocks apart in step) ran that
+ * block past the period. */
+static uint32_t checked_block;
 
 /* ev_render_in, after core_load_in: the boot's state, before any machine */
 void core_voice_boot(void)
@@ -247,15 +256,17 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     int32_t state = (int32_t)RECORD(s)[0];
     uint32_t idle = IDLE_BITS >> s & 1;
 
-    /* skipped: the cheap key, and the call made and checked every PROBE_BLOCKS */
+    /* skipped: the cheap key, and the call made and checked every PROBE_BLOCKS
+     * (later, in the first block no other slot's check has taken) */
     if (mode == SKIPPED && !trig && owner == skip_owner[s] && (uint32_t)state == skip_state[s]
-        && idle == skip_idle[s] && count + 1 < PROBE_BLOCKS) {
+        && idle == skip_idle[s] && (count + 1 < PROBE_BLOCKS || checked_block == core_block)) {
         if (idle)
             *(volatile uint16_t *)(PARAM_PTR[s] + 4) = 0;
         for (uint32_t i = 0; i < replays[s]; i++)
             ((volatile uint8_t *)FRAME)[replay[s][i] >> 8] = (uint8_t)replay[s][i];
         core_voice_skips++;
-        v->m = m + 1;
+        if (count + 1 < PROBE_BLOCKS)
+            v->m = m + 1;
         return 0;
     }
 
@@ -310,6 +321,11 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
         v->m = (m & RECORDED) ? (BLOCKED << 16 | SETTLE_BLOCKS) : RECORDED;
         return ptr;
     }
+
+    /* another slot made this block's check: stock's call, nothing counted */
+    if (checked_block == core_block)
+        return ptr;
+    checked_block = core_block;
 
     /* the call, made here, with what it changes */
     volatile uint32_t *rec = RECORD(s), *g = GAIN(s), *ck = CLICK(s);
