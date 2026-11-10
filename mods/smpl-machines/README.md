@@ -1,6 +1,6 @@
 # smpl-machines
 
-SMPL machines for the Analog Rytm MKII (core-ar2 0.13, OS 1.74): a second
+SMPL machines for the Analog Rytm MKII (core-ar2 0.15 or later, OS 1.74): a second
 machine layer on the SMPL page, the way machine-pages is the Digitakt mk1's
 page companion. Stock's SMPL page (the sound's indices 17..24, records
 39..46: TUN, FIN, SMP, BR, STA, END, LOP, LEV) is one sample layer that
@@ -15,7 +15,7 @@ list TRK + SMPL opens.
 
 | | |
 |---|---|
-| needs | core-ar2 0.13 with knob faces (`core_knob_faces`) |
+| needs | core-ar2 0.15 or later, with knob faces (`core_knob_faces`); `resources` says 0.13, the core on this branch, until that core exists |
 | sites | 3: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs; the entry of the audio side's routine that puts a sound on a track, 0x4011f60a (the kit's sound, or a sound lock's pool sound); and the sound setup menu's build, 0x400ef184, after its MACHINE row |
 | exports | `smpl_track_machine` |
 | declares | `smpl_machines`, the machines (`elekloader/sdk/include/analog-rytm-mk2/smpl.h`); the id pool `smpl_machines`, ids 0..29 |

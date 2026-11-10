@@ -1986,7 +1986,10 @@ const struct core_view_page my_view_page = {CORE_VIEW_COMP, CORE_PAGE(0), 0};
 
 Page ids are not saved, so they may differ from one build to the next.
 
-### Knob faces (core-ar2 0.13, Analog Rytm MKII)
+### Knob faces (core-ar2 0.15, Analog Rytm MKII)
+
+Planned for core-ar2 0.15 or later; until that core exists, the branch's
+core says 0.13 and mods ask for it.
 
 A mod that gives a stock page a different meaning for some sounds, but
 wants the values to stay the sound's own (stored, p-locked, slid, on the

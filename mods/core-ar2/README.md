@@ -1188,9 +1188,9 @@ machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
 
-## Knob faces (0.13)
+## Knob faces (0.15)
 
-`core_knob_faces` (docs/ADAPTING.md, "Knob faces (core-ar2 0.13, Analog
+`core_knob_faces` (docs/ADAPTING.md, "Knob faces (core-ar2 0.15, Analog
 Rytm MKII)") gives stock ids 1..468 another label, name, look, range and
 default for the sounds a mod says, on the hooks above: the label and name
 lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
