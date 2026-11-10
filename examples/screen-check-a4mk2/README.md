@@ -2,10 +2,10 @@
 
 [screen-check-ar2](../screen-check-ar2) on the A4, a test for
 [core-a4mk2](../../mods/core-a4mk2) 0.6's screen calls (README, "Screen
-calls (0.6)"), on screen. The keys are mod.json's cflags: `K_MODE` (taken)
-steps through the four modes (off, FONTS, CALLS, COVER), `K_RIGHT` steps
-the font, FILTERS is the key held back and replayed through
-`core_stock_key`, `K_BOX` opens the progress box and `K_NO` closes it.
+calls (0.6)"), on screen. The keys are mod.json's cflags: FILL (taken)
+steps through the four modes (off, FONTS, CALLS, COVER), RIGHT steps the
+font, FLTR is the key held back and replayed through `core_stock_key`, QPER
+opens the progress box and NO closes it.
 `check.c`'s header says what each mode draws. The CALLS bar adds `R`, the
 last replay's return plus 1 (the A4's `core_stock_key` returns 0 once
 stock had the key). The same values are in RAM after the magic `SCC1`.

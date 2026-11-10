@@ -11,9 +11,10 @@ mods' area (README, "Payloads and the mods' area (0.6)"):
 
 The record after the magic `PKC1` says where the code, the data, the array
 and the payload landed (`in_area` 1 when all are inside 0x45650000 to
-0x47C00000), the payload's reads and the array's passes and wrong words. A
-3x3 square at the bottom right blinks with the passes while everything reads
-back right; a bar at the bottom left means a word read back wrong.
+0x47C00000), the payload's reads and the array's passes and wrong words. On
+the bottom edge: a dot at x 120 once the payload read back right, a 3x3
+square at the right end once the whole array also read back right with
+everything in the area, and a bar at the left when a word read back wrong.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)

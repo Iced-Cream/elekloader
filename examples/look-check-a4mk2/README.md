@@ -21,7 +21,8 @@ match in the graphic and the value text, not the label.
 The record after the magic `LKA1` holds the groups' ids, the own knobs, the
 page, and for each own knob what core's UI record and range lookups answer
 against what its entry gives (`ok`, and `bad` the count of those not
-ok). It is a test, not for a project you keep.
+ok). On the bottom edge a 3x3 square at the right end says every own knob
+was ok; a bar at the left counts those that weren't. It is a test, not for a project you keep.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)

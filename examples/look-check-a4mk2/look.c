@@ -29,7 +29,9 @@
  * lookups answer, read when the table is made:
  * {int16 look, int16 ok, u32 uirec, u32 want, int32 range[3], int32
  * want_range[2]}; ok is 1 when uirec and the range are what the entry
- * gives. lk.reps lists the representatives' ids. */
+ * gives. lk.reps lists the representatives' ids. On the screen's bottom
+ * edge, once the table is made: a 3x3 square at the right end when every
+ * own knob is ok, else a bar at the left, two pixels for each that isn't. */
 #include <stdint.h>
 #include "analog-four-mk2/pages.h"
 
@@ -244,11 +246,23 @@ static void make(void)
     made = 1;
 }
 
+typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour);
+#define FILLRECT ((fillrect_t)FILLRECT_AT)
+
+/* at the bottom right (y from the bottom row), once the table is made: a
+ * 3x3 square when every own knob's lookups answered what its entry gives,
+ * else a bar from x 0, two pixels for each that didn't (up to 60) */
 void lk_draw(void *bmp, void *ctrl)
 {
-    (void)bmp;
     (void)ctrl;
     draws++;
+    if (!made)
+        return;
+    FILLRECT(bmp, 0, 0, 127, 2, 0);
+    if (!lk.bad)
+        FILLRECT(bmp, 125, 0, 127, 2, 1);
+    else
+        FILLRECT(bmp, 0, 0, 2 * (int)(lk.bad > 60 ? 60 : lk.bad) - 1, 1, 1);
 }
 
 void lk_tick(void *ctrl)

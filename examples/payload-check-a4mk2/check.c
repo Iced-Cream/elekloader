@@ -14,10 +14,12 @@
  * after the fill.
  *
  * In RAM after the magic PKC1 (pk): where the code, the data, the bss
- * array and the payload landed, and the counts. On the screen, at the
- * bottom right (y counts from the bottom row): a 3x3 square while all is
- * well (payload found and every read back right), blinking with the
- * area's passes; a bar from x 0 at y 0..1 when any word read back wrong.
+ * array and the payload landed, and the counts. On the screen, along the
+ * bottom edge (y counts from the bottom row), steady for a screen check:
+ * a 3x3 square at x 125..127 once the payload was found and read back right
+ * and the whole area read back right at least once with everything inside
+ * the mods' area; a dot at x 120..121 once the payload read back right; a
+ * bar from x 0 to 40 at y 0..1 when any word read back wrong.
  */
 #include <stdint.h>
 #include "analog-four-mk2/payload.h"
@@ -149,10 +151,13 @@ void pk_tick(void *ctrl)
 
 void pk_draw(void *bmp, void *ctrl)
 {
-    int ok = pk.in_area && pk.data_ok && !pk.missing && !pk.total_bad && !pk.area_bad;
+    int pay = pk.verifies && !pk.missing && !pk.total_bad;
+    int ok = pay && pk.in_area && pk.data_ok && pk.passes && !pk.area_bad;
     (void)ctrl;
     FILLRECT(bmp, 0, 0, 127, 2, 0);
-    if (ok && !(pk.passes & 1))
+    if (pay)
+        FILLRECT(bmp, 120, 0, 121, 1, 1);
+    if (ok)
         FILLRECT(bmp, 125, 0, 127, 2, 1);
     if (pk.total_bad || pk.area_bad)
         FILLRECT(bmp, 0, 0, 40, 1, 1);

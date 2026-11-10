@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* screen-check: core-a4mk2 0.6's screen calls on the Analog Four MKII (OS
  * 1.56), on screen: screen-check-ar2 with the A4's keys (mod.json's cflags:
- * K_MODE, K_RIGHT, K_HOLD, K_BOX, K_NO). K_MODE (taken) steps through four
- * modes; mode 0 changes nothing the unit does but take K_MODE.
+ * K_MODE FILL, K_RIGHT RIGHT, K_HOLD FLTR, K_BOX QPER, K_NO NO). K_MODE
+ * (taken) steps through four modes; mode 0 changes nothing the unit does but
+ * take K_MODE.
  *
  *   0  off: stock, untouched; only K_MODE is taken.
  *   1  FONTS: the screen cleared, then font n's sample (n from 0; K_RIGHT,
@@ -16,7 +17,7 @@
  *      OV core_stock_overlay, LV core_level_readout, K the key events held, R
  *      the last replay's return plus 1 (- before any),
  *      P the progress box's handle (- for none) and its fill.
- *      - K_HOLD (FILTERS): its press and release are taken and kept (K
+ *      - K_HOLD (FLTR): its press and release are taken and kept (K
  *        counts them), then handed to stock through core_stock_key 20 and
  *        22 ticks later: stock's FILTERS page comes a second late. R shows
  *        what the last replay returned (0 on the A4 once stock had it).
