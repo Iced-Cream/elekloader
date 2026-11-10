@@ -162,9 +162,12 @@ static int p_delta(void *view, int32_t id, int32_t d, int32_t func)
     (void)view;
     (void)func;
     if (id == ID_PAGE) {
-        if (made) {
-            page_no += d > 0 ? 1 : d < 0 ? -1 : 0;
-            page_no = page_no < 0 ? 0 : page_no >= (int32_t)lk.pages ? (int32_t)lk.pages - 1 : page_no;
+        if (made) {                     /* a step of J's value (1.0) a page */
+            static int32_t acc;
+            int32_t top = ((int32_t)lk.pages - 1) << 8;
+            acc += d;
+            acc = acc < 0 ? 0 : acc > top ? top : acc;
+            page_no = acc >> 8;
             lk.page = (uint32_t)page_no;
         }
         return 1;
