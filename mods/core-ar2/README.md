@@ -1155,7 +1155,8 @@ from all 8 voice slots, and calls the delay (0x4010da24) and the reverb
 |---|---|
 | `core_fx_skip_want` | `uint8_t`, 0 at boot: the send trim and the delay skip (exact); written by the one mod that offers it as a setting, any context, any time |
 | `core_reverb_clear_want` | `uint8_t`, 0 at boot: the reverb clear and skip (changes the sound slightly); runs only with `core_fx_skip_want` on |
-| `core_fx_skip_hold` | `uint32_t`, 0 at boot: the count of holds; both parts run only while it is 0 |
+| `core_delay_clear_want` | `uint8_t`, 0 at boot: the delay clear (changes the sound slightly); runs only with `core_fx_skip_want` on |
+| `core_fx_skip_hold` | `uint32_t`, 0 at boot: the count of holds; every part runs only while it is 0 |
 | `core_fx_skip_hold_add()`, `core_fx_skip_hold_release()` | a mod that needs stock's exact FX render while it works adds a hold and releases it, once each; one instruction each, any context |
 | `core_fx_skips` | the blocks a delay or reverb call was left out of, since boot |
 
@@ -1163,10 +1164,11 @@ from all 8 voice slots, and calls the delay (0x4010da24) and the reverb
 |---|---|---|
 | send trim | 0x4010e75e (jmp), in place of the send loop 0x4010e780..0x4010e7aa | a slot whose two gains and two increments are 0 adds exactly 0 and keeps its gains, so the loop runs only the slots that send, in stock's order; none: the bus is written as 32 frames of 0; more than 5: stock's loop |
 | delay skip | 0x4010e7c4 (10 bytes: its `jsr (pc)` and the `move.w 0x8000fbb6,%d3` after it) | no call while its bus is 0, its parameters (0x8000fbaa..0x8000fbbb) are those of its last call, that call changed none of its state (0x8000ca00..0x8000ca0f, 0x8000dff0..0x8000e12b) and wrote 0 to its output and its staging block, and no call has written anything but 0 into its 4 MB line for 16,400 blocks (a whole turn of the write position, about 11 s); the eDMA then moves zeros, as a call would |
+| delay clear | the same site | once fed, stock's delay never decays to exactly 0 either (its output keeps a few hundred of 2^31), so the skip alone ends the first time the delay is used. Input 0, and nothing at or above 1024 (4 LSB of 24 bits) written into the line or the output, for 16,400 blocks, so the whole line is that quiet: core clears 0x4000 bytes of the line (0x4b400000, 4 MB) a block, with the gate (0x8000dff0..0x8000e007), the tap's scratch and the filter (0x8000e01c..0x8000e12b), the staging block and the output, without the call (256 blocks); then the skip's rule takes over. A first call after a clear that writes anything but 0 is a failure; after 2, not until the input moves |
 | reverb clear and skip | 0x4010e81e (10 bytes: its `jsr (pc)` and the `move.l #0x1000,%d4` after it) | once excited, stock's reverb never decays to 0 (a limit cycle of about ±117 of 2^31, which leaves main L at -1). Input 0 for 1500 blocks (1 s) with the output below 256 (1 LSB of 24 bits) all along: core clears its state words and SRAM blocks every block and 0x2000 bytes of its lines (0x4b000000, 0x98000 bytes) a block, without the call (76 blocks); then calls it from the cleared state for 1024 blocks, which must leave the output exactly 0 (else stock again; after 2 failures, not until the input moves); then no call while its input is 0 |
 
-Input that is not 0 gives each part back to stock in that block. The reverb's
-next tail then starts from silence, as after a power-on. Both routines leave
+Input that is not 0 gives each part back to stock in that block. After a
+clear, the next delay or reverb tail starts from silence, as after a power-on. Both routines leave
 the MAC unit as they found it, so a call left out does too.
 
 ## Checked so far

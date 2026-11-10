@@ -199,8 +199,16 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the silent-voice skip's (0.14)
-    assert len(mod['sites']) == 123
+    # (0.11, ev_seq_step), and the silent-voice skip's (0.14), and the FX skip's three (0.14)
+    assert len(mod['sites']) == 126
+    # 0.14: the FX skip's send site, and its delay and reverb sites, each a 4-byte
+    # `jsr (pc)` with the instruction after it (10 bytes)
+    for addr, want in (('0x4010e75e', '22032003ed89'), ('0x4010e7c4', '4ebaf25e36398000fbb6'),
+                        ('0x4010e81e', '4ebaec14283c00001000')):
+        x = [x for x in mod['sites'] if x['addr'] == addr][0]
+        assert x['stock'] == want, x
+        a = int(addr, 16) - DEV.main_load
+        assert img[a:a + len(want) // 2].hex() == want, addr
     # 0.14: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
     # returns to stock's beq, which takes the skip when the site leaves %a1 at 0
     x = [x for x in mod['sites'] if x.get('target') == 'core_voice_site'][0]

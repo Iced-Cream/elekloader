@@ -147,6 +147,7 @@ core_fx_skip_hold_release:
         .bss
         .align  2
         .globl  core_fx_skip_hold, core_fx_skip_want, core_reverb_clear_want
+        .globl  core_delay_clear_want
 fx_trim:
         .space  8*ENTRY
 core_fx_skip_hold:
@@ -154,4 +155,6 @@ core_fx_skip_hold:
 core_fx_skip_want:
         .space  1
 core_reverb_clear_want:
+        .space  1
+core_delay_clear_want:
         .space  1
