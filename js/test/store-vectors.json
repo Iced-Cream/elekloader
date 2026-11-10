@@ -23682,5 +23682,978 @@
    },
    "error": null
   }
+ },
+ "pool_runs": {
+  "lowest ids, kept, freed, back and given again (none)": {
+   "start": "none",
+   "steps": [
+    [
+     "smpl",
+     {
+      "a": 2,
+      "b": 1
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "other",
+     {
+      "a": 1
+     },
+     [
+      10,
+      10
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "b": 1,
+      "c": 1
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "b": 1,
+      "c": 1,
+      "a": 2
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "b": 1,
+      "c": 1,
+      "d": 1
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "e": 5
+     },
+     [
+      1,
+      4
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "pool_ids": [
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "a": [
+       1,
+       2
+      ],
+      "b": [
+       3
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl",
+      "a: id 2 of pool smpl",
+      "b: id 3 of pool smpl"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "a": [
+       10
+      ]
+     },
+     "notes": [
+      "a: id 10 of pool other"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       },
+       {
+        "pool": "smpl",
+        "mod": "c",
+        "index": 0,
+        "id": 4
+       }
+      ],
+      "freed_pool_ids": [
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       }
+      ]
+     },
+     "ids": {
+      "b": [
+       3
+      ],
+      "c": [
+       4
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl freed, kept for it until the unused ids run out",
+      "a: id 2 of pool smpl freed, kept for it until the unused ids run out",
+      "c: id 4 of pool smpl"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       },
+       {
+        "pool": "smpl",
+        "mod": "c",
+        "index": 0,
+        "id": 4
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "a": [
+       1,
+       2
+      ],
+      "b": [
+       3
+      ],
+      "c": [
+       4
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl back",
+      "a: id 2 of pool smpl back"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "d",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       },
+       {
+        "pool": "smpl",
+        "mod": "c",
+        "index": 0,
+        "id": 4
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "b": [
+       3
+      ],
+      "c": [
+       4
+      ],
+      "d": [
+       1
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl freed, kept for it until the unused ids run out",
+      "a: id 2 of pool smpl freed, kept for it until the unused ids run out",
+      "pool smpl: ids freed by a given out again",
+      "d: id 1 of pool smpl"
+     ],
+     "layout_id": null
+    },
+    {
+     "error": "e asks for more ids from the pool smpl than it has free (1..4)"
+    }
+   ]
+  },
+  "lowest ids, kept, freed, back and given again (fresh)": {
+   "start": "fresh",
+   "steps": [
+    [
+     "smpl",
+     {
+      "a": 2,
+      "b": 1
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "other",
+     {
+      "a": 1
+     },
+     [
+      10,
+      10
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "b": 1,
+      "c": 1
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "b": 1,
+      "c": 1,
+      "a": 2
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "b": 1,
+      "c": 1,
+      "d": 1
+     },
+     [
+      1,
+      4
+     ]
+    ],
+    [
+     "smpl",
+     {
+      "e": 5
+     },
+     [
+      1,
+      4
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "pool_ids": [
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "a": [
+       1,
+       2
+      ],
+      "b": [
+       3
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl",
+      "a: id 2 of pool smpl",
+      "b: id 3 of pool smpl"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "a": [
+       10
+      ]
+     },
+     "notes": [
+      "a: id 10 of pool other"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       },
+       {
+        "pool": "smpl",
+        "mod": "c",
+        "index": 0,
+        "id": 4
+       }
+      ],
+      "freed_pool_ids": [
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       }
+      ]
+     },
+     "ids": {
+      "b": [
+       3
+      ],
+      "c": [
+       4
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl freed, kept for it until the unused ids run out",
+      "a: id 2 of pool smpl freed, kept for it until the unused ids run out",
+      "c: id 4 of pool smpl"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "a",
+        "index": 1,
+        "id": 2
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       },
+       {
+        "pool": "smpl",
+        "mod": "c",
+        "index": 0,
+        "id": 4
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "a": [
+       1,
+       2
+      ],
+      "b": [
+       3
+      ],
+      "c": [
+       4
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl back",
+      "a: id 2 of pool smpl back"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "pool_ids": [
+       {
+        "pool": "other",
+        "mod": "a",
+        "index": 0,
+        "id": 10
+       },
+       {
+        "pool": "smpl",
+        "mod": "d",
+        "index": 0,
+        "id": 1
+       },
+       {
+        "pool": "smpl",
+        "mod": "b",
+        "index": 0,
+        "id": 3
+       },
+       {
+        "pool": "smpl",
+        "mod": "c",
+        "index": 0,
+        "id": 4
+       }
+      ],
+      "freed_pool_ids": []
+     },
+     "ids": {
+      "b": [
+       3
+      ],
+      "c": [
+       4
+      ],
+      "d": [
+       1
+      ]
+     },
+     "notes": [
+      "a: id 1 of pool smpl freed, kept for it until the unused ids run out",
+      "a: id 2 of pool smpl freed, kept for it until the unused ids run out",
+      "pool smpl: ids freed by a given out again",
+      "d: id 1 of pool smpl"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "error": "e asks for more ids from the pool smpl than it has free (1..4)"
+    }
+   ]
+  }
+ },
+ "pool_locks": {
+  "one id twice": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "pool_ids": [
+     {
+      "pool": "s",
+      "mod": "a",
+      "index": 0,
+      "id": 1
+     },
+     {
+      "pool": "s",
+      "mod": "b",
+      "index": 0,
+      "id": 1
+     }
+    ],
+    "freed_pool_ids": []
+   },
+   "error": "lockfile: a bad entry in \"pool_ids\""
+  },
+  "one index twice": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "pool_ids": [
+     {
+      "pool": "s",
+      "mod": "a",
+      "index": 0,
+      "id": 1
+     },
+     {
+      "pool": "s",
+      "mod": "a",
+      "index": 0,
+      "id": 2
+     }
+    ],
+    "freed_pool_ids": []
+   },
+   "error": "lockfile: a bad entry in \"pool_ids\""
+  },
+  "freed not a list": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "pool_ids": [],
+    "freed_pool_ids": {}
+   },
+   "error": "lockfile: \"freed_pool_ids\" is a list"
+  },
+  "no pool": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "pool_ids": [
+     {
+      "mod": "a",
+      "index": 0,
+      "id": 1
+     }
+    ],
+    "freed_pool_ids": []
+   },
+   "error": "lockfile: a bad entry in \"pool_ids\""
+  },
+  "good": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "pool_ids": [
+     {
+      "pool": "s",
+      "mod": "a",
+      "index": 0,
+      "id": 1
+     },
+     {
+      "pool": "t",
+      "mod": "a",
+      "index": 0,
+      "id": 1
+     }
+    ],
+    "freed_pool_ids": [
+     {
+      "pool": "s",
+      "mod": "b",
+      "index": 1,
+      "id": 2
+     }
+    ]
+   },
+   "error": null
+  }
  }
 }

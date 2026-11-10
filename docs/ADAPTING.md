@@ -4314,10 +4314,12 @@ Some differences from an octabam build, by design:
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
 | `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
 | `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
-| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` (or `__machines`, `"machine_knobs"`; `__pages`, `"pages"`) | the mod uses a knob, machine or page past the count it declares, or a PC-relative reference to it | raise the count in mod.json, or fix the index |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` (or `__machines`, `"machine_knobs"`; `__pages`, `"pages"`; `__pool_<name>`, `"pool_ids"`) | the mod uses a knob, machine or page past the count it declares, or a PC-relative reference to it | raise the count in mod.json, or fix the index |
 | `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
 | `asks for machine slots ("machine_knobs"), which the <device> does not give mods` / `asks for page ids ("pages"), ...` | only the Analog Rytm MKII gives them out | pick fixed slots or ids, or drop the field |
 | `asks for a machine with N knobs, and no machine slot with that many is free` | every hidden slot with that many records is taken | ask for fewer knobs, or drop a machine mod |
+| `asks for ids from the pool P ("pool_ids"), which no given mod declares` | the mod that declares the pool (a framework mod, such as smpl-machines) is not in the build | add that mod |
+| `the mods ask for N ids from the pool P, which has M` / `asks for more ids from the pool P than it has free` | the mods together ask a pool for more ids than it has | build with fewer of those mods |
 | `machine slot N is claimed by number, and the lockfile gives it to M's machine I` | a mod claims, by number, a slot the lockfile already gives a by-count machine; saved sounds name that slot | give the claim another slot |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
