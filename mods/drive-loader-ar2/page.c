@@ -1990,6 +1990,24 @@ static void check_next(void)
         VIEW_DIRTY((char *)view + 0x38);          /* draws it keeps drawn_at fresh, so the next follows */
 }
 
+/* Does the MODS page show? Drawn within SHOWN ticks, or not yet asked: then a frame is asked
+ * for, as check_next asks, and a page that asked and got none SHOWN ticks on has been left (or
+ * something covers it). boot.c's crash guard waits for it after a boot that applied sites. */
+int dl_page_shown(void)
+{
+    if (!view)
+        return 0;
+    if (ticks - drawn_at <= SHOWN)
+        return 1;
+    if ((s32)(probed - drawn_at) > 0 && ticks - probed > SHOWN)
+        return 0;
+    if (ticks - probed > SHOWN) {
+        probed = ticks;
+        VIEW_DIRTY((char *)view + 0x38);
+    }
+    return 1;
+}
+
 /* The route's changes over USB (route.c): dl_fs_gen counts them, and a move leaves its FROM and TO
  * until the page takes them (dl_move_seen). */
 extern volatile unsigned dl_fs_gen;

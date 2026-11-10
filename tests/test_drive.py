@@ -15,6 +15,7 @@ imports core_desc and exports a small staging buffer; and a flashed mod `flash-a
 entry at order 60. Every refusal code the host can meet has a fixture that is refused and one that
 loads (ROWS), and test_every_code_has_a_fixture fails for a code without them.
 """
+import dataclasses
 import json
 import os
 import struct
@@ -55,6 +56,7 @@ def flashed(B, pad=0, store=False):
                          'relocs': [[0, 'abs32', 'sym:fn_flash-a', 0]]}]
     fa['symbols']['flash_fn'] = ['.run', 4]
     fa['exports'] = ['flash_fn']
+    fa['sites'] = [B.jmp_site(B.at(0x2000), 'flash_fn')]   # in the site map, for the +Drive sites' rows
     return [core, loader, fa]
 
 
@@ -253,9 +255,15 @@ def _(B):
     return files(hello(B, target=t)), files(hello(B))
 
 
-@row('feature', detail='sites')
+@row('feature', detail='collections')
 def _(B):
-    return files(hello(B, sites=[B.jmp_site(B.at(0x1000), 'fn_drive-hello')])), files(hello(B, sites=[]))
+    return files(hello(B, collections={'ev_mine': {'entry': 4}})), files(hello(B, collections={}))
+
+
+@row('site', detail='%08x flash-a' % 0x40002402, arg=drive.SITE_CORE << 8)
+def _(B):
+    return files(hello(B, sites=[B.jmp_site(B.at(0x2002), 'fn_drive-hello')])), \
+        files(hello(B, sites=[B.jmp_site(B.at(0x1000), 'fn_drive-hello')]))
 
 
 @row('duplicate', 1, detail='drive-hello')
@@ -406,8 +414,7 @@ def test_every_code_has_a_fixture():
 def test_each_feature_and_section_a_drive_mod_cannot_use_is_refused():
     with Bench('analog-rytm-mk2') as B:
         _out, b = built(B)
-        for field, value in (('sites', [B.jmp_site(B.at(0x1000), 'fn_drive-hello')]),
-                             ('collections', {'ev_mine': {'entry': 4}}), ('copied', [{'lo': 1, 'hi': 2, 'to': 3}]),
+        for field, value in (('collections', {'ev_mine': {'entry': 4}}),
                              ('storage', [{'sym': 'st', 'scope': 'kit', 'bits': 1}]), ('sharc', {})):
             r = drive.check(b, files(hello(B, **{field: value})))
             want = 'sharc' if field == 'sharc' else field
@@ -425,6 +432,63 @@ def test_each_feature_and_section_a_drive_mod_cannot_use_is_refused():
         c = [{'to': 'ev_tick', 'order': 50, 'data': '00000000', 'relocs': [], 'claims': [[1, 2]]}]
         r = drive.check(b, files(hello(B, contribute=c)))
         assert (r.choices[0].code, r.choices[0].detail) == (drive.CODE['feature'], 'claims')
+
+
+def test_sites_load_and_each_clash_is_refused():
+    """+Drive sites (ABI 1.2's site map): one loads, relocated to its mod's code; one over a flashed
+    site, in a pre-link range or not over its stock bytes is refused, as is the later of two +Drive
+    mods whose sites (or a site and a copied block) share a byte; two copied blocks may."""
+    with Bench('analog-rytm-mk2') as B:
+        pre = (B.at(0x3000), B.at(0x3010), desc.PRE_CODE, 'test')
+        B.dev.releases['SYN'] = B.rel = dataclasses.replace(B.rel, prelink=(pre,))
+        docs = flashed(B)
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        b = drive.load_build(out.image)
+        assert b.main_hi == B.at(len(B.img)), hex(b.main_hi)
+        bad = B.jmp_site(B.at(0x1000), 'fn_drive-hello')
+        bad['stock_sha256'] = '00' * 32
+        assert [(c.code, c.arg, c.detail) for c in drive.check(b, files(hello(B, sites=[bad]))).choices] == \
+            [(drive.CODE['site'], drive.SITE_STOCK << 8, '%08x' % B.at(0x1000))]
+        blk = drive.load_build(out.image[desc.find(out.image)[0]:])   # the descriptor alone: no stock bytes
+        assert drive.check(blk, files(hello(B, sites=[bad]))).choices[0].state == drive.LOADED
+        site = B.jmp_site(B.at(0x1000), 'fn_drive-hello')
+        r = drive.link(b, files(hello(B, sites=[site])))
+        assert r.choices[0].state == drive.LOADED, r.choices[0].why()
+        assert r.sites == [('drive-hello', 0, B.at(0x1000), bytes.fromhex('4ef9') + struct.pack('>I', b.lo))], r.sites
+
+        def why(*docs, deep=False):
+            r = (drive.link if deep else drive.check)(b, files(*docs))
+            return [(c.code, c.arg, c.detail) if c.state != drive.LOADED else 0 for c in r.choices]
+        S = drive.CODE['site']
+        assert why(hello(B, sites=[B.jmp_site(B.at(0x2002), 'fn_drive-hello')])) == \
+            [(S, drive.SITE_CORE << 8, '%08x flash-a' % B.at(0x2002))]
+        assert why(hello(B, sites=[B.jmp_site(B.at(0x300c), 'fn_drive-hello')])) == \
+            [(S, drive.SITE_PRELINK << 8, '%08x' % B.at(0x300c))]
+        assert why(hello(B, sites=[B.jmp_site(B.at(0x3010), 'fn_drive-hello')])) == [0]
+        a, z = dmod(B, 'a-mod', sites=[B.jmp_site(B.at(0x1000), 'fn_a-mod')]), \
+            dmod(B, 'z-mod', sites=[B.site(B.at(0x1004), 4)])
+        assert why(z, a) == [(S, drive.SITE_MOD << 8 | 1, '%08x' % B.at(0x1004)), 0]
+        assert drive.message(S, '%08x' % B.at(0x1004), drive.SITE_MOD << 8 | 1) == \
+            'site 0x40001404: taken by another +Drive mod (line 2)'
+        block = {'lo': B.at(0x1000), 'hi': B.at(0x1100), 'to': 0}
+        assert why(dmod(B, 'a-mod', copied=[block]), dmod(B, 'z-mod', sites=[B.site(B.at(0x1000), 4)])) == \
+            [0, (S, drive.SITE_MOD << 8, '%08x' % B.at(0x1000))]
+        assert why(dmod(B, 'a-mod', copied=[block]), dmod(B, 'z-mod', copied=[block])) == [0, 0]
+        assert why(hello(B, copied=[dict(block, lo=B.at(0x1f00), hi=B.at(0x2001))])) == \
+            [(S, drive.SITE_CORE << 8, '%08x flash-a' % B.at(0x1f00))]
+        for bad in (dict(site, addr=B.at(len(B.img) - 2)), dict(site, len=4), dict(site, kind='both'),
+                    dict(site, relocs=[[2, 'abs16', 'sym:fn_drive-hello', 0]]), dict(site, stock_sha256='x' * 64)):
+            assert why(hello(B, sites=[bad])) == [(drive.CODE['format'], 0, '')], bad
+        assert why(hello(B, copied=[dict(block, hi=block['lo'])])) == [(drive.CODE['format'], 0, '')]
+        # after the boot wrote them, the MODS page's check reads through the stock bytes it kept
+        r = drive.link(b, files(hello(B, sites=[site])))
+        drive.apply_sites(b, r)
+        assert b.stock(B.at(0x1000), 6) == r.sites[0][3]
+        assert why(hello(B, sites=[site])) == [0]
+        # a descriptor without a site map (ABI 1.1) takes no sites, as before
+        old = drive.Build(dict(b.d, abi=(1, 1)), b.image, b.desc_at + b._ram)
+        r = drive.check(old, files(hello(B, sites=[site])))
+        assert (r.choices[0].code, r.choices[0].detail) == (drive.CODE['feature'], 'sites')
 
 
 def test_of_a_conflicting_pair_the_later_by_id_goes():

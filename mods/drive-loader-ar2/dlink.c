@@ -9,6 +9,7 @@
  *   layout   every .run from the area's start in id order, then every .bss
  *   pass 2   each file again: .run into place, .bss zeroed, relocations, table entries
  *   bind     each table with new entries rewritten, sorted by (order, mod id, index)
+ *   sites    each loaded mod's sites written into the running main OS (dl_apply_site)
  *
  * A refusal in the layout or in pass 2 (the area is full, a pc16 out of range) drops that
  * mod and starts again from the check, so a mod that needs it goes too. Memory goes only
@@ -56,6 +57,8 @@ struct dmod {
     u16 ctr_first, ctr_n;                /* its contributions */
     u8 init_sec;                         /* drive_init, if it has one */
     u32 init_off;
+    u16 site_first, site_n;              /* its sites and copied blocks */
+    u32 sdata_first;                     /* where its sites' bytes start in sdata */
     u16 fld_first, fld_n;                /* its storage fields */
 };
 
@@ -65,6 +68,12 @@ struct fld {                             /* a +Drive storage field a mod declare
     u8 scope, bits, flags, pad;
     u32 init;
 };
+
+struct dsite {                           /* a site, or a copied block (data NONE32) */
+    u32 lo, hi;
+    u32 data;                            /* a site's bytes in sdata */
+};
+#define NONE32 0xFFFFFFFFu
 
 struct contrib {
     s32 order;
@@ -104,10 +113,14 @@ static struct {
     int nmods;
     struct dmod *mods;                   /* n of them */
     u16 *order;                          /* mods by id */
-    u32 arena_n, lists_n, nsyms, nlocals, nctr, nent, edata_n, nerel;
+    u32 arena_n, lists_n, nsyms, nlocals, nctr, nent, edata_n, nerel, nsite, sdata_n;
     u32 flashed_syms;
     /* the pools' sizes (dl.h, DL_POOL_*; the merge's from the descriptor) */
-    u32 ARENA, LISTS, SYMS, LOCALS, CONTRIBS, EDATA, ERELOCS, MERGE, MDATA;
+    u32 ARENA, LISTS, SYMS, LOCALS, CONTRIBS, EDATA, ERELOCS, MERGE, MDATA, SITES, SDATA;
+    u32 main_hi;                         /* the main OS a site may change ends here; 0: no site map */
+    u32 scan_arg;                        /* pass 1's refusal argument (DL_R_SITE) */
+    struct dsite *site;
+    u8 *sdata;
     char *arena;
     u16 *lists;
     struct sym *syms;
@@ -147,6 +160,9 @@ const u8 *dl_store_prev;
 u32 dl_store_prev_n;
 struct ds_out dl_store_out;
 u32 dl_used_lo, dl_used_hi;
+struct dl_site *dl_sites;
+u8 *dl_site_orig;
+u32 dl_sites_n;
 
 /* ---- small helpers ---------------------------------------------------------------------- */
 void dl_memcpy(void *d, const void *s, u32 n)
@@ -280,6 +296,11 @@ static u32 table_count(u32 i) { return D16(o_table(i) + 10); }
 static u32 table_cap(u32 i) { return D16(o_table(i) + 12); }
 static u32 table_flags(u32 i) { return D16(o_table(i) + 14); }
 static u32 table_key(u32 i, u32 k) { return D32(D32(o_table(i) + 16) + 4 * k); }
+/* ABI 1.2: the site map (12 a range: lo, hi, kind, module) and the pre-link ranges */
+static u32 n_map(void) { return D16(4 + 2) >= 2 ? D16(0x50) : 0; }
+static u32 o_map(u32 i) { return D32(0x4c) + 12 * i; }
+static u32 n_pre(void) { return D16(4 + 2) >= 2 ? D16(0x52) : 0; }
+static u32 o_pre(u32 i) { return D32(0x54) + 12 * i; }
 /* An entry's order: ABI 1.1's orders array, else (1.0) the key's, 0xFFFF the linker's own */
 static s32 table_order(u32 i, u32 k)
 {
@@ -805,6 +826,255 @@ static int storage(struct dmod *m, const char *p, const u8 *buf, u32 len)
     return j.err ? DL_R_FORMAT : 0;
 }
 
+/* ---- sites ------------------------------------------------------------------------------ */
+static int hexval(int c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10
+         : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+static int overlap(u32 a, u32 b, u32 lo, u32 hi) { return a < hi && lo < b; }
+
+/* A site's bytes as the running main OS has them before any +Drive site: the memory, with the
+ * stock bytes the boot kept for each site it applied (a check after the boot reads through
+ * them). */
+static void stock_bytes(u8 *dst, u32 addr, u32 len)
+{
+    u32 i;
+    dl_memcpy(dst, DL_MEM(addr), len);
+    for (i = 0; i < dl_sites_n; i++) {
+        const struct dl_site *a = &dl_sites[i];
+        u32 lo = a->addr > addr ? a->addr : addr, hi = a->addr + a->len < addr + len ? a->addr + a->len : addr + len;
+        if (lo < hi)
+            dl_memcpy(dst + (lo - addr), dl_site_orig + a->orig + (lo - a->addr), hi - lo);
+    }
+}
+
+/* A refused site's detail: its address as 8 hex digits, and the flashed owner when there is one. */
+static const char *site_detail(u32 addr, const char *owner)
+{
+    static char d[32];
+    static const char hx[] = "0123456789abcdef";
+    u32 i;
+    for (i = 0; i < 8; i++)
+        d[i] = hx[addr >> (28 - 4 * i) & 15];
+    d[8] = 0;
+    if (owner && owner[0]) {
+        d[8] = ' ';
+        for (i = 0; i < 22 && owner[i]; i++)
+            d[9 + i] = owner[i];
+        d[9 + i] = 0;
+    }
+    return d;
+}
+
+/* Is the r-th site's stock_sha256 (in "sites" at p) the hash h? */
+static int sha_is(const char *p, const u8 *buf, u32 len, u32 r, const u8 *h)
+{
+    js_t j;
+    const char *s;
+    u32 n, i, k_ = 0;
+    int first = 1;
+    at(&j, p, buf, len);
+    js_open(&j, '[');
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1;
+        if (k_++ != r) {
+            js_skip(&j);
+            continue;
+        }
+        js_open(&j, '{');
+        while (js_next(&j, '}', &f2)) {
+            js_key(&j, &s, &n);
+            if (!js_eq(s, n, "stock_sha256")) {
+                js_skip(&j);
+                continue;
+            }
+            js_str(&j, &s, &n);
+            for (i = 0; i < 32; i++)
+                if ((hexval(s[2 * i]) << 4 | hexval(s[2 * i + 1])) != h[i])
+                    return 0;
+            return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+/* Pass 1's part for "sites" and "copied", after the rest of the file: each site's form (addr,
+ * len, new, kind, stock_sha256, relocations of the three kinds inside it) and each copied
+ * block's (lo < hi, to), inside the main OS; then each site against the flashed build's site
+ * map, the pre-link ranges and its stock bytes, and each copied block against the flashed
+ * sites. -> 0, or a refusal code (DL_R_SITE's argument in L.scan_arg). */
+static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, const char **what)
+{
+    js_t j;
+    const char *s;
+    u32 n, i, r;
+    int first, pass;
+
+    m->site_first = (u16)L.nsite;
+    m->site_n = 0;
+    m->sdata_first = L.sdata_n;
+    if (!L.main_hi)
+        return 0;
+    for (pass = 0; pass < 2; pass++) {
+        const char *p = k[pass ? K_COPIED : K_SITES];
+        if (!p || empty(p, buf, len))
+            continue;
+        at(&j, p, buf, len);
+        first = 1;
+        if (!js_open(&j, '['))
+            return DL_R_FORMAT;
+        while (js_next(&j, ']', &first)) {
+            int f2 = 1, kind = 0, have_sha = 0;
+            s32 addr = 0, n_ = 0, lo = 0, hi = 0, to = 0;
+            u32 got = 0, nlen = 0;
+            const char *newp = 0, *relp = 0;
+            struct dsite *d;
+            if (!js_open(&j, '{'))
+                return DL_R_FORMAT;
+            while (js_next(&j, '}', &f2)) {
+                if (!js_key(&j, &s, &n))
+                    return DL_R_FORMAT;
+                if (!pass && js_eq(s, n, "addr")) {
+                    if (!js_int(&j, &addr))
+                        return DL_R_FORMAT;
+                    got |= 1;
+                } else if (!pass && js_eq(s, n, "len")) {
+                    if (!js_int(&j, &n_))
+                        return DL_R_FORMAT;
+                    got |= 2;
+                } else if (!pass && js_eq(s, n, "new")) {
+                    newp = j.p;
+                    if (!js_hex(&j, 0, 0, &nlen))
+                        return DL_R_FORMAT;
+                } else if (!pass && js_eq(s, n, "kind")) {
+                    if (!js_str(&j, &s, &n))
+                        return DL_R_FORMAT;
+                    kind = js_eq(s, n, "code") || js_eq(s, n, "data");
+                } else if (!pass && js_eq(s, n, "stock_sha256")) {
+                    if (!js_str(&j, &s, &n) || n != 64)
+                        return DL_R_FORMAT;
+                    for (i = 0; i < 64; i++)
+                        if (hexval(s[i]) < 0)
+                            return DL_R_FORMAT;
+                    have_sha = 1;
+                } else if (!pass && js_eq(s, n, "relocs")) {
+                    relp = j.p;
+                    if (!js_skip(&j))
+                        return DL_R_FORMAT;
+                } else if (pass && js_eq(s, n, "lo")) {
+                    if (!js_int(&j, &lo))
+                        return DL_R_FORMAT;
+                    got |= 1;
+                } else if (pass && js_eq(s, n, "hi")) {
+                    if (!js_int(&j, &hi))
+                        return DL_R_FORMAT;
+                    got |= 2;
+                } else if (pass && js_eq(s, n, "to")) {
+                    if (!js_int(&j, &to))
+                        return DL_R_FORMAT;
+                    got |= 4;
+                } else if (!js_skip(&j)) {
+                    return DL_R_FORMAT;
+                }
+            }
+            if (j.err)
+                return DL_R_FORMAT;
+            if (!pass) {                 /* a site */
+                if (got != 3 || !newp || !kind || !have_sha || n_ <= 0 || nlen != (u32)n_
+                    || (u32)addr < DL_MAIN_LO || (u32)addr >= L.main_hi || (u32)n_ > L.main_hi - (u32)addr)
+                    return DL_R_FORMAT;
+                lo = addr;
+                hi = addr + n_;
+                if (relp) {              /* [off, abs32 | pc32 | pc16, target, addend] */
+                    js_t q;
+                    int f3 = 1;
+                    at(&q, relp, buf, len);
+                    if (!js_open(&q, '['))
+                        return DL_R_FORMAT;
+                    while (js_next(&q, ']', &f3)) {
+                        int f4 = 1, sz;
+                        s32 off, add;
+                        if (!js_open(&q, '[') || !js_next(&q, ']', &f4) || !js_int(&q, &off)
+                            || !js_next(&q, ']', &f4) || !js_str(&q, &s, &n))
+                            return DL_R_FORMAT;
+                        sz = js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0;
+                        if (!sz || off < 0 || off + sz > n_ || !js_next(&q, ']', &f4) || !js_str(&q, &s, &n)
+                            || !js_next(&q, ']', &f4) || !js_int(&q, &add) || js_next(&q, ']', &f4))
+                            return DL_R_FORMAT;
+                    }
+                    if (q.err)
+                        return DL_R_FORMAT;
+                }
+            } else if (got != 7 || lo >= hi || (u32)lo < DL_MAIN_LO || (u32)hi > L.main_hi) {
+                return DL_R_FORMAT;      /* a copied block */
+            }
+            if (L.nsite >= L.SITES || (!pass && L.sdata_n + (u32)n_ > L.SDATA))
+                return DL_R_LIMIT;
+            d = &L.site[L.nsite++];
+            d->lo = (u32)lo;
+            d->hi = (u32)hi;
+            d->data = pass ? NONE32 : L.sdata_n;
+            if (!pass)
+                L.sdata_n += (u32)n_;
+            m->site_n++;
+            (void)to;
+        }
+        if (j.err)
+            return DL_R_FORMAT;
+    }
+
+    /* against the flashed build: each site, then each copied block */
+    for (r = 0; r < m->site_n; r++) {
+        const struct dsite *d = &L.site[m->site_first + r];
+        if (d->data == NONE32)
+            continue;
+        for (i = 0; i < n_map(); i++)
+            if (overlap(d->lo, d->hi, D32(o_map(i)), D32(o_map(i) + 4))) {
+                u32 kd = D16(o_map(i) + 8), mi = D16(o_map(i) + 10);
+                *what = site_detail(d->lo, (kd == 1 || kd == 2) && mi < n_modules() ? module_name(mi) : 0);
+                L.scan_arg = DL_SITE_CORE << 8;
+                return DL_R_SITE;
+            }
+        for (i = 0; i < n_pre(); i++)
+            if (overlap(d->lo, d->hi, D32(o_pre(i)), D32(o_pre(i) + 4))) {
+                *what = site_detail(d->lo, 0);
+                L.scan_arg = DL_SITE_PRELINK << 8;
+                return DL_R_SITE;
+            }
+    }
+    /* the stock bytes: the site's own slot of sdata holds them while the hash runs */
+    at(&j, k[K_SITES], buf, len);
+    for (r = 0; r < m->site_n; r++) {
+        const struct dsite *d = &L.site[m->site_first + r];
+        u8 h[32];
+        if (d->data == NONE32)
+            continue;
+        stock_bytes(L.sdata + d->data, d->lo, d->hi - d->lo);
+        dl_sha256(L.sdata + d->data, d->hi - d->lo, h);
+        if (!sha_is(k[K_SITES], buf, len, r, h)) {
+            *what = site_detail(d->lo, 0);
+            L.scan_arg = DL_SITE_STOCK << 8;
+            return DL_R_SITE;
+        }
+    }
+    for (r = 0; r < m->site_n; r++) {
+        const struct dsite *d = &L.site[m->site_first + r];
+        if (d->data != NONE32)
+            continue;
+        for (i = 0; i < n_map(); i++)
+            if (D16(o_map(i) + 8) == 1 && overlap(d->lo, d->hi, D32(o_map(i)), D32(o_map(i) + 4))) {
+                u32 mi = D16(o_map(i) + 10);
+                *what = site_detail(d->lo, mi < n_modules() ? module_name(mi) : 0);
+                L.scan_arg = DL_SITE_CORE << 8;
+                return DL_R_SITE;
+            }
+    }
+    return 0;
+}
+
 /* Pass 1: read one file into m. -> 0, or a refusal code (detail in *what). */
 static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 {
@@ -817,6 +1087,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     static const int nok[] = { K_SITES, K_COLLECTIONS, K_COPIED, K_STORAGE, K_SHARC };
 
     *what = 0;
+    L.scan_arg = 0;
     if (!top(buf, len, k))
         return DL_R_JSON;
     at(&j, k[K_ELEMOD], buf, len);
@@ -833,7 +1104,8 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     if (!target_ok(k[K_TARGET], buf, len))
         return DL_R_TARGET;
     for (i = 0; i < sizeof(nok) / sizeof(nok[0]); i++)
-        if (!(nok[i] == K_STORAGE && L.store) && !empty(k[nok[i]], buf, len)) {
+        if (!(nok[i] == K_STORAGE && L.store) && (!L.main_hi || (nok[i] != K_SITES && nok[i] != K_COPIED))
+            && !empty(k[nok[i]], buf, len)) {
             *what = no[i];
             return DL_R_FEATURE;
         }
@@ -1027,6 +1299,11 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     }
     if (L.store && (i = (u32)storage(m, k[K_STORAGE], buf, len)) != 0)
         return (int)i;
+    {
+        int code = scan_sites(m, k, buf, len, what);
+        if (code)
+            return code;
+    }
     m->init_sec = 0xFF;
     {
         u8 sec;
@@ -1174,6 +1451,32 @@ static int check_round(void)
             refuse(m, DL_R_IMPORT, 0, L.arena + L.lists[m->imports.first + q]);
             refused++;
             continue;
+        }
+        {                                /* sites against earlier living mods' sites and copied
+                                          * blocks (two copied blocks may share bytes) */
+            u32 a, b;
+            const struct dmod *with = 0;
+            const struct dsite *x = 0;
+            for (a = 0; a < m->site_n && !with; a++) {
+                x = &L.site[m->site_first + a];
+                for (k = 0; k < i && !with; k++) {
+                    const struct dmod *o = &L.mods[L.order[k]];
+                    if (!o->alive)
+                        continue;
+                    for (b = 0; b < o->site_n; b++) {
+                        const struct dsite *y = &L.site[o->site_first + b];
+                        if ((x->data != NONE32 || y->data != NONE32) && overlap(x->lo, x->hi, y->lo, y->hi)) {
+                            with = o;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (with) {
+                refuse(m, DL_R_SITE, (u32)DL_SITE_MOD << 8 | with->choice, site_detail(x->lo, 0));
+                refused++;
+                continue;
+            }
         }
     }
     /* table room: while a table is over, the last living mod (id order) adding to it goes */
@@ -1494,6 +1797,69 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
         if (j.err)
             return DL_R_JSON;
     }
+    /* sites: their new bytes into sdata, relocated at their own address (written at the end) */
+    if (m->site_n && k[K_SITES]) {
+        const struct dsite *d = &L.site[m->site_first];
+        at(&j, k[K_SITES], buf, len);
+        first = 1;
+        js_open(&j, '[');
+        while (js_next(&j, ']', &first)) {
+            int f2 = 1;
+            u8 *dst = L.sdata + d->data;
+            const char *relp = 0;
+            js_open(&j, '{');
+            while (js_next(&j, '}', &f2)) {
+                js_key(&j, &s, &n);
+                if (js_eq(s, n, "new")) {
+                    u32 dn;
+                    if (!js_hex(&j, dst, d->hi - d->lo, &dn))
+                        return DL_R_JSON;
+                } else if (js_eq(s, n, "relocs")) {
+                    relp = j.p;
+                    js_skip(&j);
+                } else {
+                    js_skip(&j);
+                }
+            }
+            if (relp) {
+                js_t q;
+                int f3 = 1;
+                at(&q, relp, buf, len);
+                js_open(&q, '[');
+                while (js_next(&q, ']', &f3)) {
+                    int f4 = 1, type;
+                    s32 off, add;
+                    u32 sv;
+                    js_open(&q, '[');
+                    js_next(&q, ']', &f4);
+                    js_int(&q, &off);
+                    js_next(&q, ']', &f4);
+                    js_str(&q, &s, &n);
+                    type = rtype(s, n);
+                    js_next(&q, ']', &f4);
+                    js_str(&q, &s, &n);
+                    if (!resolve(m, s, n, &sv)) {
+                        static char nm[32];
+                        u32 c = n > 4 ? (n - 4 < 31 ? n - 4 : 31) : 0;
+                        dl_memcpy(nm, s + 4, c);
+                        nm[c] = 0;
+                        *what = nm;
+                        return DL_R_IMPORT;
+                    }
+                    js_next(&q, ']', &f4);
+                    js_int(&q, &add);
+                    js_next(&q, ']', &f4);
+                    if (!put(dst + off, type, sv + (u32)add, d->lo + (u32)off))
+                        return DL_R_RANGE;
+                }
+            }
+            d++;
+            while (d < L.site + m->site_first + m->site_n && d->data == NONE32)
+                d++;
+        }
+        if (j.err)
+            return DL_R_JSON;
+    }
     return 0;
 }
 
@@ -1693,6 +2059,8 @@ static int pools(int n)
     L.CONTRIBS = pool_n(DL_POOL_CONTRIBS, mb, 0);
     L.EDATA = pool_n(DL_POOL_EDATA, mb, 0);
     L.ERELOCS = pool_n(DL_POOL_ERELOCS, mb, 0);
+    L.SITES = pool_n(DL_POOL_SITES, mb, 0);
+    L.SDATA = pool_n(DL_POOL_SDATA, mb, 0);
     L.mods = take((u32)n * sizeof *L.mods);
     L.order = take((u32)n * sizeof *L.order);
     L.arena = take(L.ARENA);
@@ -1714,8 +2082,10 @@ static int pools(int n)
         if (!L.fld || !L.fdesc || !L.want || !L.want_fld)
             return 0;
     }
+    L.site = take(L.SITES * sizeof *L.site);
+    L.sdata = take(L.SDATA);
     return L.mods && L.order && L.arena && L.lists && L.syms && L.sym_next && L.locals && L.ctr
-           && L.ent && L.edata && L.erel && L.items && L.mdata;
+           && L.ent && L.edata && L.erel && L.items && L.mdata && L.site && L.sdata;
 }
 
 /* ---- the whole link ------------------------------------------------------------------------ */
@@ -1939,6 +2309,11 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
     L.area_lo = D32(D32(0x3c) + 4);
     L.area_hi = D32(D32(0x3c) + 8);
     store_base();
+    for (e = 0; e < n_map(); e++)        /* the main OS ends where the boot copier starts */
+        if (D16(o_map(e) + 8) == 4 && (!L.main_hi || D32(o_map(e)) < L.main_hi))
+            L.main_hi = D32(o_map(e));
+    if (L.main_hi <= DL_MAIN_LO)
+        L.main_hi = 0;
     if (!pools(n))
         return -1;
     L.arena_n = 1;                       /* offset 0 holds "" */
@@ -1989,13 +2364,18 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
     code = scan(m, L.buf, (u32)len, &what);
     if (code) {
         /* a file pass 1 refuses leaves nothing behind: its exports, its entries */
-        set_status(m, DL_ST_REFUSED, code, 0, what);
+        set_status(m, DL_ST_REFUSED, code, L.scan_arg, what);
         if (m->exp_n)
             L.nsyms = m->exp_first;
         if (m->fld_n)
             L.nfld = m->fld_first;
         if (m->ctr_n)
             L.nctr = m->ctr_first;
+        if (m->site_n) {
+            L.nsite = m->site_first;
+            L.sdata_n = m->sdata_first;
+        }
+        m->site_n = 0;
         return;
     }
     m->alive = 1;
@@ -2172,6 +2552,11 @@ static int records(int n)
     dl_free(dl_status);
     dl_free(dl_detail);
     dl_free(dl_inits);
+    dl_free(dl_sites);
+    dl_free(dl_site_orig);
+    dl_sites = 0;
+    dl_site_orig = 0;
+    dl_sites_n = 0;
     dl_status_n = 0;
     dl_status = take((u32)n * sizeof *dl_status);
     dl_detail = take((u32)n * sizeof *dl_detail);
@@ -2187,6 +2572,62 @@ static int records(int n)
     dl_detail = 0;
     dl_inits = 0;
     return 0;
+}
+
+/* The heap's room for the loaded mods' sites and their stock bytes, kept from the boot on.
+ * -> 0 when there is none. */
+static int keep_sites(void)
+{
+    u32 n = 0, bytes = 0, r;
+    int i;
+    for (i = 0; i < L.nmods; i++) {
+        const struct dmod *m = &L.mods[i];
+        if (!m->alive)
+            continue;
+        for (r = 0; r < m->site_n; r++)
+            if (L.site[m->site_first + r].data != NONE32) {
+                n++;
+                bytes += L.site[m->site_first + r].hi - L.site[m->site_first + r].lo;
+            }
+    }
+    if (!n)
+        return 1;
+    dl_sites = dl_alloc(n * sizeof *dl_sites);
+    dl_site_orig = dl_alloc(bytes);
+    if (dl_sites && dl_site_orig)
+        return 1;
+    dl_free(dl_sites);
+    dl_free(dl_site_orig);
+    dl_sites = 0;
+    dl_site_orig = 0;
+    return 0;
+}
+
+/* The loaded mods' sites, in id order: each one's stock bytes kept, then its new bytes written
+ * (dl_apply_site). The caller's dl_flush ends it. */
+static void apply_sites(void)
+{
+    u32 r, orig = 0;
+    int i;
+    for (i = 0; i < L.nmods; i++) {
+        const struct dmod *m = &L.mods[L.order[i]];
+        if (!m->alive)
+            continue;
+        for (r = 0; r < m->site_n; r++) {
+            const struct dsite *d = &L.site[m->site_first + r];
+            struct dl_site *a;
+            if (d->data == NONE32)
+                continue;
+            a = &dl_sites[dl_sites_n++];
+            a->addr = d->lo;
+            a->len = (u16)(d->hi - d->lo);
+            a->line = m->choice;
+            a->orig = orig;
+            dl_memcpy(dl_site_orig + orig, DL_MEM(d->lo), a->len);
+            orig += a->len;
+            dl_apply_site(d->lo, L.sdata + d->data, a->len);
+        }
+    }
 }
 
 static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
@@ -2243,8 +2684,10 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         if (!restart)
             break;
     }
-    if (rounds >= 4 * DL_MAX_MODS || !bind(0)) {
-        dl_skip_reason = DL_SKIP_UNSTABLE;
+    b = rounds < 4 * DL_MAX_MODS && bind(0);
+    if (!b || !keep_sites()) {           /* never settled, past the loader's room, or no heap
+                                          * for the sites' stock bytes */
+        dl_skip_reason = b ? DL_SKIP_MEMORY : DL_SKIP_UNSTABLE;
         for (i = 0; i < L.nmods; i++)
             if (L.mods[i].alive)
                 refuse(&L.mods[i], DL_R_LIMIT, 0, 0);
@@ -2257,6 +2700,7 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
     }
     bind(1);
     write_store();
+    apply_sites();
     for (i = 0; i < L.nmods; i++) {
         struct dmod *m = &L.mods[L.order[i]];
         if (!m->alive)

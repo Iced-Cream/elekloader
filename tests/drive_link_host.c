@@ -6,7 +6,8 @@
  *
  * RAM.bin is the flashed build's RAM from RAM_BASE up to 0x48000000 (the rest zero),
  * STOCK.bin the main OS image at STOCK_BASE (stock parts copy from it). MODS_DIR holds the
- * files and `active`. OUT.bin gets the RAM afterwards; stdout a JSON summary. With
+ * files and `active`. OUT.bin gets the RAM afterwards, OUT.bin.main the main OS (with the
+ * sites applied); stdout a JSON summary. With
  * DL_HOST_CHECK set it runs the MODS page's dl_check instead of dl_link: the same summary
  * from the check's own records, plus each file's version. A file MODS_DIR/.store is the
  * +Drive storage's /mods/.store as the boot reads it; the link's new one goes to OUT.bin.store
@@ -45,6 +46,12 @@ void dl_free(void *p)
 
 void dl_breathe(void)
 {
+}
+
+/* the unit masks interrupts and pushes the data cache (flush.s); here the bytes are enough */
+void dl_apply_site(u32 addr, const u8 *src, u32 len)
+{
+    memcpy(dl_host_mem(addr), src, len);
 }
 
 static u8 *slurp(const char *path, u32 *n)
@@ -183,10 +190,26 @@ int main(int argc, char **argv)
         fwrite(dl_store_out.bytes, 1, dl_store_out.nbytes, f);
         fclose(f);
     }
+    snprintf(path, sizeof path, "%s.main", argv[7]);
+    f = fopen(path, "wb");
+    fwrite(stock, 1, stock_len, f);
+    fclose(f);
+    if (getenv("DL_HOST_RECHECK")) {     /* the MODS page's check after this boot: the same set */
+        static struct dl_status st[DL_MAX_MODS];
+        static char det[DL_MAX_MODS][32];
+        int c = dl_check(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging, st, det, 0);
+        printf("{\"recheck\": %d, \"codes\": [", c);
+        for (i = 0; i < (u32)k; i++)
+            printf("%s%d", i ? ", " : "", st[i].code);
+        printf("]}\n");
+    }
     printf("{\"loaded\": %d, \"skip\": %d, \"used\": [%u, %u], \"inits\": [", loaded, dl_skip_reason,
            dl_used_lo, dl_used_hi);
     for (i = 0; i < dl_inits_n; i++)
         printf("%s%u", i ? ", " : "", dl_inits[i]);
+    printf("], \"sites\": [");
+    for (i = 0; i < dl_sites_n; i++)
+        printf("%s[%u, %u, %u]", i ? ", " : "", dl_sites[i].addr, dl_sites[i].len, dl_sites[i].line);
     printf("], \"status\": [");
     for (i = 0; i < dl_status_n; i++) {
         char id[DL_ID_MAX + 1];

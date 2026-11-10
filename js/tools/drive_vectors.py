@@ -50,8 +50,7 @@ def _more(B, h, u):
     out.append(('a long id', T.files(T.hello(B, id='x' * 28))))
     out.append(('no target', T.files(T.hello(B, target=None))))
     out.append(('Mod2 refuses', T.files(T.hello(B, symbols={'fn_drive-hello': ['.nope', 0], 'drive-hello_count': ['.bss', 0]}))))
-    for field, value in (('collections', {'ev_mine': {'entry': 4}}), ('copied', [{'lo': 1, 'hi': 2, 'to': 3}]),
-                         ('storage', [{'sym': 'st', 'scope': 'kit', 'bits': 1}])):
+    for field, value in (('collections', {'ev_mine': {'entry': 4}}), ('storage', [{'sym': 'st', 'scope': 'kit', 'bits': 1}])):
         out.append(('feature ' + field, T.files(T.hello(B, **{field: value}))))
     for sec in ('.boot', '.fast', '.payload'):
         d = T.hello(B)
@@ -65,6 +64,20 @@ def _more(B, h, u):
     big = ['n%05d' % i for i in range(T.built(B)[1].pools['arena'] // 7)]
     out.append(('the arena', T.files(T.hello(B, resources={'names': big[:1000]}, exports=['not_a_symbol']),
                                      T.hello(B, resources={'names': big[1000:]}))))
+    # +Drive sites (the descriptor alone: no stock bytes to check)
+    jmp, wide = B.jmp_site(B.at(0x1000), 'fn_a-mod'), B.site(B.at(0x1004), 4)
+    block = {'lo': B.at(0x1000), 'hi': B.at(0x1100), 'to': 0}
+    out.append(('sites: two mods on one byte', T.files(T.dmod(B, 'z-mod', sites=[wide]), T.dmod(B, 'a-mod', sites=[jmp]))))
+    out.append(('sites: a site in a copied block', T.files(T.dmod(B, 'a-mod', copied=[block]), T.dmod(B, 'z-mod', sites=[wide]))))
+    out.append(('sites: two copied blocks', T.files(T.dmod(B, 'a-mod', copied=[block]), T.dmod(B, 'z-mod', copied=[block]))))
+    out.append(('sites: a copied block over a flashed site',
+                T.files(T.dmod(B, 'a-mod', copied=[dict(block, lo=B.at(0x1f00), hi=B.at(0x2001))]))))
+    for name, bad in (('outside the main OS', dict(jmp, addr=B.at(len(B.img) - 2))), ('a short new', dict(jmp, len=8)),
+                      ('kind both', dict(jmp, kind='both')), ('an abs16', dict(jmp, relocs=[[2, 'abs16', 'abs', 0]])),
+                      ('a sha not hex', dict(jmp, stock_sha256='x' * 64)), ('addr as text', dict(jmp, addr='0x40001400')),
+                      ('addr not a number', dict(jmp, addr='here'))):
+        out.append(('sites: ' + name, T.files(T.dmod(B, 'a-mod', sites=[bad]))))
+    out.append(('sites: an empty copied block', T.files(T.dmod(B, 'a-mod', copied=[dict(block, hi=block['lo'])]))))
     d = T.hello(B)
     d['symbols']['drive_init'] = ['.run', 2]
     d['exports'] = d['exports'] + ['drive_init']

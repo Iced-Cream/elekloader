@@ -16,6 +16,7 @@ Layout alignment, the id order, the entry sort key and the relocation writer are
 functions, so this and the flashed linker cannot drift. Nothing here reads a clock or iterates in
 hash order: the same inputs give the same bytes anywhere.
 """
+import hashlib
 import json
 import os
 import struct
@@ -35,9 +36,10 @@ RECORD = 32                    # a status record's bytes
 # +Drive area (at least 1), the symbols past the flashed build's own names, each capped at
 # POOL_CAP; past one a mod, or the whole set, is refused with LIMIT
 POOL_PER_MB = {'arena': 12288, 'lists': 1024, 'syms': 1024, 'locals': 1024, 'contribs': 256,
-               'edata': 2048, 'erelocs': 256}
+               'edata': 2048, 'erelocs': 256, 'sites': 256, 'sdata': 4096}
 POOL_CAP = 0xFFF0
 INIT = 'drive_init'            # each mod's own init: void drive_init(void); never a global name
+SITE_MAIN_LO = 0x40000400      # dl.h DL_MAIN_LO: the Rytm MKII's main_load, where a site may start
 
 # states and refusal codes (docs/FORMAT.md, "+Drive refusal codes"): the boot linker's numbers
 NONE, LOADED, REFUSED, DROPPED = 0, 1, 2, 3
@@ -65,7 +67,10 @@ CODES = {
     19: ('limit', 'past the loader\'s own limits'),
     20: ('count', 'more than 256 mods are chosen'),
     21: ('store', 'storage: {what} needs {need} of {have}'),
+    22: ('site', 'site 0x{detail}: {why}'),
 }
+# DL_R_SITE's kind (its argument's high byte; the low byte is the other mod's line for SITE_MOD)
+SITE_CORE, SITE_MOD, SITE_PRELINK, SITE_STOCK = 1, 2, 3, 4
 CODE = {name: c for c, (name, _m) in CODES.items()}
 BOOT_ONLY = ('missing', 'changed')     # the host has the files it is given
 SKIPS = {0: 'none', 1: 'key', 2: 'armed', 3: 'drive', 4: 'abi', 5: 'unstable', 6: 'count', 7: 'memory'}
@@ -79,12 +84,21 @@ MAX_FIELDS = 512                # dstore.h DS_MAX_FIELDS: the fields of every fi
 FIELD_KEYS = ('sym', 'scope', 'bits', 'init', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'handle')
 FIELD_FLAGS = (('lock', 1), ('cc', 2), ('lfo', 4), ('mod', 16), ('handle', 32))
 
+SITE_FIELDS = ('sites', 'copied')     # ... except these on a build with a site map (ABI 1.2)
+
 
 def message(code, detail='', arg=0):
     """A status's line, for a person. A storage refusal's detail is "WHAT NEED HAVE"."""
     if CODES[code][0] == 'store':
         w = (str(detail).split() + ['?', '?', '?'])[:3]
         return CODES[code][1].format(what=w[0], need=w[1], have=w[2])
+    if code == CODE['site']:
+        addr, _sp, owner = str(detail).partition(' ')
+        kind = arg >> 8
+        why = {SITE_CORE: 'taken by %s' % (owner or 'the build'),
+               SITE_MOD: 'taken by another +Drive mod (line %d)' % ((arg & 0xFF) + 1),
+               SITE_PRELINK: 'in a pre-link range', SITE_STOCK: 'not stock bytes'}.get(kind, 'refused')
+        return CODES[code][1].format(detail=addr, why=why)
     return CODES[code][1].format(detail=detail, arg=arg)
 
 
@@ -136,6 +150,14 @@ class Build:
         self.gens_at = exports.get(STORE_GENS)
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
         self.main_load = dev.main_load if dev else None
+        # the main OS a +Drive site may change: from the device's main_load to the boot copier
+        # (the site map's kind 4); 0 on a descriptor without a site map (ABI 1.0 and 1.1)
+        self.site_map = d.get('sites', []) if tuple(d.get('abi', (1, 0)))[1] >= 2 else []
+        self.prelink = d.get('prelink', [])
+        boots = [lo for lo, _hi, k, _mi in self.site_map if k == desc.SITE_BOOT]
+        self.main_lo = SITE_MAIN_LO
+        self.main_hi = min(boots) if boots and min(boots) > SITE_MAIN_LO else 0
+        self.applied = []                       # sites a boot applied: [(addr, stock bytes)]
         self.image, self._ram, self.desc_at = image, None, None
         if image is not None:
             self._ram = self._locate(image, at)
@@ -220,6 +242,7 @@ class Choice:
         self.mod = self.id = None
         self.exports = []
         self.fields = []                        # its +Drive storage fields (drive_store's documents)
+        self.sites = []                         # [(lo, hi, is_site)]: its sites, then its copied blocks
         self.alive = False
 
     def refuse(self, code, detail='', arg=0, note='', state=REFUSED):
@@ -382,7 +405,8 @@ def pass1(build, c, state):
         return c.refuse('target', note='%s %s' % (tgt.get('device'), tgt.get('os'))
                         if isinstance(tgt, dict) else 'no target')
     for f in NO_FIELDS:
-        if not (f == 'storage' and build.store) and not _empty(doc.get(f)):
+        if not (f == 'storage' and build.store) and not (build.main_hi and f in SITE_FIELDS) \
+                and not _empty(doc.get(f)):
             return c.refuse('feature', f)
     secs = doc.get('sections')
     if not isinstance(secs, dict):
@@ -457,16 +481,145 @@ def pass1(build, c, state):
         why = _storage(doc.get('storage'), fields, exports, state, build, keep)
         if why:
             return c.refuse(why[0], note=why[1])
+    sites = _scan_sites(build, c, doc, state)
+    if sites is None:
+        return False
     try:                                        # the host's own reading of the file, a last check
         m = linker.Mod2(doc, c.name, c.raw)
     except ModError as e:
         return c.refuse('format', note=str(e))
-    c.mod, c.exports, c.fields = m, exports, fields
+    c.mod, c.exports, c.fields, c.sites = m, exports, fields, sites
     state['syms'] += len(exports)
     state['fields'] += len(fields)
     state['contribs'] += contribs
+    state['sites'] += len(sites)
+    state['sdata'] += sum(hi - lo for lo, hi, is_site in sites if is_site)
     c.alive = True
     return True
+
+
+def _num(v):
+    """A number as the boot linker's js_int reads it: a JSON integer, or a string Python's int(v, 0)
+    reads, within 32 bits signed. -> int, or None."""
+    if type(v) is int:
+        n = v
+    elif isinstance(v, str):
+        try:
+            n = int(v, 0)
+        except ValueError:
+            return None
+    else:
+        return None
+    return n if -0x80000000 <= n < 0x80000000 else None
+
+
+def _overlap(a, b, lo, hi):
+    return a < hi and lo < b
+
+
+def _site_detail(addr, owner=''):
+    """A refused site's detail, as the boot linker writes it: 8 hex digits, then the flashed owner
+    (at most 22 bytes of its name)."""
+    d = '%08x' % addr
+    if owner:
+        d += ' ' + owner.encode('utf-8')[:22].decode('utf-8', 'ignore')
+    return d
+
+
+def _stock_bytes(build, addr, n):
+    """A site's bytes in the running main OS before any +Drive site, or None without an image."""
+    b = build.stock(addr, n)
+    if b is None:
+        return None
+    b = bytearray(b)
+    for at, orig in build.applied:
+        lo, hi = max(at, addr), min(at + len(orig), addr + n)
+        if lo < hi:
+            b[lo - addr:hi - addr] = orig[lo - at:hi - at]
+    return bytes(b)
+
+
+def _scan_sites(build, c, doc, state):
+    """Pass 1's part for "sites" and "copied", after the exports, as dlink.c's scan_sites: each
+    site's and copied block's form inside the main OS, the loader's room for them, then each site
+    against the flashed build's site map, the pre-link ranges and its stock bytes (not checked
+    without a built image), and each copied block against the flashed sites. -> [(lo, hi, is_site)]
+    (sites first, then copied blocks), or None after refusing c."""
+    out, sdata = [], 0
+    if not build.main_hi:
+        return out
+    for copied, key in ((False, 'sites'), (True, 'copied')):
+        v = doc.get(key)
+        if _empty(v):
+            continue
+        if not isinstance(v, list):
+            return c.refuse('format', note=key) or None
+        for x in v:
+            if not isinstance(x, dict):
+                return c.refuse('format', note=key) or None
+            if not copied:
+                addr, n = _num(x.get('addr')), _num(x.get('len'))
+                try:
+                    new = bytes.fromhex(x['new']) if isinstance(x.get('new'), str) else None
+                except ValueError:
+                    new = None
+                sha = x.get('stock_sha256')
+                ok = (addr is not None and n is not None and new is not None and x.get('kind') in ('code', 'data')
+                      and isinstance(sha, str) and len(sha) == 64 and all(ch in '0123456789abcdefABCDEF' for ch in sha)
+                      and n > 0 and len(new) == n and build.main_lo <= addr < build.main_hi
+                      and n <= build.main_hi - addr)
+                if 'new' in x and not isinstance(x['new'], str):
+                    ok = False
+                rel = x.get('relocs')
+                if ok and 'relocs' in x:
+                    if not isinstance(rel, list):
+                        ok = False
+                    for r in rel if isinstance(rel, list) else []:
+                        size = {'abs32': 4, 'pc32': 4, 'pc16': 2}.get(r[1]) if isinstance(r, list) and len(r) == 4 \
+                            and isinstance(r[1], str) else None
+                        off = _num(r[0]) if size else None
+                        if size is None or off is None or off < 0 or off + size > n or not isinstance(r[2], str) \
+                                or _num(r[3]) is None:
+                            ok = False
+                            break
+                if not ok:
+                    return c.refuse('format', note='a site %r' % (x.get('addr'),)) or None
+                lo, hi = addr, addr + n
+            else:
+                lo, hi, to = _num(x.get('lo')), _num(x.get('hi')), _num(x.get('to'))
+                if lo is None or hi is None or to is None or not lo < hi or lo < build.main_lo \
+                        or hi > build.main_hi:
+                    return c.refuse('format', note='a copied block') or None
+            if state['sites'] + len(out) >= build.pools['sites'] or \
+                    (not copied and state['sdata'] + sdata + (hi - lo) > build.pools['sdata']):
+                return c.refuse('limit', note='sites') or None
+            out.append((lo, hi, not copied))
+            if not copied:
+                sdata += hi - lo
+    names = [m['name'] for m in build.modules]
+    for lo, hi, is_site in out:
+        if not is_site:
+            continue
+        for a, b, kind, mi in build.site_map:
+            if _overlap(lo, hi, a, b):
+                owner = names[mi] if kind in (desc.SITE_SITE, desc.SITE_COPIED) and mi < len(names) else ''
+                return c.refuse('site', _site_detail(lo, owner), SITE_CORE << 8) or None
+        for a, b, _kind in build.prelink:
+            if _overlap(lo, hi, a, b):
+                return c.refuse('site', _site_detail(lo), SITE_PRELINK << 8) or None
+    sites = [x for x in doc.get('sites') or []] if build.main_hi else []
+    for (lo, hi, is_site), x in zip([o for o in out if o[2]], sites):
+        now = _stock_bytes(build, lo, hi - lo)
+        if now is not None and hashlib.sha256(now).hexdigest() != x['stock_sha256'].lower():
+            return c.refuse('site', _site_detail(lo), SITE_STOCK << 8) or None
+    for lo, hi, is_site in out:
+        if is_site:
+            continue
+        for a, b, kind, mi in build.site_map:
+            if kind == desc.SITE_SITE and _overlap(lo, hi, a, b):
+                return c.refuse('site', _site_detail(lo, names[mi] if mi < len(names) else ''),
+                                SITE_CORE << 8) or None
+    return out
 
 
 def _resolvable(build, alive, x):
@@ -514,6 +667,13 @@ def _round(build, order):
             x = next((x for x in m.imports if not _resolvable(build, alive, x) and x not in m.weak), None)
             if x is not None:
                 why = ('import', x)
+        if why is None:                         # sites against earlier living mods' sites and
+            for lo, hi, mine in c.sites:        # copied blocks (two copied blocks may share bytes)
+                o = next((o for o in earlier if any((mine or theirs) and _overlap(lo, hi, a, b)
+                                                    for a, b, theirs in o.sites)), None)
+                if o is not None:
+                    why = ('site', _site_detail(lo), SITE_MOD << 8 | o.line)
+                    break
         if why:
             c.refuse(*why)
             refused += 1
@@ -700,7 +860,19 @@ def _pass2(build, c, base, glob, edata):
             edata[1] += 1
             rel.append((off, typ, v + add))
         ents.append((x, bytes(x['data']), rel))
-    return (bytes(run), ents), None
+    sites = []                                  # each site's new bytes, relocated at its own address
+    for s in m.sites:
+        new = bytearray(s['new'])
+        for off, typ, tgt, add in s['relocs']:
+            v = value(tgt)
+            if v is None:
+                return None, ('import', tgt.split(':', 1)[-1])
+            try:
+                put_reloc(new, off, typ, v + add, s['addr'] + off, 'site 0x%08x' % s['addr'])
+            except ModError:
+                return None, ('range', '')
+        sites.append((s['addr'], bytes(new)))
+    return (bytes(run), ents, sites), None
 
 
 def _bind(build, live, placed):
@@ -762,13 +934,15 @@ def check(build, files, deep=False, store=None):
     r.choices, r.live, r.base, r.end, r.area, r.tables, r.inits, r.glob = \
         choices, [], {}, build.lo, b'', {}, [], {}
     r.placed, r.gens = None, None
+    r.sites = []
     if len(choices) > MAX_MODS:                 # the loader reads none of them
         r.skip = 'count'
         r.choices = choices[:MAX_MODS]
         for c in r.choices:
             c.refuse('count', state=NONE)
         return r
-    state = {'syms': build.nsyms, 'contribs': 0, 'arena': 1, 'lists': 0, 'fields': 0}   # the arena's 0 is ""
+    state = {'syms': build.nsyms, 'contribs': 0, 'arena': 1, 'lists': 0, 'fields': 0,   # the arena's 0 is ""
+             'sites': 0, 'sdata': 0}
     for c in choices:
         if c.raw is None:
             c.refuse('missing', state=DROPPED)
@@ -831,6 +1005,7 @@ def check(build, files, deep=False, store=None):
             st_tables, r.gens = _store_tables(build, r.placed)
             r.tables.update(st_tables)
         r.glob = {x: glob[x]() for c in live for x in c.exports}
+        r.sites = [(c.id, c.line, a, new) for c in live for a, new in placed[c.id][2]]
     for c in live:
         c.state, c.code = LOADED, 0
         sec = c.mod.symbols.get(INIT, ('', 0))[0]
@@ -842,8 +1017,22 @@ def check(build, files, deep=False, store=None):
 def link(build, files, store=None):
     """Pass 1 to the merge. -> Result, as check()'s, and .area (bytes from the area's start to
     .end), .tables ({name: {'address', 'entry', 'capacity', 'bytes' (None without an image),
-    'entries': [(module, order)]}}), .inits ([(mod id, address)] in id order), .glob."""
+    'entries': [(module, order)]}}), .inits ([(mod id, address)] in id order), .glob, .sites
+    ([(mod id, its line, address, new bytes)] in id order: what the boot writes over the main OS)."""
     return check(build, files, deep=True, store=store)
+
+
+def apply_sites(build, r):
+    """After a link: the main OS as the unit runs it, the sites written and their stock bytes kept,
+    so a later check of the build (the MODS page's) reads through them as the loader does. A build
+    without an image keeps only the sites."""
+    build.applied = []
+    for _id, _line, a, new in r.sites:
+        build.applied.append((a, build.stock(a, len(new)) or bytes(len(new))))
+        if build.image is not None:
+            build.image = bytearray(build.image)
+            o = a - build.main_load
+            build.image[o:o + len(new)] = new
 
 
 def records(r):
@@ -901,6 +1090,8 @@ def summary(r, linked=False):
                             'generations': p.generations, 'fields': len(p.state['fields']),
                             'parked': len(p.state['parked']), 'sha256': _sha(p.bytes),
                             'gens_at': '0x%08x' % b.gens_at, 'notes': p.notes}
+        out['sites'] = [{'mod': i, 'line': ln, 'addr': '0x%08x' % a, 'len': len(new), 'sha256': _sha(new)}
+                        for i, ln, a, new in r.sites]
     return out
 
 
@@ -911,7 +1102,7 @@ def _sha(b):
 
 def write_layout(r, out_dir):
     """`link --device-layout`'s files: area.bin, tables/<name>.bin (from a built image),
-    status.bin, detail.bin, status.txt and summary.json. -> the paths written, in order."""
+    sites/<address>.bin (each site's patched bytes), status.bin, detail.bin, status.txt and summary.json. -> the paths written, in order."""
     os.makedirs(out_dir, exist_ok=True)
     paths = []
 
@@ -925,6 +1116,8 @@ def write_layout(r, out_dir):
     for n, t in sorted(r.tables.items()):
         if t['bytes'] is not None:
             put(os.path.join('tables', n + '.bin'), t['bytes'])
+    for _i, _ln, a, new in r.sites:
+        put(os.path.join('sites', '%08x.bin' % a), new)
     st, dt = records(r)
     if r.placed is not None:
         put('store.bin', r.placed.bytes)        # /mods/.store as the boot writes it

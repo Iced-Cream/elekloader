@@ -16,6 +16,7 @@
 void *dl_alloc(u32 n) { return calloc(n ? n : 1, 1); }
 void dl_free(void *p) { free(p); }
 void dl_breathe(void) {}
+void dl_apply_site(u32 addr, const u8 *src, u32 len) { (void)addr; (void)src; (void)len; exit(5); }
 /* dlink.c's helpers come with it; it reads no memory or file here */
 u8 *dl_host_mem(u32 a) { (void)a; exit(5); }
 s32 dl_read_file(const char *name, u8 *buf, u32 max) { (void)name; (void)buf; (void)max; return -1; }
