@@ -76,6 +76,9 @@ test('knob id ranges on the Analog Rytm MKII (core_params, core_param_locks)', (
     'a 1 and e 1 both take ids 570..573 (core_params, core_param_locks)',
     'a 1 and e 1 both take ids 570..573 (core_param_locks, core_param_locks)'])
   assert.deepEqual(mod('f', ['core_params', 9, 3]).idRanges(image), [])
+  assert.deepEqual(ids(check([mod('g', ['core_knob_faces', 39, 46])], image)), [])
+  assert.deepEqual(ids(check([mod('h', ['core_knob_faces', 46, 470])], image)), [
+    "h 1: its core_knob_faces entry takes ids 46..470, and 469..554 are core's lockable parameters' ids; a mod's own ids start at 555"])
 })
 
 test('mk1 machines claim their ids (machine:<id>, dnmachine:<id>)', () => {

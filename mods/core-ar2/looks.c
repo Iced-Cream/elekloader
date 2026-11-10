@@ -44,6 +44,41 @@ struct core_knob_look {                 /* pages.h */
 
 extern const struct core_knob_look *const core_knob_looks[];   /* zero-terminated */
 
+/* sidecar-smpl-machines: a stock knob's face, per call (pages.h). A stock id
+ * (1..468) a core_knob_faces entry answers for is drawn, labelled, named and
+ * ranged as the face its function returns for the sound: a framework mod
+ * whose own machine takes over stock records (smpl-machines' SMPL machines on
+ * records 39..46) shows that machine's knobs on stock's page, while the
+ * records, so the sound's slots, its p-locks, slides, LFO, MIDI and
+ * storage, stay stock's. 0 from the function (or no entry): stock's. */
+struct core_knob_face {
+    const char *label, *name;
+    int32_t look;
+    const void *ui;
+    int32_t min, max, def;
+};
+
+struct core_knob_faces {
+    int32_t first, last;
+    const struct core_knob_face *(*face)(int32_t id, void *sound);
+};
+
+extern const struct core_knob_faces *const core_knob_faces[];   /* zero-terminated */
+
+/* the face of stock id for sound (a live sound item; 0: the current
+ * track's), or 0 for stock's. lock.c asks it for the label and the name. */
+const struct core_knob_face *core_knob_face(int32_t id, void *sound)
+{
+    const struct core_knob_faces *const *e;
+    const struct core_knob_face *f;
+    if (id <= 0 || id >= STOCK_IDS)
+        return 0;
+    for (e = core_knob_faces; *e; e++)
+        if (id >= (*e)->first && id <= (*e)->last && (*e)->face && (f = (*e)->face(id, sound)) != 0)
+            return f;
+    return 0;
+}
+
 static const struct core_knob_look *look_of(int32_t id)
 {
     const struct core_knob_look *const *e;
@@ -65,7 +100,13 @@ const void *core_knob_stock_ui(int32_t id)
 uint32_t core_uirec(int32_t id)
 {
     const struct core_knob_look *l;
+    const struct core_knob_face *f;
     const void *p;
+    if ((uint32_t)id < STOCK_IDS && (f = core_knob_face(id, 0)) != 0) {
+        if (f->ui)
+            return (uint32_t)f->ui;
+        return (uint32_t)core_knob_stock_ui(f->look ? f->look : id);
+    }
     if ((uint32_t)id < STOCK_IDS || !(l = look_of(id)))
         return (uint32_t)core_knob_stock_ui(id);
     if (l->ui && (p = l->ui(id)) != 0)
@@ -78,6 +119,7 @@ uint32_t core_uirec(int32_t id)
 void core_param_range(int32_t *out, int32_t id)
 {
     const struct core_knob_look *l = (uint32_t)id < STOCK_IDS ? 0 : look_of(id);
+    const struct core_knob_face *f = (uint32_t)id < STOCK_IDS ? core_knob_face(id, 0) : 0;
     int32_t from = l ? l->look : id;
     const int32_t *r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * ((uint32_t)from < STOCK_IDS ? from : 0));
     out[0] = r[0];
@@ -86,6 +128,11 @@ void core_param_range(int32_t *out, int32_t id)
     if (l && l->min < l->max) {
         out[0] = l->min;
         out[1] = l->max;
+    }
+    if (f && f->min < f->max) {         /* a face's range and default, the id's own record otherwise */
+        out[0] = f->min;
+        out[1] = f->max;
+        out[2] = f->def;
     }
 }
 
@@ -97,25 +144,36 @@ void core_param_range(int32_t *out, int32_t id)
 int32_t core_knob_dial(int32_t id, int32_t value)
 {
     const struct core_knob_look *l = (uint32_t)id < STOCK_IDS ? 0 : look_of(id);
+    const struct core_knob_face *f = (uint32_t)id < STOCK_IDS ? core_knob_face(id, 0) : 0;
     const int32_t *r;
-    int32_t lo, hi;
+    int32_t lo, hi, min, max, look;
     uint32_t span, off, out;
     int sh;
-    if (!l || l->min >= l->max)
+    if (l && l->min < l->max) {
+        min = l->min;
+        max = l->max;
+        look = l->look;
+    } else if (f && f->min < f->max) {  /* a face: onto its look's range, or the id's own */
+        min = f->min;
+        max = f->max;
+        look = f->look ? f->look : id;
+    } else
         return value;
-    r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * ((uint32_t)l->look < STOCK_IDS ? l->look : 0));
+    r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * ((uint32_t)look < STOCK_IDS ? look : 0));
     lo = r[0];
     hi = r[1];
     if (lo >= hi) {
         lo = 0;
         hi = 127 << 8;
     }
-    if (value <= l->min)
+    if (lo == min && hi == max)
+        return value;
+    if (value <= min)
         return lo;
-    if (value >= l->max)
+    if (value >= max)
         return hi;
-    off = (uint32_t)(value - l->min);           /* 0 < off < span */
-    span = (uint32_t)(l->max - l->min);
+    off = (uint32_t)(value - min);              /* 0 < off < span */
+    span = (uint32_t)(max - min);
     out = (uint32_t)(hi - lo);
     sh = 0;
     while (out > 0xffff) {                      /* off * out in 32 bits */

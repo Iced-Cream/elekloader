@@ -884,7 +884,7 @@ def _(B):
 def knobs(B):
     c = B.core()
     c['collections'].update({'core_params': {'entry': 4}, 'core_param_locks': {'entry': 4},
-                             'core_knob_looks': {'entry': 4}})
+                             'core_knob_looks': {'entry': 4}, 'core_knob_faces': {'entry': 4}})
     return c
 
 
@@ -901,8 +901,11 @@ def answering(B, first, last, table='core_params', ident='m'):
      device='analog-rytm-mk2')
 def _(B):
     return [("m 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable "
-             "parameters' ids; a mod's own ids start at 555", [knobs(B), answering(B, 470, 483)])], \
-        [knobs(B), answering(B, 560, 573)]
+             "parameters' ids; a mod's own ids start at 555", [knobs(B), answering(B, 470, 483)]),
+            ("m 1: its core_knob_faces entry takes ids 46..470, and 469..554 are core's lockable "
+             "parameters' ids; a mod's own ids start at 555",
+             [knobs(B), answering(B, 46, 470, 'core_knob_faces')])], \
+        [knobs(B), answering(B, 560, 573), answering(B, 39, 46, 'core_knob_faces', 'n')]
 
 
 @row('id_problems', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
