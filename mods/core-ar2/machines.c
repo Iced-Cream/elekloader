@@ -114,7 +114,15 @@ static uint8_t *ref_record(int32_t k)
  * track t is the signed long at 0x401bf3fc + 4t (stock's accessor
  * 0x40007130). A machine's knob records are filed by param_tables_build
  * (0x40006cd8) by id only; their range and default live in the static
- * records, so core files them itself, after its own writes, in rec_of. */
+ * records, so core files them itself, after its own writes, in rec_of.
+ * The interrupt calls ENGINES[m](v, 0x800063c0, blk, pitch) for each voice
+ * v whose owner track's machine (0x8000ea00[t]) is m, without checking the
+ * mask; blk is the track's live sound words from index 9
+ * (0x8000f7a8 + 0x54t + 18). An engine keeps the voice's state at
+ * 0x8000fef8 + 32v (word 0 a phase: 0 on a reset trig, 4 on a stop, -1 on
+ * a machine change) and its noise and wave buffers; UT NOISE (machine 15)
+ * reads only blk. Only the destination-list builder (0x400aa280) reads a
+ * record's +0x24, when a list is built, so the boot write is early enough. */
 #define DEFAULT_MACHINE ((const volatile int32_t *)0x401bf3fc)
 #define MACHINES 53
 #define NO_RECORD 0xffff
