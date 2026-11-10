@@ -347,7 +347,9 @@ struct functor {
     void *invoker;
 };
 
-#define NEW ((void *(*)(uint32_t))0x400827c4)                      /* operator new */
+/* operator new; stock returns its pointer in %d0, where our compiler reads a
+ * pointer from %a0, so it is declared as returning an integer */
+#define NEW ((uint32_t (*)(uint32_t))0x400827c4)
 #define ROW_INIT ((void (*)(void *, struct functor *, struct functor *, struct functor *, \
                             struct functor *, int32_t, int32_t))0x40072fbc)
 #define DRAW_TEXT ((void (*)(void *, const void *, int32_t, int32_t, int32_t, int32_t, int32_t, \
@@ -373,16 +375,16 @@ static void row_turn(void *f, void *row, int32_t delta)
 }
 
 /* gate.s, as the sound setup menu is built, after its MACHINE row; returns
- * the row to add, or 0 */
-void *smpl_menu_row(void)
+ * the row to add in %d0, or 0 */
+uint32_t smpl_menu_row(void)
 {
     struct functor label = {{0, 0}, (void *)0x400ee470, smpl_row_label_s};
     struct functor press = {{0, 0}, 0, 0};
     struct functor draw = {{0, 0}, (void *)0x400ee4c2, (void *)row_draw};
     struct functor turn = {{0, 0}, (void *)0x400ee514, (void *)row_turn};
-    void *row;
+    uint32_t row;
     if (count_machines() <= 0 || !(row = NEW(0x54)))      /* the menu is built at boot, before a tick */
         return 0;
-    ROW_INIT(row, &label, &press, &draw, &turn, -1, 8);
+    ROW_INIT((void *)row, &label, &press, &draw, &turn, -1, 8);
     return row;
 }
