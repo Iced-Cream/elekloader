@@ -201,7 +201,7 @@ def test_core_ar2_sites():
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
     # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic),
-    # and the engine push's sound (sidecar-engines: core_trig_sound)
+    # and the engine push's sound (0.15+: core_trig_sound)
     assert len(mod['sites']) == 126
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]

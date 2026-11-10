@@ -110,7 +110,7 @@ static uint8_t *ref_record(int32_t k)
     return 0;
 }
 
-/* (sidecar-engines) Stock engines for any machine. The default machine of
+/* (0.15+) Stock engines for any machine. The default machine of
  * track t is the signed long at 0x401bf3fc + 4t (stock's accessor
  * 0x40007130). A machine's knob records are filed by param_tables_build
  * (0x40006cd8) by id only; their range and default live in the static

@@ -86,13 +86,13 @@ struct core_machine {
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
     uint8_t voices;         /* bit v: physical voice v may run it (0 BD, 1 BT,
                                2 SD, 3 LT, 4 CH/OH, 5 MT/HT, 6 CY/CB, 7 RS/CP) */
-    uint16_t flags;         /* CORE_MACHINE_*; 0 before core 0.14 */
+    uint16_t flags;         /* CORE_MACHINE_*; 0 before core 0.15 */
     const char *name;       /* "BD TX-9" */
     const char *label;      /* four letters: "BDT9" */
     struct core_machine_knob knobs[8];  /* sound indices 9..16: LEV, then A..H's order */
 };
 
-/* flags (sidecar-engines) */
+/* flags (core 0.15+) */
 #define CORE_MACHINE_DESTS 0x0001   /* slots 44..52: the knobs are LFO, velocity
                                        and aftertouch destinations */
 
@@ -117,7 +117,7 @@ struct core_machine {
 int core_voice_trigged(int32_t voice);
 int core_voice_velocity(int32_t voice);
 
-/* sidecar-engines: stock engines for any machine. Plain reads, for the
+/* core 0.15+: stock engines for any machine. Plain reads, for the
  * audio interrupt as well as the UI.
  *
  *     core_track_default_machine(t)  track t's default machine (0..52), -1 out
@@ -147,7 +147,7 @@ int core_machine_knob(int32_t m, int32_t k, int32_t *min, int32_t *max, int32_t 
 int core_machine_defaults(int32_t m, uint16_t *blk);
 void core_voice_engine_reset(int32_t voice);
 
-/* sidecar-engines: the sound a trig plays. The sound item stock last pushed
+/* core 0.15+: the sound a trig plays. The sound item stock last pushed
  * to track t's engine (tracks 0..11): the track's sound in a live kit (a
  * plain trig, a kit apply; the item core_current_sound_item gives) or a pool
  * sound (a sound lock), 0 before the first push. Plain reads, from the audio
@@ -159,7 +159,7 @@ void core_voice_engine_reset(int32_t voice);
 void *core_track_sound(int32_t track);
 int core_track_pool_sound(int32_t track);
 
-/* sidecar-engines: set sound index i (0..41) of track t's sound (0..11) in
+/* core 0.15+: set sound index i (0..41) of track t's sound (0..11) in
  * the current kit as a knob turn does: value is the sound's 16-bit word
  * (display value << 8, the fine part in the low byte), clamped to the
  * record's range; the live value, the kit word, a lock while live recording,

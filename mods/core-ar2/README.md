@@ -423,7 +423,7 @@ A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
 whole values but its engine word keeps a fraction: read the high byte for
 the display value.
 
-## Stock engines, trig sounds, core_param_set
+## Stock engines, trig sounds, core_param_set (0.15+)
 
 machines.c (stock engines and knob defaults) and sound.c, sound.s (the
 sound a trig plays, `core_param_set`) carry the 1.74 addresses; machines.h
