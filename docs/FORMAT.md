@@ -69,12 +69,38 @@ A format-2 mod is a relocatable object:
 | `symbols` | `{"name": [".run", offset]}` or `["abs", value]` |
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
-| `relocs` | `[section, offset, "abs32"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"` |
+| `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
+| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
+| `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
+
+### Digitakt II raw SHARC payload
+
+On the Digitakt II 1.17 a format-2 mod may carry `sharc_raw`, raw changes to
+the DSP's boot stream (section 7) with no bridge and no callbacks: the mod
+brings DSP code that stock code reaches through instructions it patches.
+This is experimental.
+
+| field | value |
+|---|---|
+| `loads` | `[{"addr", "hex"}]` or `[{"addr", "parts"}]`: new load records; each inside the profile's owned L2 (`[0x2001ab7c, 0x200fa000)`), 4-byte aligned. `parts` is a list of `["hex", "..."]` and `["stock", "0x...", n]`, the latter `n` bytes the stock stream loads at that address, read from the user's file when linking |
+| `patches` | `[{"addr", "stock", "new", "relocs"}]`: whole stock instructions replaced in one stock load inside the profile's L1 patch range; `stock` must match the stock stream, `new` has its length |
+| `objects` | relocatable DSP objects (digikit's `.dko.json` layout: `name`, `sections` of kind text, data or bss, `symbols`, `relocs` of type `sharc.abs24` or `sharc.abs32` in text). The linker places each, core's first, at the lowest free address of the owned L2 (text, then data, then bss, which is reserved and not loaded). A text symbol is a short-word PC, a data symbol a byte address; a global symbol is every mod's. In mod.json's sharc_raw file, `{"dko": "file.dko.json", "name", "externs": {name: address}, "rename": {old: new}}` is such an object read from the mod's folder |
+| `tables` | `{"name": {"kind": "list", "row": bytes, "max": rows, "end": hex}}`: the rows mods give, in (`order`, mod) order, then `end`; or `{"kind": "indexed", "row", "rows", "default": parts}`: `rows` rows, each the default unless a mod gives it. Placed after the objects; the name is a symbol (its byte address) |
+| `contribute` | `[{"to", "order" or "index", "parts", "relocs"}]`: a row of a table |
+
+A relocation is `[offset, type, "sym:NAME", addend]` in bytes of `new` or of a row: `sharc.abs24` and
+`sharc.abs32` (an instruction's 24-bit address or 32-bit literal, as digikit encodes them), `hi16` and
+`lo16` (a 16-bit literal field, little-endian), `le32` (a data word).
+
+The linker checks the stock section by its hash, applies the patches, adds
+the loads before FINAL, and parses the result again. It refuses two patches
+that overlap (from any mods), a load over another load, anything outside
+the profile's ranges, a symbol two mods define or none does, and a row of an indexed table two mods give.
 
 ### Digitone II SHARC mod
 
@@ -91,30 +117,47 @@ into the `.elemod` as `sharc` and records its hash in
 `build.sharc_artifact_sha256`. The artifact is already compiled and linked,
 so no SHARC compiler runs during build, lint or patch. Any compiler or
 assembler can make one; the [sine example](../examples/sharc-sine/README.md)
-makes one from C or assembly.
+makes one from C or assembly. An SDK machine's `render`
+([SDK.md](SDK.md#render-on-the-digitone-ii)) instead lists its assembly,
+`"sharc": {"sources": ["render.s"]}`: relative `.s` files in the mod's
+folder, which the SDK builder assembles with Selache into a kernel
+artifact.
 
-**A selectable synth or filter object** uses the fields below, plus
-`machine_id`; `entries` contains only `render_offset_bytes` and cannot be
-`null`. The same mod must contribute one matching descriptor to its table:
+**A machine kernel object**, `"abi": "dn2-kernel-v1"`, holds synths',
+filters' or SDK machines' DSP code, or machines-dn2's dispatcher, which
+calls them. It is relocatable: the linker places it anywhere in the
+machine pool, loader `[0x20090000,0x200b0000)`.
+`elekloader.sdk.sharc.machine_artifact` makes one for an mk2 synth or
+filter, and the SDK builder one for SDK machines. It has exactly these
+fields:
 
-| `abi` | `machine_id` | native table |
-|---|---|---|
-| `dn2-voice-mono32-l2-v1` | 5..31 | `mk2_voice_synths` |
-| `dn2-filter-mono32-l2-v1` | 6..31 | `mk2_voice_filters` |
+| field | value |
+|---|---|
+| `abi` | `"dn2-kernel-v1"` |
+| `code` | hex: the code as the executable stores it, whole 16-bit parcels |
+| `data` | hex: the data |
+| `code_pc16`, `data_address` | the bases `code` and `data` were linked at |
+| `data_align` | the data's alignment in bytes: 4, 8, 16, 32, 64 or 128 |
+| `relocs` | `[section, offset, width, kind]`: an address field in `code` (3 or 4 bytes, big-endian) or `data` (4 bytes, little-endian) that moves with `kind`'s base, `"code"` or `"data"` |
+| `kernels` | `{"kind", "id", "entry"}` each, `entry` counting 16-bit parcels into `code`: kind `"mk2-voice"` (id 5..31) or `"mk2-filter"` (6..31) with an optional `state_bytes` a slot, in whole words; or `"sdk"` (5..127) with `knobs`, up to 15 `[min, max]` pairs of int32 |
+| `exports` | machines-dn2's dispatcher only: its labels `dn2_voice_hook.`, `dn2_filter_hook.`, `dn2_filter_capture.`, `dn2_voice_table.` and `dn2_filter_table.`; `{}` otherwise |
 
-Each kind has its own ID namespace. A build accepts at most one of
-each kind, with separate 64 KiB owners, and cannot mix them with a
-master-output mod. Each machine artifact starts with the profiled 2 KiB
-adapter and ends with exactly 1 KiB of zeroed adapter state. Author bytes
-and the render entry must stay outside those reservations. An optional
-`voice_state: {"offset_bytes", "voice_bytes"}` reserves state for each of
-the 16 voices: `offset_bytes` is 8-byte aligned, `voice_bytes` a whole
-number of words, and the 16 voices lie inside one of the mod's `zero`
-ranges. The linker writes each callback's address and ID into its adapter
-state, the voice state's address and one voice's size 32 bytes after them,
-zero-fills that kind's 4 KiB stack in L1 with a guard word at its base,
-and patches that kind's stock hook. It leaves the master hook and L1 bridge untouched.
-The callback references above define the memory bounds and stack limits.
+Synths and SDK machines share one ID space; filters have their own. Each
+kernel needs a registration with its ID in its own mod (`mk2_voice_synths`,
+`mk2_voice_filters` or `sdk_alpha_machines`), and each mk2 registration its
+kernel. When the build has a kernel, the linker refuses it without exactly
+one dispatcher, beside another SHARC mod, or with two kernels of one ID.
+It places the dispatcher, then each mod's code, with a 64-byte NOP guard,
+and data; each SDK kernel's knob map; and each kernel's 16 slots of state
+(`state_bytes` each, 256 for an SDK machine), zero-filled. It rebases each
+artifact by its relocations, fills the dispatcher's tables (by ID: the
+kernel's entry, its state, its state bytes a slot and its knob map),
+zero-fills each kind's 4 KiB stack in L1 with a guard word at its base, and
+patches the stock voice and filter hooks and the filter setup table's
+entry 0 to the dispatcher. It leaves the master hook and L1 bridge
+untouched. Without a kernel in the build, the dispatcher is not placed.
+The [synth](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
+contracts say what a kernel gets.
 
 **The master-output object** has exactly these fields:
 
@@ -140,7 +183,7 @@ example's at 176 and 238; both declare 128 bytes of stack.
   ahead.
 
 For master-output mods, linking also refuses unless:
-- only one mod in the build has `sharc`;
+- it is the only SHARC mod in the build;
 - a mod with entries has a core whose bridge is the one the device profile
   pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
   set `"resources": {"core": "0.2"}` so the loader picks it;
@@ -163,7 +206,7 @@ right, and that every other section is stock. Without a SHARC mod, section 7
 stays stock, with core 0.2 too.
 
 A mod's code, data and callback offsets may change from build to build with
-no change to elekloader: only its core bridge or machine adapter is pinned.
+no change to elekloader: only its core bridge is pinned.
 These checks cover the packaging. They cannot prove what the instructions
 do, how much stack they really use, or that they finish in time, so test
 each program on its own.
@@ -220,7 +263,8 @@ each program on its own.
    Digitakt II) automatically.
    When a mod declares `storage`, the linker places the fields from the
    build's lockfile ("Mod storage" below) and defines each field's `sym`
-   as an absolute symbol, its descriptor.
+   as an absolute symbol, its descriptor. When a mod declares `knobs`, the
+   linker gives it its run of ids ("Knob ids" below).
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -346,6 +390,29 @@ imports `core_fx_lfo_dst` gets that as a kit field (7 bits); in a build
 without one the symbol is 0 and the field is not placed. docs/ADAPTING.md ("Mod storage
 (core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4 0.1, Analog
 Four MKII)") has the rest.
+
+### Knob ids
+
+On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
+MKII's start at 555), a mod declares `"knobs": n` and the linker gives it n
+ids in a row. Its symbol `__knobs` is the first; it is the mod's own, so two
+mods' `__knobs` differ. A relocation to `__knobs` is an `abs32` or an `abs16`
+with an addend of 0..n-1, anything else is refused, as is `"knobs"` on a
+device without `param_ids` or a mod that defines `__knobs` itself.
+
+The linker (`store.knobs`, the same in `js/src/store.ts`) gives the runs from
+the first id up, by mod id, past every id a mod's `core_params` or
+`core_param_locks` entry names in its own bytes, and checks the linked
+entries again with their runs. The lockfile keeps them in `knobs` and
+`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them part
+of the layout ID: the ids are not stored data. A mod keeps its run while its
+count stays; one that leaves keeps it in `freed_knobs` and gets it back when
+it returns; one whose count changes keeps its first id when the new run has
+room there; any other takes never-used ids from `next_knob` up. Only when
+those run out (past 65535, which an `abs16` holds) are freed runs given out
+again. A build whose core keeps no lockfile gets the same ids for the same
+mods. The build's manifest carries the runs as `knobs` (`{mod: [first,
+count]}`).
 
 ### DSP code
 

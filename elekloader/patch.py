@@ -86,7 +86,7 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             if len(v2) != len(mods):
                 raise elemod.ModError('a whole-build bundle (format 1) cannot be combined '
                                       'with separate mods (format 2)')
-            dsp = stock.section(rel.sharc['section']) if any(m.sharc for m in v2) else None
+            dsp = stock.section(rel.sharc['section']) if any(m.sharc or m.sharc_raw for m in v2) else None
             linked = link.link(mods, img0, lock, sharc_stream=dsp)
             img = linked.image
         else:
@@ -123,6 +123,10 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             man['store'] = linked.store
             for n in linked.store_notes:
                 log('storage: ' + n)
+        if linked.knobs:
+            man['knobs'] = linked.knobs
+        for n in linked.knob_notes:
+            log('knobs: ' + n)
     if len(mods) == 1 and not v2 and (mods[0].doc.get('build') or {}).get('section3_sha256'):
         want = mods[0].doc['build'].get('section3_sha256')
         man['bundle_matches_build'] = want == sha(img)

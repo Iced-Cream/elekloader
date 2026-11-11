@@ -32,4 +32,16 @@ void core_voice_skip_hold_release(void);
 /* the audio blocks the skip has saved a machine call in, since boot */
 extern volatile uint32_t core_voice_skips;
 
+/* The sample-layer skip (0.14, mods/core-ar2/sample.s; README, "The
+ * sample-layer skip (0.14)"): a slot whose sample layer is not playing and
+ * whose filter history is zero no longer runs its resample, filter and output
+ * stage. The sound is unchanged, bit for bit. Off at boot; it runs while
+ * core_sample_skip_want is nonzero and core_voice_skip_hold is 0. The mod that
+ * offers it as a setting writes the user's choice; nothing else writes it. A
+ * byte, read once per slot per audio block, so any context may write it. */
+extern volatile uint8_t core_sample_skip_want;
+
+/* the slot-blocks the sample-layer skip has left out, since boot */
+extern volatile uint32_t core_sample_skips;
+
 #endif
