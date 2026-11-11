@@ -29,11 +29,17 @@ edge (y from the bottom row): y 0..1 calls before, y 4..5 calls after, y
 8..9 `sn_saves`, and at y 12..13 the last call's kind (1..3 dots from x 0),
 the slot's 8 bits from x 15, a failed dot at x 45, the I requests (x 52..61)
 and J requests (x 70..79) as dots, a refused dot at x 100, a dot at x 110
-after a `CORE_PROJECT_NEW`, a dot at x 120 when the last call was the one
+after a `CORE_PROJECT_NEW` since the last request, a dot at x 120 when the last call was the one
 before, and a dot at x 126 always. The counts are in RAM after the magic
-`SNC1` (`check.c`'s header).
+`SNC1` (`check.c`'s header). Since 0.2 it draws nothing while a
+whole-screen stock menu is up (GLOBAL, MANAGE PROJECTS), so a plan can read
+slots 127 and 128 in stock's list.
 
-Not yet run in the emulator or on a unit.
+In rytm-emu's A4 build (11 Nov 2026) [emu], 0.1 (SN60): J asked SAVE ...
+BEFORE LOADING (NO) and PROCEED (YES), then stock made a new project,
+saved it into 128 (named NEW PROJECT) and core reported `CORE_SAVE_NEW`
+for slot 127, with `sn_saves` 1; I asked nothing and saved nothing. Not
+yet gated or run on a unit.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)

@@ -36,8 +36,13 @@
  *            first), a dot at x 45 when it failed, then one dot per I request
  *            (x 52, 55, 58, 61), one per J request (x 70, 73, 76, 79), a dot
  *            at x 100 when a request was refused (slot 128 full), a dot at x
- *            110 after an ev_project CORE_PROJECT_NEW, a dot at x 120 when the
+ *            110 after an ev_project CORE_PROJECT_NEW since the last
+ *            request made, a dot at x 120 when the
  *            last call was the one before, and at x 126 always (the mod draws).
+ *
+ * Nothing is drawn while a whole-screen stock menu is up (GLOBAL, PROJECT,
+ * MANAGE PROJECTS: core_stock_overlay's CORE_OVERLAY_SCREEN), so a plan reads
+ * stock's slot list as stock draws it.
  *
  * So J on an empty 128 gives three kind dots and slot bits 0111 1111, with
  * sn_saves at 1 (the new project's field, 0, plus the call before), and the
@@ -52,6 +57,7 @@
 #include <stdint.h>
 #include "analog-four-mk2/store.h"
 #include "analog-four-mk2/pages.h"
+#include "analog-four-mk2/screen.h"
 
 typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour);
 #define FILLRECT ((fillrect_t)FILLRECT_AT)
@@ -139,6 +145,7 @@ static void request(int create)
         sn.refused++;
         return;
     }
+    sn.proj_new = 0;                     /* 0.2: the x 110 dot means this request's new project */
     if (create) {
         sn.req_j++;
         sn.ret_j = LOAD_REQUEST(SLOT, no_callback, 1, 1);
@@ -212,6 +219,8 @@ void sn_draw(void *bmp, void *ctrl)
 {
     unsigned how = sn.how, kind = CORE_SAVE_KIND(how), slot = CORE_SAVE_SLOT(how), i;
     (void)ctrl;
+    if (core_stock_overlay() & CORE_OVERLAY_SCREEN)
+        return;                          /* 0.2: GLOBAL's menus (MANAGE PROJECTS) stay stock's */
     FILLRECT(bmp, 0, 0, 127, 13, 0);
     bar(bmp, 0, sn.pre);
     bar(bmp, 4, sn.post);
