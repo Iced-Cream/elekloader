@@ -26,6 +26,12 @@ carry DSP56300 code, `.dsp.<payload>` sections of 24-bit little-endian words, an
 DSP tables (a collection with "space": "dsp.<payload>"). They are placed in the P words of
 that payload a mod frees by claiming the area's name (the profile's `dsp_areas`); a symbol
 there is a DSP word address, and a `dsp24` relocation writes one as three little-endian bytes.
+
+On a device with knob ids for mods (the profile's `param_ids`), a mod may declare `"knobs": n`:
+the linker gives it a run of n ids from the profile's first mod id up (store.knobs, kept in the
+lockfile), and its own symbol `__knobs` is the run's first id. A relocation to `__knobs` is an
+abs32 or an `abs16` (two big-endian bytes, for the 16-bit knob lists of const tables) with an
+addend of 0..n-1.
 """
 import struct
 
@@ -37,8 +43,9 @@ from .elemod import (ModError, sha, _int, _hex, common_checks, insn_check, overl
 
 FORMAT2 = 2
 SECTIONS = ('.boot', '.run', '.fast', '.bss', '.payload')
-RTYPES = ('abs32', 'pc32', 'pc16', 'dsp24')
-RSIZE = {'abs32': 4, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
+RTYPES = ('abs32', 'abs16', 'pc32', 'pc16', 'dsp24')
+RSIZE = {'abs32': 4, 'abs16': 2, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
+KNOBS = '__knobs'                 # a mod's first knob id (its "knobs")
 DSP = '.dsp.'                     # a DSP section: '.dsp.' + its payload's tag
 
 
@@ -50,6 +57,7 @@ def _dsp_tag(dev, sec):
 FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
 PAYLOADS = 'core_payloads'        # the core's table of the mods' payloads: id, address, length
 PAYLOAD_ENTRY = 12
+MAX_KNOBS = 1024                  # a mod's "knobs": at most this many ids
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words', '__run_hash'}
@@ -88,7 +96,8 @@ class Mod2:
         if format_of(doc) != FORMAT2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
-                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'}
+                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
+                                     'sharc_raw', 'knobs'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -120,8 +129,14 @@ class Mod2:
             if n != _int(d.get('len', n), name):
                 raise ModError('%s %s: parts make %d bytes, not %s' % (name, sec, n, d.get('len')))
             self.sections[sec] = {'align': align, 'parts': parts, 'len': n}
-        self.sharc = (sharc.module_payload(doc['sharc'], self.rel.sharc, '.boot' in self.sections)
-                      if 'sharc' in doc else None)
+        if 'sharc' not in doc:
+            self.sharc = None
+        elif isinstance(doc['sharc'], dict) and doc['sharc'].get('abi') == sharc.KERNEL_ABI:
+            self.sharc = sharc.kernel_payload(doc['sharc'], self.rel.sharc)
+        else:
+            self.sharc = sharc.module_payload(doc['sharc'], self.rel.sharc, '.boot' in self.sections)
+        self.sharc_raw = (sharc.raw_payload(doc['sharc_raw'], self.rel.sharc)
+                          if 'sharc_raw' in doc else None)
         self.symbols = {}
         for nm, v in doc.get('symbols', {}).items():
             if not isinstance(v, list) or len(v) != 2:
@@ -131,6 +146,11 @@ class Mod2:
             self.symbols[nm] = (v[0], _int(v[1], name))
             if _dsp_tag(self.dev, v[0]) and self.symbols[nm][1] % 3:
                 raise ModError('%s: DSP symbol %s is not at a whole word' % (name, nm))
+        if KNOBS in self.symbols:
+            raise ModError('%s: %s is the linker\'s (its first knob id), not a symbol of a mod' % (name, KNOBS))
+        self.knobs = doc.get('knobs', 0)
+        if type(self.knobs) is not int or not 0 <= self.knobs <= MAX_KNOBS:
+            raise ModError('%s: "knobs" is a count of knob ids, 0..%d' % (name, MAX_KNOBS))
         self.exports = [str(x) for x in doc.get('exports', [])]
         for x in self.exports:
             if x not in self.symbols:
@@ -171,7 +191,7 @@ class Mod2:
             for r in c.get('relocs', []):
                 off, typ, tgt, add = r
                 off = _int(off, what)
-                if typ not in RTYPES or off < 0 or off + (3 if typ == 'dsp24' else 4) > len(data):
+                if typ not in RTYPES or off < 0 or off + RSIZE[typ] > len(data):
                     raise ModError('%s: bad relocation %r' % (what, r))
                 rel.append((off, typ, tgt, _int(add, what)))
             claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims', [])]
@@ -226,11 +246,12 @@ class Mod2:
                         out.append('%s:%d' % (prefix, v))
         return out
 
-    def id_ranges(self, image):
+    def id_ranges(self, image, knobs=None):
         """The knob ids this mod's entries answer for, by the profile's param_ids: a
         contribution to such a table holds four-byte pointers to entries whose first two longs are
         a range of ids (core-ar2's core_params, core_param_locks). -> [(table, first, last)]. An
-        entry this cannot read (outside the mod's own bytes, or relocated there) answers for none."""
+        entry this cannot read (outside the mod's own bytes, or relocated there) answers for none;
+        one relocated to __knobs answers for its ids when knobs (the mod's first id) is given."""
         out = []
         for table, _own_only in (self.dev.param_ids[2] if self.dev.param_ids else ()):
             for c in self.contribute:
@@ -240,11 +261,30 @@ class Mod2:
                     at = None if off % 4 else self._target(typ, tgt, add)
                     if at is None:
                         continue
-                    first, last = self._long(at[0], at[1], image), self._long(at[0], at[1] + 4, image)
+                    first, last = self._id(at[0], at[1], image, knobs), self._id(at[0], at[1] + 4, image, knobs)
                     if first is not None and last is not None:
                         first, last = [v - (1 << 32) if v >> 31 else v for v in (first, last)]
                         if first <= last:
                             out.append((table, first, last))
+        return out
+
+    def _id(self, sec, off, image, knobs):
+        """An id long at `sec`+`off`: its bytes, or __knobs + the addend where an abs32
+        relocates it to __knobs and knobs is given; else None."""
+        r = next(((t, g, a) for s, o, t, g, a in self.relocs if s == sec and o == off), None)
+        if r is None:
+            return self._long(sec, off, image)
+        if knobs is not None and r[:2] == ('abs32', 'sym:' + KNOBS):
+            return (knobs + r[2]) & 0xFFFFFFFF
+        return None
+
+    def knob_refs(self):
+        """-> [(where, type, addend)] of every relocation to __knobs: sections, sites, entries."""
+        out = [('%s+0x%x' % (sec, off), t, a) for sec, off, t, g, a in self.relocs if g == 'sym:' + KNOBS]
+        out += [('site 0x%08x' % s['addr'], t, a) for s in self.sites for _o, t, g, a in s['relocs']
+                if g == 'sym:' + KNOBS]
+        out += [('an entry of %s' % c['to'], t, a) for c in self.contribute for _o, t, g, a in c['relocs']
+                if g == 'sym:' + KNOBS]
         return out
 
     def _long(self, sec, off, image):
@@ -376,6 +416,28 @@ def _dsp_needs(m):
             | {t for t, _h, _e in m.dsp_tables.values()})
 
 
+def kernel_payload(m):
+    return isinstance(m.sharc, dict) and m.sharc.get('abi') == sharc.KERNEL_ABI
+
+
+def sharc_split(mods):
+    """(the DN2 kernel mods, the other SHARC mods but the core). A dispatcher without kernels is inert."""
+    kernel_mods = [m for m in mods if kernel_payload(m)]
+    if not any(m.sharc['kernels'] for m in kernel_mods):
+        kernel_mods = []
+    return kernel_mods, [m for m in mods if m.sharc and '.boot' not in m.sections and not kernel_payload(m)]
+
+
+def kernel_registrations(m, image):
+    """The DN2 machines m registers, by the profile's kernel_registrations: {(kernel kind, id): (table,
+    needs its kernel)}."""
+    out = {}
+    for table, kind, needs in (m.rel.sharc or {}).get('kernel_registrations', ()):
+        for nm in m.implied_names(image, table):
+            out[kind, int(nm.rsplit(':', 1)[1])] = (table, needs)
+    return out
+
+
 def check(mods, image):
     """Static checks that need no layout. -> [problems]."""
     spans = []
@@ -413,36 +475,40 @@ def check(mods, image):
             if m.needs_core and version_key(cores[0].version) < version_key(m.needs_core):
                 bad.append('%s needs core %s or newer, and this build has core %s'
                            % (m.label(), m.needs_core, cores[0].version))
-    sharc_mods = [m for m in mods if m.sharc and '.boot' not in m.sections]
+    kernel_mods, sharc_mods = sharc_split(mods)
     for m in mods:
-        if not sharc_mods and any(sharc_site(m.rel, s['addr']) for s in m.sites):
+        if not sharc_mods and not kernel_mods and any(sharc_site(m.rel, s['addr']) for s in m.sites):
             bad.append('%s: SHARC data site requires a SHARC mod' % m.label())
-    if len(sharc_mods) > 1 and (len(sharc_mods) != 2 or
-            {m.sharc.get('machine_kind') for m in sharc_mods} != {'voice', 'filter'}):
-        bad.append('SHARC mods may combine only one DN2 voice and one DN2 filter')
-    for kind in ('voice', 'filter'):
-        table = (mods[0].rel.sharc or {}).get(kind + '_table')
-        for m in mods:
-            if table and any(c['to'] == table for c in m.contribute) \
-                    and (not m.sharc or m.sharc.get('machine_kind') != kind):
-                bad.append('%s: DN2 %s registration requires a matching SHARC %s payload'
-                           % (m.label(), kind, kind))
+    if kernel_mods:
+        dispatchers = [m.label() for m in kernel_mods if m.sharc['exports']]
+        if len(dispatchers) != 1:
+            bad.append('DN2 machine kernels need one dispatcher (machines-dn2); this build has %s'
+                       % (', '.join(dispatchers) or 'none'))
+        if sharc_mods:
+            bad.append('DN2 machine kernels do not combine with %s' % ', '.join(m.label() for m in sharc_mods))
+        owners = {}
+        for m in kernel_mods:
+            for k in m.sharc['kernels']:
+                key = (sharc.KERNEL_TABLE[k['kind']], k['id'])
+                if key in owners:
+                    bad.append('%s and %s both have a DN2 %s kernel with id %d'
+                               % (owners[key].label(), m.label(), *key))
+                owners[key] = m
+    if len(sharc_mods) > 1:
+        bad.append('a build takes one SHARC mod; this one has %s' % ', '.join(m.label() for m in sharc_mods))
+    for m in mods:                          # DN2 machines: each registration and its kernel, in one mod
+        regs = kernel_registrations(m, image)
+        have = {(k['kind'], k['id']) for k in m.sharc['kernels']} if kernel_payload(m) else set()
+        for (kind, mid), (table, needs) in sorted(regs.items()):
+            if needs and (kind, mid) not in have:
+                bad.append('%s: its %s entry %d needs a SHARC %s kernel with that id' % (m.label(), table, mid, kind))
+        for kind, mid in sorted(have - set(regs)):
+            bad.append('%s: its SHARC %s kernel %d has no registration with that id in its mod' % (m.label(), kind, mid))
+        g_tables = {t for t, kind, _n in (m.rel.sharc or {}).get('kernel_registrations', ()) if kind == 'mk2-filter'}
+        if any(c['to'] in g_tables and not m.dn2_filter_g_ok(c, image) for c in m.contribute):
+            bad.append('%s: DN2 filter G needs a label of 1..5 printable ASCII characters and '
+                       'a default of 0..127' % m.label())
     for app in sharc_mods:
-        kind = app.sharc.get('machine_kind')
-        if kind:
-            profile = app.rel.sharc
-            table = profile[kind + '_table']
-            contributions = [c for c in app.contribute if c['to'] == table]
-            expected = ['%s:%d' % (prefix, app.sharc['machine_id'])
-                        for name, _at, _count, prefix in app.dev.slot_claims if name == table]
-            if len(contributions) != 1 or len(contributions[0]['data']) != 4 \
-                    or not expected or app.implied_names(image, table) != expected:
-                bad.append('%s: SHARC %s machine_id must match its single native %s registration'
-                           % (app.label(), kind, kind))
-            elif kind == 'filter' and not app.dn2_filter_g_ok(contributions[0], image):
-                bad.append('%s: DN2 filter G needs a label of 1..5 printable ASCII characters and '
-                           'a default of 0..127' % app.label())
-            continue
         if app.sharc['entries'] is None:
             continue
         core = cores[0] if len(cores) == 1 else None
@@ -476,24 +542,15 @@ def check(mods, image):
                 bad.append('table %s has the name of a symbol %s exports' % (c, owner[c].label()))
             tables[c] = (m, e)
     if dev.param_ids and len({(m.dev.key, m.rel.version) for m in mods}) == 1:
-        own, (lo, hi, what), kinds = dev.param_ids
-        own_only = {t for t, o in kinds if o}
-        taken = []
-        for m in mods:
-            for table, a, b in m.id_ranges(image):
-                if a <= hi and lo <= b:
-                    bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
-                               'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
-                elif table in own_only and a < own:
-                    bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
-                               % (m.label(), table, a, b, own))
-                elif b >= own:
-                    a = max(a, own)
-                    for n, t, x, y in taken:
-                        if n is not m and x <= b and a <= y:
-                            bad.append('%s and %s both take ids %d..%d (%s, %s)'
-                                       % (n.label(), m.label(), max(a, x), min(b, y), t, table))
-                    taken.append((m, table, a, b))
+        bad += id_problems(mods, image)
+    for m in mods:
+        if m.knobs and not dev.param_ids:
+            bad.append('%s asks for knob ids ("knobs"), which the %s does not give mods'
+                       % (m.label(), dev.name))
+        for where, t, a in m.knob_refs():
+            if t not in ('abs32', 'abs16') or not 0 <= a < m.knobs:
+                bad.append('%s: %s is a %s reference to %s+%d; one takes abs32 or abs16 with an addend '
+                           'below its "knobs" (%d)' % (m.label(), where, t, KNOBS, a, m.knobs))
     sized = reserve_names(dev, owner)
     fields = {}                                 # mod storage: the linker defines these
     for m in mods:
@@ -510,7 +567,7 @@ def check(mods, image):
     for m in mods:
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
-                    or (x.endswith('_n') and x[:-2] in tables) or x in fields:
+                    or (x.endswith('_n') and x[:-2] in tables) or x in fields or (x == KNOBS and m.knobs):
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
@@ -550,6 +607,31 @@ def check(mods, image):
         la = a[2].label() if a[2] else 'the linker'
         lb = b[2].label() if b[2] else 'the linker'
         bad.append('%s %s and %s %s overlap' % (la, a[3], lb, b[3]))
+    return bad
+
+
+def id_problems(mods, image, knobs=None):
+    """The profile's param_ids against the mods' entries: none in the core's ids, none in a table
+    whose ids are mods' own below them, and no id from there up taken twice. knobs: {mod id: its
+    first knob id} (link), to count the entries relocated to __knobs too. -> [problems]."""
+    own, (lo, hi, what), kinds = mods[0].dev.param_ids
+    own_only = {t for t, o in kinds if o}
+    taken, bad = [], []
+    for m in mods:
+        for table, a, b in m.id_ranges(image, (knobs or {}).get(m.id)):
+            if a <= hi and lo <= b:
+                bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
+                           'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+            elif table in own_only and a < own:
+                bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
+                           % (m.label(), table, a, b, own))
+            elif b >= own:
+                a = max(a, own)
+                for n, t, x, y in taken:
+                    if n is not m and x <= b and a <= y:
+                        bad.append('%s and %s both take ids %d..%d (%s, %s)'
+                                   % (n.label(), m.label(), max(a, x), min(b, y), t, table))
+                taken.append((m, table, a, b))
     return bad
 
 
@@ -645,7 +727,8 @@ class Linked:
 def link(mods, image, lock=None, *, sharc_stream=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
-    with mod storage .store (the new lockfile) and .store_notes. lock: the
+    with mod storage .store (the new lockfile) and .store_notes; .knobs ({mod id:
+    [first id, count]}) and .knob_notes for the mods' "knobs". lock: the
     build's lockfile, or None for a new one (elekloader/store.py). Raises
     ModError."""
     if not mods:
@@ -661,39 +744,20 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     ddr_base, ddr_end = dev.ddr_for(core.version)
     fast_base, fast_end = dev.sram_code
     order = [core] + sorted((m for m in mods if m is not core), key=lambda m: m.id)
-    sharc_mods = [m for m in order if m.sharc and m is not core]
+    kernel_mods, sharc_mods = sharc_split(order)
     dsp_stream = dsp_stored = None
-    if sharc_mods:
+    if kernel_mods or sharc_mods:
         if sharc_stream is None:
             raise ModError('SHARC mod needs the stock section-7 stream')
         loads, fills, patches = [], [], []
+        if kernel_mods:
+            loads, fills, patches, kernel_layout = sharc.place_kernels([(m.id, m.sharc) for m in kernel_mods], rel.sharc)
         for mod in sharc_mods:
             payload = mod.sharc
             base = payload['owner'][0]
             loads += [(base + off, data) for off, _kind, data in payload['segments']]
             fills += [(base + off, count, 0) for off, count in payload['zero']]
-            kind = payload.get('machine_kind')
-            if kind:
-                at = rel.sharc[kind + '_binding_offset']
-                binding = struct.pack('<II', sharc.pc16(rel.sharc, base + payload['entries']['render_offset_bytes']),
-                                      payload['machine_id'])
-                # At +0x20 the adapter finds the per-voice state: its address and one voice's size.
-                voice = payload['voice_state']
-                state = struct.pack('<II', base + voice[0], voice[1]) if voice else bytes(8)
-                lo = payload['owner'][1] - rel.sharc[kind + '_state_bytes']
-                fills = [f for f in fills if f[0] != lo]
-                fills += [(lo, base + at - lo, 0), (base + at + 8, 0x18, 0),
-                          (base + at + 0x28, payload['owner'][1] - base - at - 0x28, 0)]
-                loads += [(base + at, binding), (base + at + 0x20, state)]
-                # The callback's own stack, in L1: zeroed, with the guard word the adapter checks at its base.
-                stack = rel.sharc[kind + '_stack']
-                fills.append((stack[0] + 4, stack[1] - stack[0] - 4, 0))
-                loads.append((stack[0], struct.pack('<I', rel.sharc['stack_guard'])))
-                for hook in (kind + '_hook', kind + '_capture'):
-                    if hook in rel.sharc:
-                        site, old, new = rel.sharc[hook]
-                        patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
-            elif payload['entries'] is not None:
+            if payload['entries'] is not None:
                 bridge = core.sharc
                 def pc16(off):
                     return sharc.pc16(rel.sharc, base + off)
@@ -727,6 +791,25 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         dsp_stored = syx.pack_main(dsp_stream)
         if len(dsp_stored) > rel.sharc['stored_max']:
             raise ModError('SHARC stored section exceeds the profile limit')
+    raw_mods = [m for m in order if m.sharc_raw]
+    if raw_mods:
+        # (a device's profile takes raw payloads or a bridge's modules, never both: raw_payload
+        # refuses a profile without 'raw', and module_payload one without the bridge's ABI)
+        if sharc_stream is None:
+            raise ModError('SHARC mod needs the stock section-7 stream')
+        loads, patches, _dsp_syms = sharc.link_raw([(m.id, m.sharc_raw) for m in raw_mods],
+                                                   sharc_stream, rel.sharc)
+        spans = sorted((a, a + len(o)) for a, o, _n in patches)
+        for (a0, a1), (b0, _b1) in zip(spans, spans[1:]):
+            if b0 < a1:
+                raise ModError('two raw SHARC patches overlap at 0x%x' % b0)
+        dsp_stream = sharc.insert(sharc_stream, rel.sharc, loads=loads, patches=patches)
+        dsp_stored = syx.pack_main(dsp_stream)
+        if len(dsp_stored) > rel.sharc['stored_max']:
+            raise ModError('SHARC stored section exceeds the profile limit')
+        payload = {'owner': (min(a for a, _d in loads), max(a + len(d) for a, d in loads))
+                   if loads else (0, 0), 'entries': None}
+        sharc_mods = raw_mods
     tables = {c: (m, e) for m in order for c, e in m.collections.items()}
 
     entries = {c: [] for c in tables}
@@ -797,6 +880,17 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
         for i, data in enumerate(ids):
             entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
+    # knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
+    knob_base, knob_notes = {}, []
+    if dev.param_ids and (any(m.knobs for m in order) or (new_lock or {}).get('knobs')
+                          or (new_lock or {}).get('freed_knobs')):
+        fixed = [(a, b) for m in order for _t, a, b in m.id_ranges(image)]
+        held = new_lock if new_lock is not None else {}
+        knob_base, knob_notes = store.knobs(held, {m.id: m.knobs for m in order if m.knobs},
+                                            dev.param_ids[0], fixed)
+        bad = id_problems(order, image, knob_base)
+        if bad:                                # store.knobs keeps clear of them: a self-check
+            raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
     fast_mods = [m for m in order if m.size('.fast')]
     pay_mods = [m for m in order if m.size('.payload')]
     if pay_mods:
@@ -948,6 +1042,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             return base[(m.id, nm)]
         if (m.id, nm) in addr and nm in m.symbols:
             return addr[(m.id, nm)]
+        if nm == KNOBS and m.id in knob_base:
+            return knob_base[m.id]
         if nm in glob:
             return glob[nm]
         if nm in m.weak and zero is not None:
@@ -980,6 +1076,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             buf[off:off + 3] = bytes((value & 0xFF, (value >> 8) & 0xFF, value >> 16))
         elif typ == 'abs32':
             struct.pack_into('>I', buf, off, value & 0xFFFFFFFF)
+        elif typ == 'abs16':
+            if not -0x8000 <= value <= 0xFFFF:
+                raise ModError('%s: a 16-bit value out of range (%d)' % (where, value))
+            struct.pack_into('>H', buf, off, value & 0xFFFF)
         elif typ == 'pc32':
             struct.pack_into('>i', buf, off, value - p)
         else:
@@ -1062,6 +1162,21 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     if new_lock is not None:
         img += store.trailer(new_lock)
     bad = _copied_rules(order, bytes(img), dev)
+    if dev.isa == 'coldfire':
+        # ColdFire stops with an address error on an odd jump target (an emulator may not): a jsr or jmp
+        # abs.l in the mods' code, in a site or in the RAM image, must name an even address
+        code = [(s['addr'], bytes(img[s['addr'] - dev.main_load:s['addr'] - dev.main_load + s['len']]),
+                 '%s site 0x%08x' % (m.label(), s['addr'])) for m in order for s in m.sites if s['kind'] == 'code']
+        code += [(base[(m.id, '.run')], bytes(ddr[base[(m.id, '.run')] - ddr_base:
+                                                  base[(m.id, '.run')] - ddr_base + m.size('.run')]),
+                  '%s .run' % m.label()) for m in order if m.size('.run')]
+        for at, data, what in code:
+            for i in range(0, len(data) - 5, 2):
+                if data[i:i + 2] in (b'\x4e\xb9', b'\x4e\xf9'):
+                    t = int.from_bytes(data[i + 2:i + 6], 'big')
+                    if t % 2 and ddr_base <= t < bss_end:
+                        bad.append('%s: a jsr/jmp at 0x%08x goes to the odd address 0x%08x (align the code: '
+                                   '.balign 2 at the start of each .run section)' % (what, at + i, t))
     for m in order:
         for s in m.sites:
             if s['kind'] == 'code':
@@ -1108,18 +1223,20 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         'ddr_spare': ddr_end - bss_end, 'fast_spare': fast_end - fast_at,
         'ddr_size': ddr_end - ddr_base, 'fast_size': fast_end - fast_base,
     }
-    if sharc_mods:
+    if kernel_mods or sharc_mods:
         info = out.layout['sharc'] = {'decoded': len(dsp_stream), 'decoded_sha256': sha(dsp_stream),
                                       'stored': len(dsp_stored), 'stored_sha256': sha(dsp_stored)}
-        if sharc_mods[0].sharc.get('machine_kind'):
-            info['mods'] = [{'id': m.id, 'owner': list(m.sharc['owner']),
-                             'hook': rel.sharc[m.sharc['machine_kind'] + '_hook'][0]}
-                            for m in sharc_mods]
+        if kernel_mods:
+            info['kernels'] = kernel_layout
         else:
             info.update(owner=list(payload['owner']), app=sharc_mods[0].id)
             if payload['entries'] is not None:
                 info.update(core=list(core.sharc['owner']), hook=rel.sharc['hook'][0])
     out.store, out.store_notes = new_lock, store_notes
+    out.knobs = {mid: [b, next(m.knobs for m in order if m.id == mid)] for mid, b in sorted(knob_base.items())}
+    out.knob_notes = knob_notes
+    for mid, b in knob_base.items():
+        out.map['%s:%s' % (mid, KNOBS)] = b
     if units is not None:                      # the reserve the core takes: units of dev.reserve
         out.layout['reserve'] = {'units': units, 'end': ddr_base + units * dev.reserve[0]}
     if areas:                                  # words: P addresses of each payload's area

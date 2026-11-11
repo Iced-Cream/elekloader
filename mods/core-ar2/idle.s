@@ -22,9 +22,11 @@
 | the pointer.
         .equ    GAINS, 0x80007000
         .equ    TRACK_TRIG, 0x8000e508
+        .equ    FRAME, 0x800063c0       | the control frame, 0x3d8 bytes = 246 longs
 
         .text
         .globl  core_voice_site, core_voice_skip_hold_add, core_voice_skip_hold_release
+        .globl  core_frame_save, core_frame_diff
         .align  2
 core_voice_site:
         movea.l (0,%a5,%d4.l),%a1
@@ -87,6 +89,60 @@ core_voice_skip_hold_add:
         rts
 core_voice_skip_hold_release:
         subq.l  #1, core_voice_skip_hold
+        rts
+
+| the checked call's frame copy and compare (idle.c)
+|
+| core_frame_save(dst): the frame's 246 longs to dst, 41 x 6 by movem
+core_frame_save:
+        movea.l 4(%sp),%a1
+        lea     -24(%sp),%sp
+        movem.l %d2-%d7,(%sp)
+        lea     FRAME,%a0
+        moveq   #41,%d0
+1:      movem.l (%a0),%d2-%d7
+        movem.l %d2-%d7,(%a1)
+        lea     24(%a0),%a0
+        lea     24(%a1),%a1
+        subq.l  #1,%d0
+        bne.s   1b
+        movem.l (%sp),%d2-%d7
+        lea     24(%sp),%sp
+        rts
+
+| core_frame_diff(before): bit c set when a long of 8c..8c+7 differs
+| between the frame and before (chunk 30 holds longs 240..245)
+core_frame_diff:
+        movea.l 4(%sp),%a1
+        lea     -12(%sp),%sp
+        movem.l %d2-%d4,(%sp)
+        lea     FRAME,%a0
+        clr.l   %d0                     | the mask
+        clr.l   %d3                     | the chunk
+        moveq   #30,%d4
+1:      clr.l   %d1
+        .rept   8
+        move.l  (%a0)+,%d2
+        sub.l   (%a1)+,%d2
+        or.l    %d2,%d1
+        .endr
+        tst.l   %d1
+        beq.s   2f
+        bset    %d3,%d0
+2:      addq.l  #1,%d3
+        cmp.l   %d4,%d3
+        bne.s   1b
+        clr.l   %d1
+        .rept   6
+        move.l  (%a0)+,%d2
+        sub.l   (%a1)+,%d2
+        or.l    %d2,%d1
+        .endr
+        tst.l   %d1
+        beq.s   3f
+        bset    %d3,%d0
+3:      movem.l (%sp),%d2-%d4
+        lea     12(%sp),%sp
         rts
 
         .bss
