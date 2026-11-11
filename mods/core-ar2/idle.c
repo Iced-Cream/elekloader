@@ -276,6 +276,13 @@ void core_voice_off(uint32_t s, uint32_t owner)
     }
 }
 
+/* [0]: 1 while the block makes a checked call; analoghealth reads and clears
+ * it at render-out to time checked and unchecked blocks apart. The rest is
+ * padding: with the code this adds to core (16 bytes) and to analoghealth
+ * dsp-settings-check-split (84), 28 bytes here move .bss by 128, so
+ * frame_before keeps the offset it had before in a 16-byte cache line (14) */
+extern uint32_t core_check_mark[7];
+
 /* idle.s, the skip on and the gain small: 0 skips the call, else the
  * pointer runs it */
 uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
@@ -360,6 +367,7 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     volatile uint32_t *rec = RECORD(s), *g = GAIN(s), *ck = CLICK(s);
     uint32_t rec0[8], g0 = g[0], g1 = g[1];
     uint32_t rec_n = (RECORD_FREE >> mach & 1) ? 2 : 8;
+    core_check_mark[0] = 1;              /* analoghealth: this block made a checked call */
     core_frame_save(frame_before);
     for (uint32_t i = 0; i < rec_n; i++)
         rec0[i] = rec[i];
@@ -418,3 +426,5 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     set(v, SKIPPED, 0, RECORDED);
     return 0;
 }
+
+uint32_t core_check_mark[7];
