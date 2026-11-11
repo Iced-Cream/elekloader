@@ -921,7 +921,7 @@ static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD",
  * record drew list row 100 as SELECT ALL, rows from 200 as NO MODS ON +DRIVE and rows from 300
  * as VIEW BUILD (2026-11-08). A row needs a heap entry, so no list reaches 0x10000000. */
 #define I_ACT 0x10000000                 /* functor index of the action panel's rows */
-#define I_EMPTY 0x20000000               /* the file list's one row when /mods holds no file */
+#define I_EMPTY 0x20000000               /* an empty list's one row (page_rows) */
 #define I_LEFT 0x30000000                /* and of the left panel's row */
 
 /* a row's label: list rows 1.., the action panel I_ACT.., the left panel I_LEFT. The file list
@@ -936,7 +936,7 @@ unsigned dl_page_text(int i)
     char *end = label + sizeof label;
     label[0] = 0;
     if (i == I_EMPTY)
-        cat(label, end, "NO MODS ON +DRIVE");
+        cat(label, end, mode == M_DRIVE ? "NO MODS ON +DRIVE" : "BUILD EMPTY");
     else if (i >= I_LEFT)
         cat(label, end, mode == M_DRIVE ? "VIEW BUILD" : "VIEW +DRIVE");
     else if (i >= I_ACT) {
@@ -1874,11 +1874,18 @@ static void page_rows(void)
     ((int *)view)[11] = ((int *)view)[10];   /* no ticks carried across lists */
     for (i = 0; i < list_n(); i++)
         add_item(view, i + 1, i);
-    /* stock's file view hangs the UI when it is first shown with no row (DLP7, 2026-11-07); its
-     * own lists never are (a folder has "..", VIEW RAM its slots). So a file list with no row
-     * gets one that says so and does nothing (YES on it changes nothing: it is no file). Only
-     * DL_DIR itself can be empty: a folder below it has "..". */
-    if (mode == M_DRIVE && !nlrows)
+    /* stock's list is never left with no row: its own lists never are (a folder has "..", VIEW
+     * RAM its slots), and its label scroll (0x4006dce8, every third UI tick) reads the cursor's
+     * row with no count check. LIST_CLEAR (0x40072914) frees the rows but keeps the vector's
+     * storage, so on an empty list that read takes a freed row and calls its label through
+     * whatever the heap has put there since: an illegal instruction and the OS's fatal halt
+     * (FORGET DATA of the build list's last rows, the DV2B emulator runs, 3 in 4 tries, found
+     * 2026-11-11). A list never shown with rows reads past a null vector instead (DLP7,
+     * 2026-11-07: the UI hung). So a list with no row gets one that says so and does nothing
+     * (YES on it changes nothing: it is no file): DL_DIR itself with nothing in it (a folder
+     * below it has ".."), or a build list that a CLEAR, UNLOAD or FORGET DATA has emptied, or
+     * that has nothing in it. */
+    if (!list_n())
         add_item(view, I_EMPTY, 0);
     LIST_CLEAR(right);
     for (i = 0; i < (mode == M_BUILD ? NACT_BUILD : NACT_DRIVE); i++)

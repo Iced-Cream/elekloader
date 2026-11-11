@@ -96,9 +96,12 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   and data parked, the panels open so that VIEW BUILD and FORGET DATA can be reached; the file
   list keeps its `NO MODS ON +DRIVE` row.
 - **No files.** With no `.elemod` and no folder in `/mods` the list has one row,
-  `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens unless data is parked. Stock's file view
-  hangs the UI when it is first shown with no row at all; its own lists never are (a folder
-  has `..`, VIEW RAM its 128 slots).
+  `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens unless data is parked.
+  A build list with no row (nothing in the build and nothing parked, or after CLEAR BUILD,
+  UNLOAD or FORGET DATA took its last rows) has one row the same way, `BUILD EMPTY` (short enough for the list beside its panels).
+  Stock's lists are never left with no row: its label scroll reads the cursor's row without
+  checking the count, which on a cleared list is a freed row (a fatal halt, the DV2B emulator
+  runs) and on a list never filled a null one (the UI hung on DLP7).
 - **Messages** are stock's message box: on opening, why the boot skipped the mods
   (`SKIPPED: [NO] HELD`, `SKIPPED: CRASH`, `NO +DRIVE`, ...); after a change, `SAVE FAILED`,
   `BUSY: TRY AGAIN` or `OVER 256 MODS` (a build of more than the boot links); `NO MEMORY` when
