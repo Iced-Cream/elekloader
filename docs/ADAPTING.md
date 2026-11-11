@@ -2255,6 +2255,29 @@ they call. `examples/screen-check-ar2` uses each of them.
   fills its bar and `core_progress_close(h)` takes it away. The box takes
   no keys: catch NO in your `ev_key` and close it.
 
+### Pads and LEDs (core-ar2 0.15, Analog Rytm MKII)
+
+A pad strike before stock plays it, and pad and key LEDs a mod colours
+(`analog-rytm-mk2/pads.h`; ask for `"core": "0.15"` in `resources`; the
+internals in `mods/core-ar2/pads.c`'s header). Both run in the UI task. `examples/pad-check-ar2` uses each.
+
+- **`ev_pad`**, `int32_t f(int32_t pad, int32_t value, int32_t flags)`:
+  each of the 12 pads' (0 BD .. 11 CB) strikes (`CORE_PAD_DOWN`, value the
+  velocity), releases (`CORE_PAD_UP`) and pressure (`CORE_PAD_PRESSURE`,
+  0..32640), with `CORE_PAD_FUNC` while FUNC is held. Return nonzero to a
+  strike to take it: stock doesn't play the sound, send the note or select
+  the track, and gets neither the pressure nor the release of that touch.
+  A strike stock got keeps its release, whatever you answer. The pad's key
+  event (ids 0x90..0x9b) still comes to `ev_key`: a strike taken there
+  alone still sounds. `core_pads_taken()` gives the pads a mod holds now.
+- **`ev_leds`**, `void f(void)`, every UI frame after every mod's
+  `ev_tick`: call `core_led(led, colour)` for each LED you want this
+  frame, colour an index in the panel's palette (0 dark). It stays over
+  whatever stock does with that LED (on, off, blink, the track's colour)
+  until a frame in which no handler sets it; then stock's colours come
+  back. `led` is stock's LED number: `CORE_LED_TRIG(k)` the trig keys,
+  `CORE_LED_PAD(p)` the pads.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,
