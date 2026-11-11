@@ -91,6 +91,8 @@ export type Device = {
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
+  machineSlots: [string, [string, Record<number, number>][]] | null   // [table, [[core version, {slot: knobs}]]]: the slots a mod's "machine_knobs" are given from that core on (link.machineSlotsFor)
+  pageIds: [number, [string, number][]] | null  // [first, [[table, at]]]: a mod's "pages" are ids from first up, past those a contribution to table names at +at
   tableLimits: Record<string, number>           // table -> the most entries all mods together may add to it: the OS uses no more (link.check)
   sramCode: Range
   fastTable: string
@@ -106,7 +108,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, machineSlots: null, pageIds: null, tableLimits: {}, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -250,7 +252,15 @@ export const ANALOG_RYTM_MK2: Device = {
   slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0
   // core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
   // (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
-  paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true], ['core_knob_looks', true]]],
+  paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true], ['core_knob_looks', true], ['core_knob_faces', false]]],
+  // the hidden slots a mod's "machine_knobs" are given (core-ar2 0.5: 34..43, 0.13: 34..52), with how many knobs from LEV
+  // (sound index 9) on have a record there (stock 1.74's records)
+  machineSlots: ['core_machines', [
+    ['0.5', { 34: 3, 35: 8, 36: 8, 37: 8, 38: 8, 39: 8, 40: 8, 41: 8, 42: 8, 43: 5 }],
+    ['0.13', { 34: 3, 35: 8, 36: 8, 37: 8, 38: 8, 39: 8, 40: 8, 41: 8, 42: 8, 43: 5,
+      44: 8, 45: 4, 46: 8, 47: 5, 48: 4, 49: 4, 50: 5, 51: 8, 52: 0 }]]],
+  // a mod's "pages": ids from 12 up (stock's are 0..11), past the ids entries of these tables name
+  pageIds: [12, [['core_pages', 0], ['core_page_fns', 0], ['core_view_pages', 4]]],
 }
 
 export const ANALOG_FOUR_MK2: Device = {
