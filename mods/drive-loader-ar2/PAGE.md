@@ -98,7 +98,7 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 - **No files.** With no `.elemod` and no folder in `/mods` the list has one row,
   `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens unless data is parked.
   A build list with no row (nothing in the build and nothing parked, or after CLEAR BUILD,
-  UNLOAD or FORGET DATA took its last rows) has one row the same way, `NO MODS IN BUILD`.
+  UNLOAD or FORGET DATA took its last rows) has one row the same way, `BUILD EMPTY` (short enough for the list beside its panels).
   Stock's lists are never left with no row: its label scroll reads the cursor's row without
   checking the count, which on a cleared list is a freed row (a fatal halt, the DV2B emulator
   runs) and on a list never filled a null one (the UI hung on DLP7).

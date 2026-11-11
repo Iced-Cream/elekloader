@@ -936,7 +936,7 @@ unsigned dl_page_text(int i)
     char *end = label + sizeof label;
     label[0] = 0;
     if (i == I_EMPTY)
-        cat(label, end, mode == M_DRIVE ? "NO MODS ON +DRIVE" : "NO MODS IN BUILD");
+        cat(label, end, mode == M_DRIVE ? "NO MODS ON +DRIVE" : "BUILD EMPTY");
     else if (i >= I_LEFT)
         cat(label, end, mode == M_DRIVE ? "VIEW BUILD" : "VIEW +DRIVE");
     else if (i >= I_ACT) {
