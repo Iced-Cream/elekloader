@@ -1,0 +1,30 @@
+{
+ "id": "savenew-check",
+ "version": "0.1",
+ "title": "Save-new check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-a4mk2 0.6's CORE_SAVE_NEW on the Analog Four MKII, which no panel action reaches on OS 1.56. A SAVE NEW CHECK page behind the AMP key: encoder J asks stock's project load for the empty slot 128 with create-if-empty set (the stock request every LOAD passes 0 to), so the load job makes a new project and saves it there; encoder I asks the same with the flag clear, as stock does (no save). save-check's bars show the save calls, the kind and the slot; the counts are in RAM after the magic SNC1.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["check.c"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "storage": [
+  {"sym": "sn_saves", "scope": "project", "bits": 16}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "sn_tick", "order": 60},
+  {"event": "ev_draw", "fn": "sn_draw", "order": 60},
+  {"event": "ev_enc", "fn": "sn_enc", "order": 40},
+  {"event": "ev_project", "fn": "sn_project", "order": 60},
+  {"event": "ev_project_save", "fn": "sn_save", "order": 60}
+ ],
+ "contribute": [
+  {"to": "core_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:sn_params", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:sn_page", 0]]},
+  {"to": "core_view_pages", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:sn_view", 0]]}
+ ],
+ "resources": {"core": "0.6"},
+ "requires": ["core"]
+}
