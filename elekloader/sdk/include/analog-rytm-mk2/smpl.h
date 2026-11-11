@@ -12,6 +12,11 @@
  * machine's engine, if it has one, gets the words each audio block. Stock's
  * sample playback is machine 0, so a sound that names none is unchanged.
  *
+ * A machine's page shows its knobs in record order, so knob C is SMP's word
+ * (index 19, CC 27), where stock's page shows BR. It is the sound's sample
+ * slot: a move never writes it, and what it holds is the sample stock plays.
+ * Leave it blank, or use it for something that follows the sample.
+ *
  * A mod adds machines through the table smpl_machines, and asks the
  * framework for their ids by count; the build's lockfile keeps them, so a
  * saved sound finds its machine again. In mod.json:
