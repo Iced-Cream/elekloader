@@ -312,6 +312,29 @@ static const char *choice_name(void)
     return m ? m->name : "----";
 }
 
+/* a live sound's stored word for sound index i (the parameter model's read,
+ * 0x400a8e66) */
+#define SOUND_WORD(s, i) (*(const int16_t *)((const unsigned char *)(s) + 0x14 + 2 * (i)))
+#define FIRST_INDEX 17                  /* knob A's sound index */
+
+/* sets the current sound's choice to c on track t; when that changes the
+ * machine the sound runs to machine m, m's knob defaults are written as a
+ * knob turn writes them (a knob with its own range: min < max) */
+static void choice_set(unsigned char *s, int t, unsigned c)
+{
+    const struct smpl_machine *before = machine_of(s, t), *after;
+    int k;
+    core_store_set(STORE(smpl_choice), s, 0, c);
+    after = machine_of(s, t);
+    if (!after || after == before)
+        return;
+    for (k = 0; k < 8; k++) {
+        const struct smpl_knob *n = &after->knobs[k];
+        if (n->label && n->min < n->max)
+            core_param_set(t, FIRST_INDEX + k, n->def, 0);
+    }
+}
+
 static void choice_turn(int delta)
 {
     unsigned char *s = core_current_sound_item();
@@ -322,8 +345,7 @@ static void choice_turn(int delta)
     if (bound((signed char)s[SOUND_MACHINE], SMPL_REQUIRED))
         return;                                 /* the SRC machine holds it */
     c = core_store_get(STORE(smpl_choice), s, 0);
-    c = step_choice(c, delta > 0 ? 1 : -1, t);
-    core_store_set(STORE(smpl_choice), s, 0, c);
+    choice_set(s, t, step_choice(c, delta > 0 ? 1 : -1, t));
 }
 
 /* ---- the sound setup menu's row (gate.s) -------------------------------- */
@@ -422,6 +444,7 @@ uint32_t smpl_menu_row(void *view)
 
 extern char smpl_list_label_s[];                                    /* gate.s */
 static void *list_view;
+static int16_t list_words[8];           /* knobs A..H as the list opened */
 static uint32_t list_ctrl;              /* a weak hold on the open list */
 static int trk_down, smpl_taken;
 static char list_text[16];
@@ -453,16 +476,22 @@ static void list_step(void *f, int32_t dir)
         return;
     c = core_store_get(STORE(smpl_choice), s, 0);
     c = step_choice(c, dir > 0 ? 1 : -1, t);
-    core_store_set(STORE(smpl_choice), s, 0, c);
+    choice_set(s, t, c);
     LIST_SELECT(list_view, (int32_t)c);
 }
 
+/* NO: the first choice back, and the knobs' words as they were */
 static void list_revert(void *f, int32_t first)
 {
     unsigned char *s = core_current_sound_item();
+    int t = core_current_track(), k;
     (void)f;
-    if (s && first >= 0 && first < CHOICE_FIRST + MAX_MACHINES)
-        core_store_set(STORE(smpl_choice), s, 0, (unsigned)first);
+    if (!s || t < 0 || t >= 12 || first < 0 || first >= CHOICE_FIRST + MAX_MACHINES)
+        return;
+    core_store_set(STORE(smpl_choice), s, 0, (unsigned)first);
+    for (k = 0; k < 8; k++)
+        if (SOUND_WORD(s, FIRST_INDEX + k) != list_words[k])
+            core_param_set(t, FIRST_INDEX + k, (uint16_t)list_words[k], 0);
 }
 
 static void list_add(void *model, int32_t c)
@@ -489,6 +518,8 @@ static void list_open(void)
     if (list_ctrl && WP_ALIVE(&list_ctrl))
         return;                                     /* open already */
     c = core_store_get(STORE(smpl_choice), s, 0);
+    for (k = 0; k < 8; k++)
+        list_words[k] = SOUND_WORD(s, FIRST_INDEX + k);
     if (!(view = NEW(LIST_SIZE)))
         return;
     LIST_CTOR((void *)view, t, (int32_t)c, 0, 0, 0, 0, 0x46, 0x3a, 1);

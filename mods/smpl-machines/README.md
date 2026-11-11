@@ -15,7 +15,7 @@ list TRK + SMPL opens.
 
 | | |
 |---|---|
-| needs | core-ar2 0.15 or later, with knob faces (`core_knob_faces`); `resources` says 0.13, the core on this branch, until that core exists |
+| needs | core-ar2 0.15 or later, with knob faces (`core_knob_faces`) and `core_param_set`; `resources` says 0.13, the core on this branch, until that core exists |
 | sites | 3: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs; the entry of the audio side's routine that puts a sound on a track, 0x4011f60a (the kit's sound, or a sound lock's pool sound); and the sound setup menu's build, 0x400ef184, after its MACHINE row |
 | exports | `smpl_track_machine` |
 | declares | `smpl_machines`, the machines (`elekloader/sdk/include/analog-rytm-mk2/smpl.h`); the id pool `smpl_machines`, ids 0..29 |
@@ -39,8 +39,13 @@ Which machine a sound runs:
    SMPL MACHINE row, under MACHINE, or in the list SMPL opens while TRK is
    held: AUTO, STOCK, then the machines the track's voice may run. The list
    is stock's SRC machine list with these rows: UP and DOWN choose as you
-   go, YES keeps the choice and NO puts the first one back. With a required
-   machine, or no machines, TRK + SMPL is stock's.
+   go, YES keeps the choice and NO puts the first one back, with the
+   knobs' values as they were. With a required machine, or no machines,
+   TRK + SMPL is stock's.
+
+A choice that changes the machine the sound runs to a machine writes that
+machine's defaults into its knobs that have their own range (`min < max`),
+as a knob turn writes them (`core_param_set`).
 3. **Auto**: on AUTO, one whose `bind` is `SMPL_DEFAULT` for the SRC
    machine, else stock's.
 
@@ -69,9 +74,4 @@ sound that names it plays stock's.
   sound). Each UI tick (`ev_tick`, order 40) it also works out the current
   kit's machines, which the page and a track with no sound noted yet use.
 
-## Not yet
-
-- Defaults on choosing a machine wait for `core_param_set` (core-ar2's
-  engines work); until then a machine's `def` is the knob's default on a
-  new sound and in the pop-up, not a value written on choosing.
 
