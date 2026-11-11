@@ -64,9 +64,9 @@
 struct smpl_knob {
     const char *label;      /* up to 4 characters; 0: a blank knob (no label, no graphic) */
     const char *name;       /* the header's name as it turns; 0: the label */
-    int32_t look;           /* a stock id (1..468) whose knob it looks like; 0: a plain dial
-                             * when min < max (BR's, 42; not knob C's own value),
-                             * else the record's own */
+    int32_t look;           /* a stock id (1..468) whose knob it looks like; 0: the record's own,
+                             * or a plain dial (BR's, 42) when min < max differs
+                             * from the record's range (not knob C's own value) */
     int32_t min, max, def;  /* min < max: the range and default (8.8); else the record's */
     /* the value's text into buf (up to 8 characters), value 8.8; 0: a number */
     void (*text)(char *buf, int32_t value);

@@ -78,9 +78,9 @@ none of these bits, and knob C stays SMP's word.
   MIDI as stock's do. Core's knob faces (core-ar2 README, "Knob faces")
   give them the machine's label, name, look, range and default; core's
   `core_params` entries on the stock ids give their text; and a page
-  function on stock pages 4 and 5 gives the title. A ranged knob with no
-  look gets BR's plain dial (42): the record under it may draw on another
-  range (TUN's +-24 stops short of the end). From 0.3 page 5, stock's
+  function on stock pages 4 and 5 gives the title. A knob with no look
+  whose range differs from the record's under it gets BR's plain dial
+  (42): the record's look draws on its own range (TUN's +-24 stops short). From 0.3 page 5, stock's
   waveform, is shown only for stock's layer and machines with
   `SMPL_WAVEFORM` (a `core_view_pages` entry with a shown on the stock
   page, core-ar2 0.15).

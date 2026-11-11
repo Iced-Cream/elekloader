@@ -5,7 +5,8 @@
  * hidden while the view is on it (smpl-machines: a machine with one page
  * hides the SAMPLE view's page 5), so before the view draws (pages.s,
  * core_sample_draw) it moves on to the next page that is shown, as the key
- * would, and the header takes that page's title. */
+ * would, and the header takes that page's title; not while a stock list or
+ * window is over it (the machine list's CONFIRM?), whose header that is. */
 #include <stdint.h>
 
 #define VIEW_MAX 16
@@ -20,6 +21,7 @@
 #define VIEW_INVALIDATE ((void (*)(void *))0x40078580)
 
 typedef int32_t (*shown_fn)(void *view);
+int core_stock_overlay(void);           /* screen.c */
 extern int32_t core_view_buf[VIEWS * VIEW_MAX * 2];  /* the lists, then each page's shown */
 extern int32_t core_view_len[VIEWS];
 
@@ -45,8 +47,10 @@ static shown_fn *shown_of(void *view, int32_t *n)
 static void set_title(void *view)
 {
     char str[12];                       /* stock's string: 8 bytes, its allocator's byte after */
-    const char *(*title)(void *) = (*(const char *(***)(void *))view)[VT_TITLE / 4];
-    STR_FROM_CSTR(str, title(view), str + 8);
+    /* stock answers the title in %d0, where our compiler reads a pointer from
+     * %a0: so an integer */
+    uintptr_t (*title)(void *) = (*(uintptr_t (***)(void *))view)[VT_TITLE / 4];
+    STR_FROM_CSTR(str, (const char *)title(view), str + 8);
     UI_SET_TITLE(*(void **)((char *)view + VIEW_UI), str);
     STR_DTOR(str);
 }
@@ -55,8 +59,8 @@ void core_view_settle(void *view)
 {
     int32_t n, sel, at, tries;
     shown_fn *sh = shown_of(view, &n);
-    if (!sh)
-        return;
+    if (!sh || core_stock_overlay())
+        return;                         /* a list or window over it owns the header: later */
     sel = *(int32_t *)((char *)view + VIEW_SEL);
     if (sel < 0 || sel >= n || !sh[sel] || sh[sel](view))
         return;
