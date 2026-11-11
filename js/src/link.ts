@@ -22,7 +22,8 @@ import {
 import { PCREL, decodeColdFire, readerAt } from './isa/coldfire.ts'
 import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, str } from './py.ts'
 import * as store from './store.ts'
-import { modulePayload, type SharcPayload } from './sharc.ts'
+import { KERNEL_ABI, KERNEL_TABLE, kernelPayload, modulePayload, placeKernels, type KernelKind, type KernelLayout,
+  type KernelPayload, type RawPayload, type SharcPayload, linkRaw, rawPayload } from './sharc.ts'
 import * as sharcRecords from './sharc.ts'
 import * as syx from './syx.ts'
 
@@ -31,7 +32,9 @@ export class StructError extends PyException {}
 
 export const FORMAT2 = 2
 const SECTIONS = ['.boot', '.run', '.fast', '.bss', '.payload']
-const RTYPES = ['abs32', 'pc32', 'pc16', 'dsp24']
+const RTYPES = ['abs32', 'abs16', 'pc32', 'pc16', 'dsp24']
+export const KNOBS = '__knobs'                // a mod's first knob id (its "knobs")
+const MAX_KNOBS = 1024                      // a mod's "knobs": at most this many ids
 const DSP = '.dsp.'                         // a DSP section: '.dsp.' + its payload's tag
 const FAST_ENTRY = 16                       // a .fast copy entry: src, dst, len, 0
 export const PAYLOADS = 'core_payloads'     // the core's table of the mods' payloads: id, address, length
@@ -85,7 +88,8 @@ export class Mod2 implements AnyMod {
   dev: Device
   rel: Release
   sections: Map<string, Sec>
-  sharc: SharcPayload | null
+  sharc: SharcPayload | KernelPayload | null
+  sharcRaw: RawPayload | null
   symbols: Map<string, [string, number]>
   exports: string[]
   imports: string[]
@@ -97,6 +101,7 @@ export class Mod2 implements AnyMod {
   contribute: Contribution[]
   copied: [number, number, number][]
   storage: [string, string, number][]
+  knobs: number
   locks: string[]
   ccs: string[]
   lfos: string[]
@@ -117,7 +122,8 @@ export class Mod2 implements AnyMod {
     this.name = name
     this.sha256 = raw ? sha(raw) : null
     if (!pyEq(formatOf(doc), FORMAT2)) throw new ModError(`${name}: not a format-2 .elemod file`)
-    const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'])
+    const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
+      'sharc_raw', 'knobs'])
     const extra = Object.keys(doc).filter(k => !COMMON.has(k) && !more.has(k)).sort()
     if (extra.length) throw new ModError(`${name}: unknown fields ${repr(extra)}`)
     for (const k of ['id', 'version', 'target', 'sections']) if (!(k in doc)) throw new ModError(`${name}: no "${k}"`)
@@ -147,7 +153,9 @@ export class Mod2 implements AnyMod {
       if (n !== int(get(d, 'len', n), name)) throw new ModError(`${name} ${sec}: parts make ${n} bytes, not ${str(get(d, 'len'))}`)
       this.sections.set(sec, { align: al, parts, len: n })
     }
-    this.sharc = 'sharc' in doc ? modulePayload(doc.sharc, this.rel.sharc, this.sections.has('.boot')) : null
+    this.sharc = !('sharc' in doc) ? null : isDict(doc.sharc) && doc.sharc.abi === KERNEL_ABI ? kernelPayload(doc.sharc, this.rel.sharc)
+      : modulePayload(doc.sharc, this.rel.sharc, this.sections.has('.boot'))
+    this.sharcRaw = 'sharc_raw' in doc ? rawPayload(doc.sharc_raw, this.rel.sharc) : null
     this.symbols = new Map()
     for (const [nm, v] of items(get(doc, 'symbols', {}))) {
       if (!Array.isArray(v) || v.length !== 2) throw new ModError(`${name}: symbol ${nm}`)
@@ -155,6 +163,11 @@ export class Mod2 implements AnyMod {
       this.symbols.set(nm, [v[0], int(v[1], name)])
       if (dspTag(this.dev, v[0]) && this.symbols.get(nm)![1] % 3) throw new ModError(`${name}: DSP symbol ${nm} is not at a whole word`)
     }
+    if (this.symbols.has(KNOBS)) throw new ModError(`${name}: ${KNOBS} is the linker's (its first knob id), not a symbol of a mod`)
+    const k = get(doc, 'knobs', 0)
+    if (typeof k !== 'number' || !Number.isInteger(k) || !(k >= 0 && k <= MAX_KNOBS))
+      throw new ModError(`${name}: "knobs" is a count of knob ids, 0..${MAX_KNOBS}`)
+    this.knobs = k
     this.exports = iter(get(doc, 'exports', [])).map(x => str(x))
     for (const x of this.exports) if (!this.symbols.has(x)) throw new ModError(`${name}: exports ${x}, which it does not define`)
     this.imports = iter(get(doc, 'imports', [])).map(x => str(x))
@@ -192,7 +205,7 @@ export class Mod2 implements AnyMod {
       for (const r of iter(get(c, 'relocs', []))) {
         const [off0, typ, tgt, add] = unpack(r, 4)
         const off = int(off0, what)
-        if (!RTYPES.includes(typ as string) || off < 0 || off + (typ === 'dsp24' ? 3 : 4) > data.length)
+        if (!RTYPES.includes(typ as string) || off < 0 || off + RSIZE.get(typ as string)! > data.length)
           throw new ModError(`${what}: bad relocation ${repr(r)}`)
         rel.push([off, typ as string, tgt as string, int(add, what)])
       }
@@ -257,8 +270,9 @@ export class Mod2 implements AnyMod {
   /** The knob ids this mod's entries answer for, by the profile's paramIds: a contribution to such a table holds
    * four-byte pointers to entries whose first two longs are a range of ids (core-ar2's core_params,
    * core_param_locks). -> [[table, first, last]]. An entry this cannot read (outside the mod's own bytes, or
-   * relocated there) answers for none. link.Mod2.id_ranges. */
-  idRanges(image: Uint8Array): [string, number, number][] {
+   * relocated there) answers for none; one relocated to __knobs answers for its ids when knobs (the mod's first id)
+   * is given. link.Mod2.id_ranges. */
+  idRanges(image: Uint8Array, knobs: number | null = null): [string, number, number][] {
     const out: [string, number, number][] = []
     for (const [table] of this.dev.paramIds ? this.dev.paramIds[2] : []) {
       for (const c of this.contribute) {
@@ -266,12 +280,31 @@ export class Mod2 implements AnyMod {
         for (const [off, typ, tgt, add] of c.relocs) {
           const at = off % 4 ? null : this.target(typ, tgt, add)
           if (at === null) continue
-          const first = this.long(at[0], at[1], image), last = this.long(at[0], at[1] + 4, image)
+          const first = this.idLong(at[0], at[1], image, knobs), last = this.idLong(at[0], at[1] + 4, image, knobs)
           if (first !== null && last !== null && (first | 0) <= (last | 0)) out.push([table, first | 0, last | 0])
         }
       }
     }
     return out
+  }
+
+  /** An id long at sec+off: its bytes, or __knobs + the addend where an abs32 relocates it to __knobs and knobs is
+   * given; else null. link.Mod2._id. */
+  private idLong(sec: string, off: number, image: Uint8Array, knobs: number | null): number | null {
+    const r = this.relocs.find(([s, o]) => s === sec && o === off)
+    if (!r) return this.long(sec, off, image)
+    if (knobs !== null && r[2] === 'abs32' && r[3] === 'sym:' + KNOBS) return (knobs + r[4]) >>> 0
+    return null
+  }
+
+  /** -> [[where, type, addend]] of every relocation to __knobs: sections, sites, entries. link.Mod2.knob_refs. */
+  knobRefs(): [string, string, number][] {
+    const t = 'sym:' + KNOBS
+    return [
+      ...this.relocs.filter(r => r[3] === t).map(([sec, off, ty, , a]) => [`${sec}+0x${off.toString(16)}`, ty, a] as [string, string, number]),
+      ...this.sites.flatMap(s => s.relocs.filter(r => r[2] === t).map(([, ty, , a]) => [`site 0x${s.addr.toString(16).padStart(8, '0')}`, ty, a] as [string, string, number])),
+      ...this.contribute.flatMap(c => c.relocs.filter(r => r[2] === t).map(([, ty, , a]) => [`an entry of ${c.to}`, ty, a] as [string, string, number])),
+    ]
   }
 
   /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes
@@ -400,6 +433,32 @@ function dspNeeds(m: Mod2): Set<string> {
   return out
 }
 
+const isKernel = (m: Mod2): boolean => !!m.sharc && 'abi' in m.sharc && m.sharc.abi === KERNEL_ABI
+const kernel = (m: Mod2): KernelPayload => m.sharc as KernelPayload
+type Active = Mod2 & { sharc: SharcPayload }
+
+/** [the DN2 kernel mods, the other SHARC mods but the core]. A dispatcher without kernels is inert. link.sharc_split. */
+function sharcSplit(mods: Mod2[]): [Mod2[], Active[]] {
+  let kernelMods = mods.filter(isKernel)
+  if (!kernelMods.some(m => kernel(m).kernels.length)) kernelMods = []
+  return [kernelMods, mods.filter(m => m.sharc && !m.sections.has('.boot') && !isKernel(m)) as Active[]]
+}
+
+/** The DN2 machines m registers, by the profile's kernelRegistrations: {"kind:id": [table, needs its kernel]}.
+ * link.kernel_registrations. */
+function kernelRegistrations(m: Mod2, image: Uint8Array): Map<string, [string, boolean]> {
+  const out = new Map<string, [string, boolean]>()
+  for (const [table, kind, needs] of m.rel.sharc?.kernelRegistrations ?? [])
+    for (const nm of m.impliedNames(image, table)) out.set(`${kind}:${Number(nm.slice(nm.lastIndexOf(':') + 1))}`, [table, needs])
+  return out
+}
+
+/** Python's sorted() over (kind, id) keys. */
+const byKindId = (a: string, b: string) => {
+  const [ka, ia] = a.split(':'), [kb, ib] = b.split(':')
+  return ka < kb ? -1 : ka > kb ? 1 : Number(ia) - Number(ib)
+}
+
 /** Static checks that need no layout. -> problems. */
 export function check(mods: Mod2[], image: Uint8Array): string[] {
   const spans: Span<AnyMod>[] = []
@@ -429,34 +488,41 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       if (m.needsCore && cmpVersions(cores[0].version, m.needsCore) < 0)
         bad.push(`${m.label()} needs core ${m.needsCore} or newer, and this build has core ${cores[0].version}`)
   }
-  const sharcMods = mods.filter(m => m.sharc && !m.sections.has('.boot'))
+  const [kernelMods, sharcMods] = sharcSplit(mods)
   for (const m of mods)
-    if (!sharcMods.length && m.sites.some(s => sharcSite(m.rel, s.addr)))
+    if (!sharcMods.length && !kernelMods.length && m.sites.some(s => sharcSite(m.rel, s.addr)))
       bad.push(`${m.label()}: SHARC data site requires a SHARC mod`)
-  if (sharcMods.length > 1 && sharcMods.map(m => m.sharc!.machineKind).sort().join(',') !== 'filter,voice')
-    bad.push('SHARC mods may combine only one DN2 voice and one DN2 filter')
-  for (const kind of ['voice', 'filter'] as const) {
-    const table = mods[0].rel.sharc?.[`${kind}Table`]
-    for (const m of mods)
-      if (table && m.contribute.some(c => c.to === table) && m.sharc?.machineKind !== kind)
-        bad.push(`${m.label()}: DN2 ${kind} registration requires a matching SHARC ${kind} payload`)
+  if (kernelMods.length) {
+    const dispatchers = kernelMods.filter(m => Object.keys(kernel(m).exports).length).map(m => m.label())
+    if (dispatchers.length !== 1)
+      bad.push(`DN2 machine kernels need one dispatcher (machines-dn2); this build has ${dispatchers.join(', ') || 'none'}`)
+    if (sharcMods.length) bad.push(`DN2 machine kernels do not combine with ${sharcMods.map(m => m.label()).join(', ')}`)
+    const owners = new Map<string, Mod2>()
+    for (const m of kernelMods) for (const k of kernel(m).kernels) {
+      const key = `${KERNEL_TABLE[k.kind]}:${k.id}`
+      if (owners.has(key)) bad.push(`${owners.get(key)!.label()} and ${m.label()} both have a DN2 ${KERNEL_TABLE[k.kind]} kernel with id ${k.id}`)
+      owners.set(key, m)
+    }
+  }
+  if (sharcMods.length > 1) bad.push(`a build takes one SHARC mod; this one has ${sharcMods.map(m => m.label()).join(', ')}`)
+  for (const m of mods) {                   // DN2 machines: each registration and its kernel, in one mod
+    const regs = kernelRegistrations(m, image)
+    const have = new Set(isKernel(m) ? kernel(m).kernels.map(k => `${k.kind}:${k.id}`) : [])
+    for (const key of [...regs.keys()].sort(byKindId)) {
+      const [table, needs] = regs.get(key)!, [kind, mid] = key.split(':')
+      if (needs && !have.has(key)) bad.push(`${m.label()}: its ${table} entry ${mid} needs a SHARC ${kind} kernel with that id`)
+    }
+    for (const key of [...have].filter(k => !regs.has(k)).sort(byKindId)) {
+      const [kind, mid] = key.split(':')
+      bad.push(`${m.label()}: its SHARC ${kind} kernel ${mid} has no registration with that id in its mod`)
+    }
+    const gTables = new Set((m.rel.sharc?.kernelRegistrations ?? []).filter(([, kind]) => kind === 'mk2-filter').map(([t]) => t))
+    if (m.contribute.some(c => gTables.has(c.to) && !m.dn2FilterGOk(c, image)))
+      bad.push(`${m.label()}: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127`)
   }
   for (const app of sharcMods) {
-    const kind = app.sharc!.machineKind
-    if (kind) {
-      const profile = app.rel.sharc!, table = profile[`${kind}Table`]
-      const contributions = app.contribute.filter(c => c.to === table)
-      const expected = app.dev.slotClaims.filter(([name]) => name === table)
-        .map(([, , , prefix]) => `${prefix}:${app.sharc!.machineId}`)
-      if (contributions.length !== 1 || contributions[0].data.length !== 4 ||
-        !expected.length || JSON.stringify(app.impliedNames(image, table)) !== JSON.stringify(expected))
-        bad.push(`${app.label()}: SHARC ${kind} machine_id must match its single native ${kind} registration`)
-      else if (kind === 'filter' && !app.dn2FilterGOk(contributions[0], image))
-        bad.push(`${app.label()}: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127`)
-      continue
-    }
-    if (app.sharc!.entries === null) continue
-    const core = cores.length === 1 ? cores[0] : null
+    if (app.sharc.entries === null) continue
+    const core = cores.length === 1 ? cores[0] as Active : null
     if (!core?.sharc) { bad.push('active SHARC mod requires a qualified matching core bridge'); continue }
     const profile = app.rel.sharc!
     const qualified = profile.activeKeyedCore!
@@ -483,26 +549,12 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       tables.set(c, [m, e])
     }
   }
-  if (dev.paramIds && new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) {
-    const [own, [lo, hi, what], kinds] = dev.paramIds
-    const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
-    const taken: [Mod2, string, number, number][] = []
-    for (const m of mods) {
-      for (const [table, a0, b] of m.idRanges(image)) {
-        let a = a0
-        if (a <= hi && lo <= b) {
-          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
-        } else if (ownOnly.has(table) && a < own) {
-          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
-        } else if (b >= own) {
-          a = Math.max(a, own)
-          for (const [n, t, x, y] of taken) {
-            if (n !== m && x <= b && a <= y) bad.push(`${n.label()} and ${m.label()} both take ids ${Math.max(a, x)}..${Math.min(b, y)} (${t}, ${table})`)
-          }
-          taken.push([m, table, a, b])
-        }
-      }
-    }
+  if (dev.paramIds && new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) bad.push(...idProblems(mods, image))
+  for (const m of mods) {
+    if (m.knobs && !dev.paramIds) bad.push(`${m.label()} asks for knob ids ("knobs"), which the ${dev.name} does not give mods`)
+    for (const [where, t, a] of m.knobRefs())
+      if (!['abs32', 'abs16'].includes(t) || !(a >= 0 && a < m.knobs))
+        bad.push(`${m.label()}: ${where} is a ${t} reference to ${KNOBS}+${a}; one takes abs32 or abs16 with an addend below its "knobs" (${m.knobs})`)
   }
   const sized = reserveNames(dev, owner)
   const fields = new Map<string, Mod2 | null>()   // mod storage: the linker defines these
@@ -518,7 +570,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
   for (const m of mods) {
     for (const x of m.imports) {
       if (owner.has(x) || tables.has(x) || LINKER_SYMS.has(x) || sized.has(x) || m.weak.has(x)
-        || (x.endsWith('_n') && tables.has(x.slice(0, -2))) || fields.has(x)) continue
+        || (x.endsWith('_n') && tables.has(x.slice(0, -2))) || fields.has(x) || (x === KNOBS && m.knobs)) continue
       bad.push(`${m.label()} imports ${x}, which no given mod exports`)
     }
     for (const c of m.contribute) {
@@ -564,6 +616,32 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
  * patched image. */
 /** The linker's last check, on the image it built, against the stock one. It trusts none of the layout that
  *  built the image; it only compares (link.py's image_problems, the same lines). */
+/** The profile's paramIds against the mods' entries: none in the core's ids, none in a table whose ids are mods' own
+ * below them, and no id from there up taken twice. knobs: mod id -> its first knob id (link), to count the entries
+ * relocated to __knobs too. -> [problems]. link.id_problems. */
+export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, number> | null = null): string[] {
+  const [own, [lo, hi, what], kinds] = mods[0].dev.paramIds!
+  const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
+  const taken: [Mod2, string, number, number][] = [], bad: string[] = []
+  for (const m of mods) {
+    for (const [table, a0, b] of m.idRanges(image, knobs?.get(m.id) ?? null)) {
+      let a = a0
+      if (a <= hi && lo <= b) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+      } else if (ownOnly.has(table) && a < own) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
+      } else if (b >= own) {
+        a = Math.max(a, own)
+        for (const [n, t, x, y] of taken) {
+          if (n !== m && x <= b && a <= y) bad.push(`${n.label()} and ${m.label()} both take ids ${Math.max(a, x)}..${Math.min(b, y)} (${t}, ${table})`)
+        }
+        taken.push([m, table, a, b])
+      }
+    }
+  }
+  return bad
+}
+
 export function imageProblems(dev: Device, stock: Uint8Array, img: Uint8Array, declared: [number, number, string][], tailAt: number): string[] {
   const ml = dev.mainLoad, n = stock.length
   const bad: string[] = []
@@ -644,8 +722,7 @@ export type Layout = {
   reserve?: { units: number; end: number }   // a core sized to the mods: the pages it takes, and where they end
   dsp?: Record<string, DspLayout>              // words: P addresses of each payload's area
   sharc?: { decoded: number; decoded_sha256: string; stored: number; stored_sha256: string;
-    mods?: { id: string; owner: [number, number]; hook: number }[];
-    owner?: [number, number]; app?: string; core?: [number, number]; hook?: number }
+    owner?: [number, number]; app?: string; core?: [number, number]; hook?: number; kernels?: KernelLayout }
 }
 
 export type Linked = {
@@ -656,6 +733,8 @@ export type Linked = {
   layout: Layout
   store: store.Lock | null                      // a core with mod storage: the new lockfile
   storeNotes: string[]
+  knobs: Map<string, [number, number]>          // mod id -> [first knob id, count], by mod id
+  knobNotes: string[]
   sharcStream: Uint8Array | null
   sharcStored: Uint8Array | null
 }
@@ -681,45 +760,24 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   const [ddrBase, ddrEnd] = ddrFor(dev, core.version)
   const [fastBase, fastEnd] = dev.sramCode
   const order = [core, ...mods.filter(m => m !== core).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))]
-  const sharcMods = order.filter(m => m.sharc && m !== core)
-  let dspStream: Uint8Array | null = null, dspStored: Uint8Array | null = null
-  if (sharcMods.length) {
+  const [kernelMods, sharcMods] = sharcSplit(order)
+  let dspStream: Uint8Array | null = null, dspStored: Uint8Array | null = null, kernelLayout: KernelLayout | undefined
+  if (kernelMods.length || sharcMods.length) {
     if (sharcStream === null) throw new ModError('SHARC mod needs the stock section-7 stream')
     const allLoads: [number, Uint8Array][] = [], allFills: [number, number, number][] = []
     const allPatches: [number, Uint8Array, Uint8Array][] = []
+    if (kernelMods.length) {
+      const [loads, fills, patches, placed] = placeKernels(kernelMods.map(m => [m.id, kernel(m)]), rel.sharc!)
+      allLoads.push(...loads); allFills.push(...fills); allPatches.push(...patches)
+      kernelLayout = placed
+    }
     for (const mod of sharcMods) {
-      const payload = mod.sharc!, base = payload.owner[0]
+      const payload = mod.sharc, base = payload.owner[0]
       let loads: [number, Uint8Array][] = payload.segments.map(([off, , data]) => [base + off, data])
       let fills: [number, number, number][] = payload.zero.map(([off, count]) => [base + off, count, 0])
       let patches: [number, Uint8Array, Uint8Array][] = []
-      const kind = payload.machineKind
-      if (kind) {
-        const at = rel.sharc![`${kind}BindingOffset`]!
-        const binding = new Uint8Array(8), words = new DataView(binding.buffer)
-        words.setUint32(0, sharcRecords.pc16(rel.sharc!, base + payload.entries!.render_offset_bytes), true)
-        words.setUint32(4, payload.machineId!, true)
-        // At +0x20 the adapter finds the per-voice state: its address and one voice's size.
-        const state = new Uint8Array(8), stateWords = new DataView(state.buffer)
-        if (payload.voiceState) {
-          stateWords.setUint32(0, base + payload.voiceState[0], true)
-          stateWords.setUint32(4, payload.voiceState[1], true)
-        }
-        const lo = payload.owner[1] - rel.sharc![`${kind}StateBytes`]!
-        fills = fills.filter(([address]) => address !== lo)
-        fills.push([lo, base + at - lo, 0], [base + at + 8, 0x18, 0],
-          [base + at + 0x28, payload.owner[1] - base - at - 0x28, 0])
-        loads.push([base + at, binding], [base + at + 0x20, state])
-        // The callback's own stack, in L1: zeroed, with the guard word the adapter checks at its base.
-        const [stackLo, stackHi] = rel.sharc![`${kind}Stack`]!
-        const guard = new Uint8Array(4)
-        new DataView(guard.buffer).setUint32(0, rel.sharc!.stackGuard!, true)
-        fills.push([stackLo + 4, stackHi - stackLo - 4, 0])
-        loads.push([stackLo, guard])
-        const capture = kind === 'filter' ? rel.sharc!.filterCapture : undefined
-        patches = [rel.sharc![`${kind}Hook`]!, ...(capture ? [capture] : [])].map(([site, old, replacement]) =>
-          [site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')])
-      } else if (payload.entries !== null) {
-        const bridge = core.sharc!
+      if (payload.entries !== null) {
+        const bridge = (core as Active).sharc
         const pc16 = (off: number) => sharcRecords.pc16(rel.sharc!, base + off)
         const binding = new Uint8Array(12), words = new DataView(binding.buffer)
         words.setUint32(0, pc16(payload.entries.init_offset_bytes), true)
@@ -750,6 +808,22 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       allLoads, allFills, allPatches)
     dspStored = syx.packMain(dspStream)
     if (dspStored.length > rel.sharc!.storedMax) throw new ModError('SHARC stored section exceeds the profile limit')
+  }
+  const rawMods = order.filter(m => m.sharcRaw)
+  let rawLayout: { owner: [number, number]; app: string } | null = null
+  if (rawMods.length) {
+    // (a device's profile takes raw payloads or a bridge's modules, never both: rawPayload refuses a profile
+    // without raw, and modulePayload one without the bridge's ABI)
+    if (sharcStream === null) throw new ModError('SHARC mod needs the stock section-7 stream')
+    const [loads, patches] = linkRaw(rawMods.map(m => [m.id, m.sharcRaw!]), sharcStream, rel.sharc!)
+    const spans = patches.map(([a, o]): [number, number] => [a, a + o.length]).sort((x, y) => x[0] - y[0] || x[1] - y[1])
+    for (let i = 1; i < spans.length; i++)
+      if (spans[i][0] < spans[i - 1][1]) throw new ModError(`two raw SHARC patches overlap at 0x${spans[i][0].toString(16)}`)
+    dspStream = sharcRecords.insert(sharcStream, rel.sharc!, loads, [], patches)
+    dspStored = syx.packMain(dspStream)
+    if (dspStored.length > rel.sharc!.storedMax) throw new ModError('SHARC stored section exceeds the profile limit')
+    rawLayout = { owner: loads.length ? [Math.min(...loads.map(([a]) => a)), Math.max(...loads.map(([a, d]) => a + d.length))]
+      : [0, 0], app: rawMods[0].id }
   }
   const tables = new Map<string, [Mod2, number]>()
   for (const m of order) for (const [c, e] of m.collections) tables.set(c, [m, e])
@@ -813,6 +887,15 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     for (const nm of storeSyms.keys())
       if (taken.has(nm) || LINKER_SYMS.has(nm)) throw new ModError(`the storage field ${nm} has the name of a symbol a mod exports`)
     ids.forEach((data, i) => entries.get(store.IDS_TABLE)!.push([-1, '', i, core, { to: store.IDS_TABLE, order: -1, data, relocs: [], claims: [], i }]))
+  }
+  // knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
+  let knobBase = new Map<string, number>(), knobNotes: string[] = []
+  if (dev.paramIds && (order.some(m => m.knobs) || newLock?.knobs?.length || newLock?.freed_knobs?.length)) {
+    const fixed = order.flatMap(m => m.idRanges(image).map(([, a, b]) => [a, b] as [number, number]))
+    const held: Partial<store.Lock> = newLock ?? {}
+    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed)
+    const bad = idProblems(order, image, knobBase)
+    if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))   // store.knobs keeps clear of them
   }
   const fastMods = order.filter(m => m.size('.fast'))
   const payMods = order.filter(m => m.size('.payload'))
@@ -990,6 +1073,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       return b
     }
     if (addr.has(key(m.id, nm)) && m.symbols.has(nm)) return addr.get(key(m.id, nm))!
+    if (nm === KNOBS && knobBase.has(m.id)) return knobBase.get(m.id)!
     if (glob.has(nm)) return glob.get(nm)!
     if (m.weak.has(nm) && zero !== undefined) return zero
     throw new ModError(`${m.label()}: ${where} refers to ${nm}, which nothing defines`)
@@ -1022,6 +1106,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       buf[off + 2] = value >> 16
     } else if (typ === 'abs32') {
       v.setUint32(off, ((value % 2 ** 32) + 2 ** 32) % 2 ** 32)
+    } else if (typ === 'abs16') {
+      if (!(value >= -0x8000 && value <= 0xffff)) throw new ModError(`${where}: a 16-bit value out of range (${value})`)
+      v.setUint16(off, value & 0xffff)
     } else if (typ === 'pc32') {
       const d = value - p
       if (d < -(2 ** 31) || d >= 2 ** 31) throw new StructError("'i' format requires -2147483648 <= number <= 2147483647")
@@ -1109,6 +1196,27 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   img.set(blob, image.length)
   img.set(tail, image.length + blob.length)
   const bad = copiedRules(order, img, dev)
+  if (dev.isa === 'coldfire') {
+    // ColdFire stops with an address error on an odd jump target (an emulator may not): a jsr or jmp abs.l in
+    // the mods' code, in a site or in the RAM image, must name an even address
+    const code: [number, Uint8Array, string][] = []
+    for (const m of order) for (const s of m.sites) if (s.kind === 'code')
+      code.push([s.addr, img.slice(s.addr - dev.mainLoad, s.addr - dev.mainLoad + s.len), `${m.label()} site ${hex8(s.addr)}`])
+    for (const m of order) if (m.size('.run')) {
+      const at = base.get(key(m.id, '.run'))!
+      code.push([at, ddr.slice(at - ddrBase, at - ddrBase + m.size('.run')), `${m.label()} .run`])
+    }
+    for (const [at, data, what] of code) {
+      for (let i = 0; i < data.length - 5; i += 2) {
+        if (data[i] === 0x4e && (data[i + 1] === 0xb9 || data[i + 1] === 0xf9)) {
+          const t = ((data[i + 2] << 24) | (data[i + 3] << 16) | (data[i + 4] << 8) | data[i + 5]) >>> 0
+          if (t % 2 && ddrBase <= t && t < bssEnd)
+            bad.push(`${what}: a jsr/jmp at ${hex8(at + i)} goes to the odd address ${hex8(t)} (align the code: `
+              + '.balign 2 at the start of each .run section)')
+        }
+      }
+    }
+  }
   for (const m of order) {
     for (const s of m.sites) {
       if (s.kind === 'code') {
@@ -1154,17 +1262,19 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     blob_len: blob.length, payload: payMods.length ? [payAt, payEnd] : null, sections, ddr_spare: ddrEnd - bssEnd, fast_spare: fastEnd - fastAt, ddr_size: ddrEnd - ddrBase,
     fast_size: fastEnd - fastBase,
   }
-  if (sharcMods.length) {
+  if (kernelMods.length || sharcMods.length || rawLayout) {
     layout.sharc = { decoded: dspStream!.length, decoded_sha256: sha(dspStream!),
       stored: dspStored!.length, stored_sha256: sha(dspStored!) }
-    if (sharcMods[0].sharc!.machineKind) {
-      layout.sharc.mods = sharcMods.map(m => ({ id: m.id, owner: m.sharc!.owner,
-        hook: rel.sharc![`${m.sharc!.machineKind!}Hook`]![0] }))
+    if (kernelMods.length) {
+      layout.sharc.kernels = kernelLayout
+    } else if (rawLayout) {
+      layout.sharc.owner = rawLayout.owner
+      layout.sharc.app = rawLayout.app
     } else {
-      layout.sharc.owner = sharcMods[0].sharc!.owner
+      layout.sharc.owner = sharcMods[0].sharc.owner
       layout.sharc.app = sharcMods[0].id
-      if (sharcMods[0].sharc!.entries !== null) {
-        layout.sharc.core = core.sharc!.owner
+      if (sharcMods[0].sharc.entries !== null) {
+        layout.sharc.core = (core as Active).sharc.owner
         layout.sharc.hook = rel.sharc!.hook![0]
       }
     }
@@ -1183,7 +1293,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
     layout.dsp = dspOut
   }
-  return { image: img, order: order.map(m => m.label()), map, tables: outTables, layout, store: newLock, storeNotes,
+  const knobsOut = new Map([...knobBase].sort((a, b) => cmp(a[0], b[0])).map(([id, b]) => [id, [b, order.find(m => m.id === id)!.knobs] as [number, number]]))
+  for (const [id, b] of knobBase) map.set(`${id}:${KNOBS}`, b)
+  return { image: img, order: order.map(m => m.label()), map, tables: outTables, layout, store: newLock, storeNotes, knobs: knobsOut, knobNotes,
     sharcStream: dspStream, sharcStored: dspStored }
 }
 

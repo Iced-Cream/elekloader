@@ -124,18 +124,19 @@ event (lower first; the shipped mods use 10-90).
 | `ev_hold` | Digitone mk1 only (core-dn1 2.2): a track key held on its own, UI task | `int f(void *brain, void *event, int track)` | return nonzero to take it; when none does, core opens the Mod Menu ("The Mod Menu" below) |
 | `ev_personalize` | Digitakt II (core-dt2) and Digitone II (core-dn2 0.1): SETTINGS > PERSONALIZE is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`, after the last row (TRK SELECT on the Digitakt II, NOTE EDIT MENU on the Digitone II); a row redraws the menu with `View::invalidate(menu + 0x38)`, as from SETTINGS; a checkbox is drawn as mods/core-dt2/README.md describes |
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
-| `ev_midi_cc` | Digitone mk1 only (core-dn1 3.2): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` 0-8 (with MIDI CONFIG's default channels, channels 1-9); a CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). A mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
+| `ev_midi_cc` | Digitakt mk1 (core 4.3), Digitone mk1 (core-dn1 3.2) and Digitone II (core-dn2 0.4): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` by MIDI CONFIG's channels: on the Digitakt 0-7 the audio tracks, 8-15 the MIDI tracks, 16 FX; on the Digitone 0-8 (channels 1-9 by default); on the Digitone II 0-15, 16 FX. A CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). The router keeps a few CCs for itself (NRPN and data entry among them), which never arrive. On the Digitone, a mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
 | `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
 | `ev_key_leds` | Digitone mk1 only (core-dn1 3.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
 | `ev_render_params` | Digitone mk1 only (core-dn1 3.3): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
 | `ev_voice_ready` | Digitone mk1 only (core-dn1 4.2): a voice starting a note, once it holds its sound and the event's p-locks, in the render | `void f(int voice, int track, void *event)` | interrupt level, after `ev_voice_on` in the same pass. What the voice has here is what plays; `fw_voice_locks` puts more locks into it as the render puts a step's ("Parameter pages and the starting voice" below) |
 | `ev_param_turn` | Digitone mk1 only (core-dn1 4.2): a knob turn on a parameter page that the stock would put into the track's sound (no trig held); UI task | `int f(void *view, int id, int delta, int knob)` | return nonzero to take it: the stock neither edits the sound nor shows its pop-up. `delta` is the stock's step (8.8). GRID REC's held trigs keep their turns and are never asked |
 | `ev_param_value` | Digitone mk1 only (core-dn1 4.2): the value a parameter page shows on a knob, every frame it draws them; UI task | `int f(void *view, int id, int32_t *value, uint8_t *locked)` | return nonzero to answer: `*value` is shown, inverted as a p-lock when `*locked` is 1 |
+| `ev_live_note` | Digitakt mk1 (core 4.2) and Digitone mk1 (core-dn1 5.3): a note played live on a track (the trig keys, keyboard mode, the preview, a MIDI note on its channel), before its voice; the UI or the MIDI task. The sequencer's trigs do not pass here | `int f(int track, int note, int vel, int on, int source)` | return nonzero to take it: the stock neither counts the key nor plays (or releases) it. On a release `vel` is the source; `source` 0x40 the panel, 2 MIDI on the Digitakt; 0x40 or 0x80 KEYBOARD mode, the port (8 or 0x10 DIN, 2 or 4 USB) for MIDI on the Digitone. `fw_note_on` and `fw_note_off` (core3.h) play a note past the event; each counts the key, so pair them |
 
 The events, their prototypes and their conventions are the same on every
-device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`, `ev_key_leds`,
+device; only the sites differ, and `ev_voice_on`, `ev_key_leds`,
 `ev_render_params`, `ev_midi_pc`, `ev_voice_ready`, `ev_param_turn` and
-`ev_param_value` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
+`ev_param_value` exist on the Digitone only, and `ev_live_note` on the two mk1s only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
@@ -190,6 +191,14 @@ code-free [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) to enable
 it; it requires core 0.3 and a SHARC mod. Without it the record stays zero
 and the peek still works. It is not headroom (SHARC-DN2.md says why);
 DigiHealth's `dspbusy` reads it.
+
+`core_dsp_post(word)` (core-dn2 0.4) sends a 25-bit word to DSP code, from
+any task or interrupt: each frame to the DSP carries the newest
+`CORE_DSP_POSTS` (5) posts, numbered, in its tail after the peek's request.
+DSP code takes the ones numbered after the last it took, oldest first;
+more than five between two frames lose the oldest. The layout is in
+`digitone-mk2/core.h`, and machines-dn2's dispatcher is the reader
+([SHARC-DN2.md](SHARC-DN2.md#the-dsp-peek)).
 
 The Analog Rytm MKII's core (mods/core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, and
@@ -261,6 +270,19 @@ A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
 `.elemod` per device and OS (a mod's `device` and `os`, or one of its
 `ports`, pick the stock file: 3.10).
+
+### Raw SHARC payloads (Digitakt II 1.17)
+
+Experimental. On the Digitakt II 1.17 a mod can add code and data to the DSP's
+boot stream with `sharc_raw` ([FORMAT.md](FORMAT.md#digitakt-ii-raw-sharc-payload)):
+relocatable DSP objects (digikit's `.dko.json`), which the linker places in the
+L2 the stock stream leaves unused, tables mods add rows to, and patches of whole
+stock instructions that reach the new code. There is no bridge and no callback
+contract here: the core that declares the tables and patches the stock voice
+loop defines what a row means. In `mod.json`, `"sharc_raw": "sharc_raw.json"`
+names the file the SDK reads (`objects` may name a `.dko.json` in the mod's
+folder). The DSP side is the Digitone II's kernels' counterpart; its machines are
+not SDK machines.
 
 ### SHARC mods (core-dn2 0.2, Digitone II)
 
@@ -960,7 +982,7 @@ ignore:
 
 The loader then refuses it beside an older core with *"needs core 3.0 or
 newer"*, and an older loader with the imports it cannot resolve. Core 3.0's
-files are on the [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0) pre-release and in the
+files are on the [core-v3.0](https://github.com/elekloader/elekloader/releases/tag/core-v3.0) pre-release and in the
 mod shop.
 
 **Which core a build takes.** A builder (the app, the web page, the kit)
@@ -968,9 +990,10 @@ takes the newest core it has for the stock OS, which keeps all of every
 older one: core 4.0 on the Digitakt mk1, core-dn1 4.0 on the Digitone, for
 a selection that needs nothing from 3.0 too. Of the cores new enough for
 every selected mod's `resources.core` (the catalog's `needs_core`), it
-takes the newest whose RAM holds the mods ("The mods' RAM", below;
-[CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
-is new enough and holds the mods is kept.
+takes the newest whose RAM holds the mods ("The mods' RAM", below) and
+that patches no place one of them patches
+([CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
+is new enough and takes the mods is kept.
 
 ### Firmware locations (core 3.0, Digitakt mk1)
 
@@ -1929,6 +1952,68 @@ The linker refuses a `core_params` or `core_param_locks` entry whose ids
 take 469..554, a `core_param_locks` entry below 555, and entries of two
 mods that share an id from 555.
 
+**Knob ids by count (core-ar2 0.13).** Rather than pick ids from 555 up,
+declare how many the mod needs in mod.json, `"knobs": 4`, and use
+`__knobs + k` for knob k. The linker gives each mod its own run past every
+other mod's ids and keeps it from build to build in the lockfile
+(docs/FORMAT.md, "Knob ids"):
+
+```c
+#include "analog-rytm-mk2/pages.h"
+CORE_KNOBS;                         /* extern char __knobs[] */
+const struct core_page my_page = {14, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB(2), CORE_KNOB(3)}};
+const struct core_param_lock my_locks = {CORE_KNOB(0), CORE_KNOB(3), my_get, my_turn,
+                                         my_set, my_clear, my_label, my_name};
+```
+
+`CORE_KNOB(k)` is a constant in a const table (an `abs32`); a 16-bit field
+in assembly, `.short __knobs + 2`, is an `abs16`. The addend must be below
+the mod's `"knobs"`.
+
+Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
+with other mods may give the mod other ids.
+
+### Knob looks (core-ar2 0.13, Analog Rytm MKII)
+
+A knob id of the mod's own (555 up) has no stock records: without more,
+stock draws it as record 0's dial with a range of 0..0, so its pointer
+never moves, whatever the value. To draw it as any stock knob draws (a
+switch, a select box, a bipolar dial, a dial with its own steps), give the
+ids a look in `core_knob_looks`, with `analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_looks", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_looks", 0]]}
+```
+
+```c
+CORE_KNOBS;
+/* {first, last, look, ui, min, max} */
+const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0};  /* CB TEST's switch */
+```
+
+- `look`: a stock id (1..468). The knob takes its UI record (the graphic,
+  the parts its flags draw, the turn's steps, its pop-ups) and its range.
+  Pick an id whose knob looks as yours should; any id with the same record
+  looks the same. `examples/look-check-ar2/looks.h` lists one sample id of
+  each of 1.74's 87 looks, and its `looks_table.py` prints their stock names
+  and the ids that share each from your own OS file.
+- `min`, `max`: when min < max, the knob's range (8.8) in place of look's:
+  the pop-ups and the header take it, and core moves the value the graphic
+  draws from min..max onto look's range (0..127 where look's is 0..0), so a
+  dial is at its start at min and at its end at max.
+- `ui(id)`: when not 0, an 84-byte UI record of your own for the id, or 0
+  for look's. Build it once from a stock one,
+  `memcpy(mine, core_knob_stock_ui(94), 84)`, and change fields (flags +0,
+  steps +4..+0x10, delegates +0x14, +0x24 the graphic, +0x34, +0x44): stock
+  builds its records at boot, so copy at the first call, not in `ev_boot`.
+  Its pointer is read from %a0 (in assembly, return it in %a0 and %d0).
+
+The label and name stay your `core_param_locks` entry's, the value and its
+text your `core_params` entry's; nothing else of the stock parameter (its
+sound slot, its lists, MIDI) comes with its look. The linker refuses an
+entry below 555 and two mods' entries that share an id.
+
 ### Step tags (core-ar2 0.11, Analog Rytm MKII)
 
 A mod that keeps a record of its own for some steps (for the Sidecar mods,
@@ -2123,6 +2208,43 @@ my_blob:
   overtakes its own input. The patcher refuses either and says by how much.
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
+
+### Screen calls (core-ar2 0.13, Analog Rytm MKII)
+
+Text in stock's own fonts, a key handed back to stock, whether a stock
+overlay is up, the TRK LEVEL readout and stock's progress box
+(`analog-rytm-mk2/screen.h`; ask for `"core": "0.13"` in `resources`).
+All are for the UI task: `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and what
+they call. `examples/screen-check-ar2` uses each of them.
+
+- **Text.** `core_text_draw(bmp, font, x, y, align, str)` draws `str` in
+  one of stock's 17 fonts (16 is the main screen's) with stock's own
+  routine, into `ev_draw`'s frame or a bitmap you make over your own
+  buffers with `core_bitmap_init` (`CORE_BITMAP_SIZE` bytes; 1 KB of bits
+  for 128 x 64). `y` counts from the bottom: for a glass top row `t`, pass
+  `64 - core_font_height(font) - t`. `align` is `CORE_ALIGN_LEFT`,
+  `_CENTRE` or `_RIGHT`, with `CORE_TEXT_INVERT` for light text on a set
+  bar. A `%` in `str` is drawn as a `%`. `core_text_width` measures.
+- **Keys back to stock.** `core_stock_key(ev)` hands a key event to stock
+  alone, skipping the other mods' handlers. To act on a key and let stock
+  have it later, return 1 from `ev_key`, keep a copy of the event
+  (`CORE_KEY_EVENT_SIZE` bytes) and hand the copy over from `ev_tick`.
+- **Overlays.** `core_stock_overlay()` answers `CORE_OVERLAY_VIEW` while a
+  stock menu or overlay view is stacked over the main screen (TEMPO, SCALE,
+  the FUNC + key menus, a browser, TRK held), `CORE_OVERLAY_WINDOW` while
+  a stock window is up (a popup, a confirm box, a progress box) and
+  `CORE_OVERLAY_SCREEN` while the main screen isn't up at all (GLOBAL).
+  The pad modes' views don't count. A mod that draws over the screen steps
+  aside while it is not 0.
+- **The TRK LEVEL readout.** After a LEVEL turn that reached stock,
+  `core_level_readout()` counts down 47 ticks (2.35 s, inside stock's own
+  readout). Save the header's field with `core_level_field_save` before you
+  draw over it and put it back with `core_level_field_put`, and stock's
+  `TRK LEVEL <v>` shows through your page.
+- **The progress box.** `h = core_progress_open("TITLE")` shows stock's
+  progress box (up to four at once), `core_progress_set(h, done, total)`
+  fills its bar and `core_progress_close(h)` takes it away. The box takes
+  no keys: catch NO in your `ev_key` and close it.
 
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
@@ -2496,9 +2618,18 @@ sounds store the knobs and MIDI reaches them as any machine's. A knob
 whose name is 0 keeps its record as stock has it. Slots 35..42 have all
 eight records; 34 and 43 have five, and a knob with no record is ignored.
 Each entry's slot is the resource `machine:<n>`, which elekloader names
-for it, so a second mod with the same slot is refused at link. Slots
-44..52 (the TEST machines) are not offered, since mods already use their
-records as spare parameters.
+for it, so a second mod with the same slot is refused at link.
+
+The TEST machines' slots 44..52 are offered too (core-ar2 0.13: ask
+for `"core": "0.13"`). Their records have no MIDI of their own, so at
+boot core gives each record a knob uses the hidden machines' CC 16 + k
+and NRPN 1:k (k = the sound index less 9). They have fewer records: BD,
+RS and CY TEST (44, 46, 51) all eight; SD TEST (45) 9..12, 15 and 16;
+BT TEST (47) 9..13; LT and MT TEST (48, 49) 9..12; HH TEST (50) 9..13 and
+16; CB TEST (52) 10..12 and 16, with no LEV. Mods that kept spare
+parameters in those records (fx-sends, duck, voice-dac) move off them
+for this core; one that still uses a slot's records declares `"machine:<n>"` in
+its resources, and the linker refuses it next to a machine in that slot.
 
 The engine is called once per 32-frame block for each voice running the
 machine, from the audio interrupt, as stock's are: `frame` is the analog
@@ -2507,6 +2638,14 @@ sound's index 9 + k). It may call a stock engine (`CORE_ENGINE_*`) with a
 block it fills itself, which is how the AE TX machines are built. A value's
 text, or how a knob turns, can be changed through `core_params` (Parameter
 pages, above).
+
+The engine table holds core's trampoline for the slot,
+which latches the voice's trig and velocity and then calls the engine.
+In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
+trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
+sounding voice alike) and `core_voice_velocity(voice)` is the track's
+velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
+accent.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
@@ -2590,9 +2729,11 @@ firmware hooks live in the companion, which shows the stock OS each custom
 machine as a fixed stock host type. See
 [Digitone II machines](MACHINES-DN2.md) for IDs, host types and missing
 mods, and the [track-synth contract](MACHINES-DN2-VOICE.md) or
-[filter contract](MACHINES-DN2-FILTER.md) for registration and custom DSP. One custom synth and one custom filter can share a
-build; their SDK helpers package the compiled code in separate regions.
-The producer's build handles compilation and placement. The external
+[filter contract](MACHINES-DN2-FILTER.md) for registration and custom DSP. Any number of
+custom synths and filters, from any number of mods, can share a build:
+`elekloader.sdk.sharc.machine_artifact` packages each one's compiled code
+as a relocatable kernel, and the linker places them all.
+The producer's build handles compilation. The external
 `digitone-2-mod-hack` example's `mise run build-c` builds SINE, LOWPASS and
 DigiHealth together. This interface is implemented only for Digitone II.
 
@@ -2715,8 +2856,9 @@ defaults. An older machines mod (0.1) reads 16 knobs only.
 phase step a sample at 48 kHz and a sine. A voice that peaks at `DNM_PEAK`
 (0x08000000) is about as loud as an FM voice at the stock defaults. The
 render runs at interrupt level for every voice playing the machine, every
-block (667 us): in digikit's emulator SINE takes about 3,000 instructions a
-voice a block.
+block (667 us), until its envelope ends; `struct dnm_voice`'s `idle` then
+counts the frames it was not rendered (machines 0.4). In digikit's emulator
+SINE takes about 3,000 instructions a voice a block.
 
 `examples/dn-sine-machine` is a whole machine in C to start from: a sine at
 the note that OCT shifts by octaves, FOLD folds, SUB doubles an octave down
@@ -4128,7 +4270,10 @@ Some differences from an octabam build, by design:
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
 | `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
-| `relocation type N` | a reference the linker cannot relocate (e.g. 16-bit absolute) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` | the mod uses a knob past the count it declares, or a PC-relative reference to it | raise `"knobs"` in mod.json, or fix the index |
+| `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |
@@ -4143,20 +4288,27 @@ Some differences from an octabam build, by design:
 | `the label N is part of a longer word here` (SDK) | dsp_asm would put N's address inside that word | rename the label |
 | `unqualified SHARC data site` | a companion's data site differs from the profile's exact stock hash, length or replacement, uses code or has relocations | rebuild the unmodified [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) with a matching loader |
 | `SHARC data site requires a SHARC mod` | the idle hook would jump into absent DSP code | add a SHARC mod or omit dspbusy-dn2 |
-| `SHARC ABI does not match the device profile` | the artifact does not name a supported master-output, track-synth or track-filter contract | build for the matching [SHARC contract](FORMAT.md#digitone-ii-sharc-mod); changing only the ABI string does not relocate code |
-| `SHARC voice machine_id must match its single native voice registration` / `DN2 voice registration requires a matching SHARC voice payload` | a voice descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [track-synth contract](MACHINES-DN2-VOICE.md) describes |
-| `SHARC filter machine_id must match its single native filter registration` / `DN2 filter registration requires a matching SHARC filter payload` | a filter descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [filter contract](MACHINES-DN2-FILTER.md) describes |
-| `SHARC voice voice_state needs exactly offset_bytes, voice_bytes` / `SHARC filter voice_state needs exactly offset_bytes, voice_bytes` | the artifact's `voice_state` is not an object of those two fields | make the artifact with the SDK, or write the object [FORMAT.md](FORMAT.md) describes |
-| `SHARC voice voice_state must be 16 zeroed voices inside the mod` / `SHARC filter voice_state must be 16 zeroed voices inside the mod` | the state is unaligned, empty, not whole words, or not inside one of the mod's zero ranges | make the artifact with the SDK, which places it after the data |
-| `SHARC voice stack exceeds the profile limit` | the callback declares more than 2,048 stack bytes (it has a 4 KiB stack of its own and shares the rest with interrupts) | reduce its stack use and declaration, then qualify the real workload |
-| `SHARC filter stack exceeds the profile limit` | the callback declares more than 2,048 stack bytes (as a synth's) | reduce its stack use and declaration, then qualify the real workload |
+| `SHARC ABI does not match the device profile` | the artifact names neither the master-output contract nor `dn2-kernel-v1` | build for the matching [SHARC contract](FORMAT.md#digitone-ii-sharc-mod); changing only the ABI string does not relocate code |
+| `its T entry N needs a SHARC K kernel with that id` | a synth or filter registration whose mod carries no kernel with its ID | package the kernel with `machine_artifact` and the same ID, as the [track-synth](MACHINES-DN2-VOICE.md) or [filter](MACHINES-DN2-FILTER.md) contract describes |
+| `its SHARC K kernel N has no registration with that id in its mod` | a kernel whose mod registers no machine with its ID | register the machine in the mod that carries its kernel, with the same ID |
+| `A and B both have a DN2 T kernel with id N` | two kernels of one kind's table share an ID (synths and SDK machines share one) | give each machine its own ID |
+| `DN2 machine kernels need one dispatcher (machines-dn2); this build has ...` | the build has a kernel and no machines-dn2, or two dispatchers | build with one machines-dn2 |
+| `DN2 machine kernels do not combine with M` | the build has a kernel and a master-output SHARC mod | use machines or one master-output mod |
+| `DN2 kernels need N bytes; the machine pool has M` | the kernels, their data and state do not fit the 128 KiB pool | build with fewer machines, or smaller code, data or state |
 | `DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127` | a filter descriptor's `g` has an empty, too long or non-printable label, or a default above 127 | give G a label of one to five printable ASCII characters and a default of 0..127, or leave `g` out ([filter contract](MACHINES-DN2-FILTER.md)) |
 | `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's owner exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
 | `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |
 | `SHARC entry is in the instruction read-ahead guard` / `SHARC entry is not in owned code` | a callback offset is in the guard, outside the code, or odd | link the callbacks inside a code segment, before its guard |
 | `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
 | `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
-| `SHARC mods may combine only one DN2 voice and one DN2 filter` | the build has two mods of one kind, or mixes a master-output mod with a machine | use at most one synth and one filter, or one master-output mod |
+| `a build takes one SHARC mod; this one has ...` | the build has two master-output SHARC mods | use one |
+| `a jsr/jmp at 0x... goes to the odd address 0x...` | a site or `.run` code jumps to an odd address in the mods' RAM: the ColdFire stops with an address error there (an emulator may run on) | align the code: `.balign 2` at the start of each `.run` section |
+| `this device takes no raw SHARC payload` | a mod with `sharc_raw` is built for a device or OS without a raw profile | build it for the Digitakt II 1.17 |
+| `sharc_raw load 0x... is unaligned or outside the owned L2` / `sharc_raw patch 0x... is outside the profile patch range` | a load or patch outside the profile's ranges ([FORMAT.md](FORMAT.md#digitakt-ii-raw-sharc-payload)) | place loads in the owned L2, 4-byte aligned; patch whole stock instructions in the L1 range |
+| `two raw SHARC patches overlap at 0x...` | two mods patch the same stock DSP instruction | build with one of them, or give the hook to a table both add rows to |
+| `the SHARC symbol S is defined by A and B` / `the SHARC symbol S is defined by no mod in the build` | two DSP objects export S, or a relocation names a symbol nobody exports | prefix DSP globals with the mod id; add the mod that exports S |
+| `A adds to the SHARC table T, which no mod declares` / `both give row N of the SHARC table T` | a row for a missing table, or two mods claiming one indexed row | add the mod that declares T (the core); give each machine its own row |
+| `the raw SHARC objects and tables need L2 to 0x..., past 0x...` | the DSP objects and tables do not fit the owned L2 | build with fewer DSP mods, or smaller code |
 
 ## 6. Definition of done
 
