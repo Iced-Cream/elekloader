@@ -71,9 +71,11 @@ core_usb_in_gain:
 core_usb_in_step:
         jmp     core_usb_in_site
 
-| const void *core_usb_in_holder(void): who holds it, 0 for nobody.
+| const void *core_usb_in_holder(void): who holds it, 0 for nobody. A
+| pointer comes back in %a0 (gcc's m68k ABI), and in %d0 as well.
 core_usb_in_holder:
         move.l  usb_in_holder, %d0
+        movea.l %d0, %a0
         rts
 
         .bss
