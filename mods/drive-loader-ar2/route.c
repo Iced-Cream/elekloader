@@ -857,6 +857,27 @@ static const char *move(unsigned n)
     return keep_active(from, to) ? "moved, but active not rewritten" : 0;
 }
 
+/* A file larger than the staging buffer resolves too, so that a Clear and a listing work
+ * whatever its size, but without P_READ: the router serves a read from the buffer
+ * (dl_fill), which can't hold it. An upload over it stays allowed, since dl_hdr checks the
+ * new payload against the buffer. */
+static int big_perm(int size, int perm)
+{
+    return size > DL_STAGING_SIZE ? perm & ~P_READ : perm;
+}
+
+/* a file's entry, at any size: -> the refusal, or 0 with *size (0 for a new file) and *perm
+ * (tests/drive_move_host.c runs it) */
+static const char *file_perm(const char *name, int *size, int *perm)
+{
+    if (*size < 0 && !writable(name))
+        return "Invalid name";
+    if (*size < 0)
+        *size = 0;
+    *perm = big_perm(*size, writable(name) ? P_READ | P_WRITE | P_CLEAR : P_READ | P_CLEAR);
+    return 0;
+}
+
 /* /mods/<name>: expected<entry, string>, 0x84 bytes: {u8 has_value, string
  * error +4, entry +8}. caps[0] is the name. It runs at a ReadOpen, a
  * WriteOpen, an upload's first chunk and a Clear, and can't tell which. */
@@ -900,12 +921,10 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         dl_unlock();
         if (size < 0)
             why = "No .store yet";
-        else if (size > DL_STAGING_SIZE)
-            why = "File too large";
-        else {
+        else {                            /* resolves at any size: a read only when it fits (big_perm) */
             put32(e + E_TYPE, EMOD);
             put32(e + E_ADDR, (unsigned)drive_staging);
-            perm = P_READ;
+            perm = big_perm(size, P_READ);
             c.what = C_FILE;
             copy(c.name, name, len(name) + 1);
         }
@@ -958,14 +977,8 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
             goto made;
         }
         dl_unlock();
-        if (size > DL_STAGING_SIZE)
-            why = "File too large";
-        else if (size < 0 && !writable(name))
-            why = "Invalid name";
-        else {
-            if (size < 0)
-                size = 0;
-            perm = writable(name) ? P_READ | P_WRITE | P_CLEAR : P_READ | P_CLEAR;
+        why = file_perm(name, &size, &perm);
+        if (!why) {
             put32(e + E_TYPE, EMOD);
             put32(e + E_ADDR, (unsigned)drive_staging);
             c.what = C_FILE;
@@ -1082,9 +1095,11 @@ static int walk(unsigned char *at, const char *rel, int folders, struct dl_ent *
             if (ents[i].dir)
                 folder_item(at + 0x14 * k, k + 1, nm);
             else {
+                int size;
                 path_of(path, p, "");
-                item(at + 0x14 * k, k + 1, nm, dl_fs_file_size(path),
-                     P_READ | P_CLEAR | (writable(p) ? P_WRITE : 0));
+                size = dl_fs_file_size(path);
+                item(at + 0x14 * k, k + 1, nm, size,
+                     big_perm(size, P_READ | P_CLEAR | (writable(p) ? P_WRITE : 0)));
             }
         }
         k++;
@@ -1133,7 +1148,7 @@ unsigned dl_list(unsigned char *res, void **f, void **caps)
         item(v + 0x14 * k, k + 1, ".status", 0, P_READ);
         k++;
         if (store_size >= 0) {
-            item(v + 0x14 * k, k + 1, DL_STORE, store_size, P_READ);
+            item(v + 0x14 * k, k + 1, DL_STORE, store_size, big_perm(store_size, P_READ));
             k++;
         }
     }

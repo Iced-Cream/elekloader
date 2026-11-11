@@ -189,6 +189,19 @@ class Moves(unittest.TestCase):
         self.assertNotIn('~T A/x.elemod', tree)
         self.assertEqual(active, '~T C/x.elemod 1234abcd|# a note|~T AB/y.elemod 00000001|~T A/~T B/z.elemod 00000002|')
 
+    def test_a_file_larger_than_staging_resolves_for_clear_and_listing(self):
+        # dl_entry refused a file over DL_STAGING_SIZE for every use, Clear included, so one left by
+        # a build with a larger buffer couldn't be deleted over Data. It resolves now without P_READ
+        # (the read is served from the buffer); an upload over it checks its own payload (dl_hdr).
+        big = 0x80000 + 1                 # fs.h DL_STAGING_SIZE + 1
+        tree = self.TREE + ['~T A/big.elemod=@%d' % big, '~T A/fit.elemod=@%d' % 0x80000,
+                            '~T A/notes.txt=@%d' % big]
+        got = [a for a, _, _ in self.run_('entry ~T A/big.elemod', 'entry ~T A/fit.elemod',
+                                          'entry ~T A/notes.txt', 'entry ~T A/new.elemod',
+                                          'entry ~T A/new.txt', tree=tree)]
+        self.assertEqual(got, ['ok %d write clear' % big, 'ok %d read write clear' % 0x80000,
+                               'ok %d clear' % big, 'ok 0 read write clear', 'Invalid name'])
+
     def test_a_file_is_renamed(self):
         (why, tree, active), = self.run_('mv ~T A/x.elemod|~T A/w.elemod')
         self.assertEqual(why, 'ok')
