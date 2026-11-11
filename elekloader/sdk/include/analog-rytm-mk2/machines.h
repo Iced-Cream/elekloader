@@ -86,11 +86,15 @@ struct core_machine {
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
     uint8_t voices;         /* bit v: physical voice v may run it (0 BD, 1 BT,
                                2 SD, 3 LT, 4 CH/OH, 5 MT/HT, 6 CY/CB, 7 RS/CP) */
-    uint16_t pad;
+    uint16_t flags;         /* CORE_MACHINE_*; 0 before core 0.15 */
     const char *name;       /* "BD TX-9"; 0: the slot's stock name */
     const char *label;      /* four letters: "BDT9"; 0: the slot's stock label */
     struct core_machine_knob knobs[8];  /* sound indices 9..16: LEV, then A..H's order */
 };
+
+/* flags (core 0.15+) */
+#define CORE_MACHINE_DESTS 0x0001   /* slots 44..52: the knobs are LFO, velocity
+                                       and aftertouch destinations */
 
 #define CORE_VOICE_BD 0x01
 #define CORE_VOICE_BT 0x02
@@ -107,6 +111,7 @@ struct core_machine {
 #define CORE_ENGINE_BT_CLASSIC ((core_engine)0x4011b5a0)
 #define CORE_ENGINE_XT_CLASSIC ((core_engine)0x4011b850)
 #define CORE_ENGINE_DISABLE ((core_engine)0x40113f68)
+#define CORE_ENGINE_UT_NOISE ((core_engine)0x401140c8)   /* machine 15; reads only blk */
 
 /* Machines by count: a mod that declares "machine_knobs": [k0, k1, ...] in mod.json
  * (the knobs each machine needs, from LEV) is given a slot per machine by the
@@ -125,5 +130,56 @@ struct core_machine {
 /* core 0.13 */
 int core_voice_trigged(int32_t voice);
 int core_voice_velocity(int32_t voice);
+
+/* core 0.15+: stock engines for any machine. Plain reads, for the
+ * audio interrupt as well as the UI.
+ *
+ *     core_track_default_machine(t)  track t's default machine (0..52), -1 out
+ *                                    of range (tracks 0..11)
+ *     core_machine_engine(m)         the engine the interrupt calls for m
+ *     core_machine_voices(m)         m's voice mask (bit v: voice v may run it)
+ *     core_machine_knob(m, k, ...)   1 and the range and default of m's
+ *                                    record at sound index 9 + k, as record
+ *                                    words (value << 8); 0 when m has none
+ *     core_machine_defaults(m, blk)  writes m's defaults into blk[0..7]
+ *                                    (16-bit words, as the interrupt's blk
+ *                                    holds them); returns bit k for each
+ *                                    word written, the rest is left
+ *     core_voice_engine_reset(v)     the voice's state as after a machine
+ *                                    change: call it when an engine starts
+ *                                    running a different stock engine on v
+ *
+ * A mod's engine may call a stock engine with its own voice, frame and pitch
+ * and a block of its own, on a voice the engine's mask allows (the
+ * interrupt does not check). The stock engine keeps its own state for the
+ * voice (0x8000fef8 + 32v, its noise and wave buffers): the mod's engine
+ * leaves those alone. */
+int core_track_default_machine(int32_t track);
+core_engine core_machine_engine(int32_t m);
+int core_machine_voices(int32_t m);
+int core_machine_knob(int32_t m, int32_t k, int32_t *min, int32_t *max, int32_t *def);
+int core_machine_defaults(int32_t m, uint16_t *blk);
+void core_voice_engine_reset(int32_t voice);
+
+/* core 0.15+: the sound a trig plays. The sound item stock last pushed
+ * to track t's engine (tracks 0..11): the track's sound in a live kit (a
+ * plain trig, a kit apply; the item core_current_sound_item gives) or a pool
+ * sound (a sound lock), 0 before the first push. Plain reads, from the audio
+ * interrupt or the UI task.
+ *
+ *     core_track_sound(t)       the item
+ *     core_track_pool_sound(t)  its pool sound 0..127, or -1 for a kit's sound
+ */
+void *core_track_sound(int32_t track);
+int core_track_pool_sound(int32_t track);
+
+/* core 0.15+: set sound index i (0..41) of track t's sound (0..11) in
+ * the current kit as a knob turn does: value is the sound's 16-bit word
+ * (display value << 8, the fine part in the low byte), clamped to the
+ * record's range; the live value, the kit word, a lock while live recording,
+ * the host's notification and the screen follow; out 1 also sends it as
+ * PARAM OUTPUT does. A trig held is not a p-lock here. 1 when set, 0 when
+ * the sound's machine has no such parameter. UI task only. */
+int core_param_set(int32_t track, int32_t index, int32_t value, int32_t out);
 
 #endif

@@ -115,6 +115,87 @@ static uint8_t *ref_record(int32_t k)
     return 0;
 }
 
+/* (0.15+) Stock engines for any machine. The default machine of
+ * track t is the signed long at 0x401bf3fc + 4t (stock's accessor
+ * 0x40007130). A machine's knob records are filed by param_tables_build
+ * (0x40006cd8) by id only; their range and default live in the static
+ * records, so core files them itself, after its own writes, in rec_of.
+ * The interrupt calls ENGINES[m](v, 0x800063c0, blk, pitch) for each voice
+ * v whose owner track's machine (0x8000ea00[t]) is m, without checking the
+ * mask; blk is the track's live sound words from index 9
+ * (0x8000f7a8 + 0x54t + 18). An engine keeps the voice's state at
+ * 0x8000fef8 + 32v (word 0 a phase: 0 on a reset trig, 4 on a stop, -1 on
+ * a machine change) and its noise and wave buffers; UT NOISE (machine 15)
+ * reads only blk. Only the destination-list builder (0x400aa280) reads a
+ * record's +0x24, when a list is built, so the boot write is early enough. */
+#define DEFAULT_MACHINE ((const volatile int32_t *)0x401bf3fc)
+#define MACHINES 53
+#define NO_RECORD 0xffff
+#define VOICE_STATE ((volatile int32_t *)0x8000fef8)   /* 32 bytes per voice; word 0: phase */
+static uint16_t rec_of[MACHINES][8];
+
+int core_track_default_machine(int32_t track)
+{
+    return (uint32_t)track < 12 ? DEFAULT_MACHINE[track] : -1;
+}
+
+core_engine core_machine_engine(int32_t m)
+{
+    return (uint32_t)m < MACHINES ? ENGINES[m] : 0;
+}
+
+int core_machine_voices(int32_t m)
+{
+    return (uint32_t)m < MACHINES ? AVAIL[2 * m + 1] : 0;
+}
+
+int core_machine_knob(int32_t m, int32_t k, int32_t *min, int32_t *max, int32_t *def)
+{
+    if ((uint32_t)m >= MACHINES || (uint32_t)k >= 8 || rec_of[m][k] == NO_RECORD)
+        return 0;
+    const uint8_t *r = RECORDS + RECORD_SIZE * rec_of[m][k];
+    if (min)
+        *min = L(r, 0x08);
+    if (max)
+        *max = L(r, 0x0c);
+    if (def)
+        *def = L(r, 0x10);
+    return 1;
+}
+
+int core_machine_defaults(int32_t m, uint16_t *blk)
+{
+    int got = 0;
+    if ((uint32_t)m >= MACHINES)
+        return 0;
+    for (int k = 0; k < 8; k++) {
+        if (rec_of[m][k] == NO_RECORD)
+            continue;
+        blk[k] = (uint16_t)L(RECORDS + RECORD_SIZE * rec_of[m][k], 0x10);
+        got |= 1 << k;
+    }
+    return got;
+}
+
+void core_voice_engine_reset(int32_t voice)
+{
+    if ((uint32_t)voice < VOICES)
+        VOICE_STATE[8 * voice] = -1;
+}
+
+static void file_records(void)
+{
+    for (int m = 0; m < MACHINES; m++)
+        for (int k = 0; k < 8; k++)
+            rec_of[m][k] = NO_RECORD;
+    for (int id = 0; id < RECORD_COUNT; id++) {
+        const uint8_t *r = RECORDS + RECORD_SIZE * id;
+        uint32_t m = L(r, 0x00), k = L(r, 0x04) - 9;
+        if (m < MACHINES && k < 8 && rec_of[m][k] == NO_RECORD)
+            rec_of[m][k] = id;
+    }
+}
+
 void core_boot_init(void)
 {
     uint32_t done = 0;
@@ -156,8 +237,11 @@ void core_boot_init(void)
                 if (q) {
                     L(r, 0x18) = L(q, 0x18);       /* CC 16 + k */
                     L(r, 0x1c) = L(q, 0x1c);       /* NRPN 1:k */
+                    if (m->flags & CORE_MACHINE_DESTS)
+                        L(r, 0x24) = L(q, 0x24);   /* LFO, velocity, aftertouch */
                 }
             }
         }
     }
+    file_records();
 }
