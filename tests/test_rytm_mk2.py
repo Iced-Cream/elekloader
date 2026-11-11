@@ -200,10 +200,10 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and the silent-voice skip's and the
-    # sample-layer skip's two and
-    # the UI skip's (0.14)
-    assert len(mod['sites']) == 129
+    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic),
+    # and the silent-voice skip's, the sample-layer skip's two, the UI skip's and the FX
+    # skip's three (0.14)
+    assert len(mod['sites']) == 132
     # 0.14: the UI skip's site is __dynamic_cast's link and movem, 8 bytes; its stock
     # copy in cast.s rejoins right after them
     x = [x for x in mod['sites'] if x.get('target') == 'core_cast_site'][0]
@@ -211,6 +211,14 @@ def test_core_ar2_sites():
     assert img[0x401b82f2 - DEV.main_load:0x401b82fa - DEV.main_load].hex() == '4e56ffd848d7043c'
     cast = open(os.path.join(ROOT, 'mods', 'core-ar2', 'cast.s')).read()
     assert 'CAST_REST, 0x401b82fa' in cast and 'link.w  %a6,#-40' in cast
+    # 0.14: the FX skip's send site, and its delay and reverb sites, each a 4-byte
+    # `jsr (pc)` with the instruction after it (10 bytes)
+    for addr, want in (('0x4010e75e', '22032003ed89'), ('0x4010e7c4', '4ebaf25e36398000fbb6'),
+                        ('0x4010e81e', '4ebaec14283c00001000')):
+        x = [x for x in mod['sites'] if x['addr'] == addr][0]
+        assert x['stock'] == want, x
+        a = int(addr, 16) - DEV.main_load
+        assert img[a:a + len(want) // 2].hex() == want, addr
     # 0.14: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
     # returns to stock's beq, which takes the skip when the site leaves %a1 at 0
     x = [x for x in mod['sites'] if x.get('target') == 'core_voice_site'][0]
