@@ -2757,7 +2757,7 @@ const struct smpl_machine my_smpl = {
   one page. 0 otherwise.
 - `knobs`: per knob, as a knob face (above), plus `text(buf, value)` for
   the value's text, 0 for a number. A knob with `min < max` and look 0
-  draws as a plain 0..127 dial (BR's, 41), not as the record under it
+  draws as a plain 0..127 dial (BR's, 42), not as the record under it
   (TUN's dial stops at its +24). A change to the machine, chosen or by
   the SRC machine, writes each ranged knob's `def`, except into SMP's word,
   which keeps the sample; a change to stock writes stock's SMPL defaults.
