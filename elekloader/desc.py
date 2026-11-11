@@ -17,8 +17,9 @@ into its string pool (UTF-8, NUL-terminated):
   size; +0x20 u16 module, export, table and claim counts; +0x28 u32 offsets of the module, export,
   table and claim arrays, the key arrays, the area record and the storage record; +0x44 u32 the
   device key (a name), +0x48 u32 the OS version (a name); ABI 1.2: +0x4c u32 offset of the site
-  map, +0x50 u16 its count, u16 the pre-link count, +0x54 u32 offset of the pre-link ranges; zero
-  to +0x60.
+  map, +0x50 u16 its count, u16 the pre-link count, +0x54 u32 offset of the pre-link ranges; ABI
+  1.3: +0x58 u32 flags (bit 0, F_STAGE_TOP: the loader reads each +Drive file into the area itself
+  at boot, a mod's export drive_stage_top; docs/DRIVE.md, "The boot link"); zero to +0x60.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
@@ -53,7 +54,7 @@ from .elemod import ModError
 
 SYM = 'core_desc'
 MAGIC = b'ELKD'
-ABI = (1, 2)
+ABI = (1, 3)
 HEADER = 0x60
 SPARE = 16                       # a table's spare entries, unless its collection says
 F_MORE, F_RENDER, F_DSP, F_LOADER = 1, 2, 4, 8
@@ -63,6 +64,8 @@ KEY_LINKER = 0xFFFF              # a key's order (ABI 1.0's field) for the linke
 KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
 STAGING = ('drive_staging', 'drive_staging_size')
+STAGE_TOP = 'drive_stage_top'    # a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
+F_STAGE_TOP = 1                  # the header's flags (ABI 1.3)
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
 # a site map range's kind (ABI 1.2)
 SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER = 1, 2, 3, 4, 5, 6
@@ -145,11 +148,12 @@ def encode(d):
     assert HEADER + len(body) == o_pool
     raw = bytes(pool.raw) + bytes(-len(pool.raw) % 4)
     size = o_pool + len(raw)
-    head = struct.pack('>4sHHII HHI II HHHH 7I II IHHI', MAGIC, ABI[0], ABI[1], size, 0,
+    head = struct.pack('>4sHHII HHI II HHHH 7I II IHHI I', MAGIC, ABI[0], ABI[1], size, 0,
                        d['family'], d['device'], d['release'], o_pool, len(pool.raw),
                        len(mods), len(exports), len(tables), len(claims),
                        o_mod, o_exp, o_tab, o_clm, o_key, o_area, o_sto,
-                       pool(d['device_key']), pool(d['os']), o_map, len(sites), len(pre), o_pre)
+                       pool(d['device_key']), pool(d['os']), o_map, len(sites), len(pre), o_pre,
+                       d.get('flags', 0))
     blk = bytearray(head + bytes(HEADER - len(head)) + body + raw)
     struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
     return bytes(blk)
@@ -201,6 +205,7 @@ def decode(blk, at=0):
             raise ModError('the build descriptor is cut short')
         sites = [tuple(x) for x in struct.iter_unpack('>IIHH', b[o_map:o_map + RANGE * nmap])]
         pre = [(lo, hi, k) for lo, hi, k, _z in struct.iter_unpack('>IIHH', b[o_pre:o_pre + RANGE * npre])]
+    flags = struct.unpack_from('>I', b, 0x58)[0] if minor >= 3 else 0   # ABI 1.3
     claims = [(k, m, name(n)) for k, m, n in
               (struct.unpack_from('>HHI', b, o_clm + CLAIM * i) for i in range(nclm))]
     t_at, t_len, nsc, _z = struct.unpack_from('>IIHH', b, o_sto)
@@ -209,7 +214,8 @@ def decode(blk, at=0):
     return {'abi': (major, minor), 'size': size, 'crc': crc, 'family': family, 'device': device,
             'release': release, 'device_key': name(dkey), 'os': name(os_), 'modules': mods,
             'tables': tables, 'claims': claims, 'area': struct.unpack_from('>5I', b, o_area),
-            'storage': {'trailer': (t_at, t_len), 'scopes': scopes}, 'sites': sites, 'prelink': pre}
+            'storage': {'trailer': (t_at, t_len), 'scopes': scopes}, 'sites': sites, 'prelink': pre,
+            'flags': flags}
 
 
 def find(image):
@@ -249,7 +255,8 @@ def dump(d):
     for kind, mi, n in d['claims']:
         out.append('claim %s by module %d: %s' % ('name' if kind == CLAIM_NAME else kind, mi, n))
     a = d['area']
-    out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a)
+    out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a
+               + (', files staged at the area\'s top' if d.get('flags', 0) & F_STAGE_TOP else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]

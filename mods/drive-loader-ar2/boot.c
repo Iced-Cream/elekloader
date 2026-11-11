@@ -133,22 +133,21 @@ void dl_read_close(struct dl_reader *rd)
 int dl_read_more(struct dl_reader *rd, u8 *buf, u32 max)
 {
     s32 r;
-    u8 more;
+    u32 at = rd->got < max ? rd->got : 0;   /* past max: on over the buffer's start, for the
+                                             * size and CRC alone */
+    u32 room = rd->got < max ? max - rd->got : max;
     if (!rd->open)
         return -3;
-    if (rd->got < max) {                 /* one stretch, as dl_read_file reads them */
-        r = dl_fs_read(&rd->f, buf + rd->got, max - rd->got < DL_BREATHE ? max - rd->got : DL_BREATHE);
-        if (r > 0) {
-            rd->crc = dl_crc32_add(rd->crc, buf + rd->got, (u32)r);
-            rd->got += (u32)r;
-            return 0;
-        }
-        dl_read_close(rd);
-        return r < 0 ? -3 : 1;
+    r = dl_fs_read(&rd->f, buf + at, room < DL_BREATHE ? room : DL_BREATHE);   /* one stretch */
+    if (r > 0) {
+        rd->crc = dl_crc32_add(rd->crc, buf + at, (u32)r);
+        if (rd->got >= max)
+            rd->over = 1;
+        rd->got += (u32)r;
+        return 0;
     }
-    r = dl_fs_read(&rd->f, &more, 1);    /* full: one byte more is a file too large */
     dl_read_close(rd);
-    return r > 0 ? -2 : 1;
+    return r < 0 ? -3 : rd->over ? -2 : 1;
 }
 
 static int exists(const char *name)
@@ -216,11 +215,15 @@ static void boot(void);
 
 void dl_boot(void)
 {
-    u32 t0 = DTCN0, t1;
+    u32 t0 = DTCN0, t1, lo, hi;
     t_checks = t_link = 0;
+    dl_stage_top = 1;                    /* each file read into the +Drive area itself (dl.h) */
     booting = 1;
     boot();
     booting = 0;
+    if (dl_area((u32)core_desc, &lo, &hi) == 0)   /* the free tail, above the layout's end: the */
+        dl_stage_tail(dl_used_hi > lo && dl_used_hi <= hi ? dl_used_hi : lo, hi);   /* route and the
+                                          * MODS page stage there from now on (fs.h) */
     t1 = DTCN0;
     if (!t_checks)
         t_checks = t1;
@@ -337,7 +340,7 @@ static void boot(void)
             read_store();
             if (dl_store_prev) {
                 write_armed();
-                dl_link((u32)core_desc, 0, 0, (u8 *)drive_staging, DL_STAGING_SIZE);
+                dl_link((u32)core_desc, 0, 0, 0, 0);
                 remove_file(".armed");
             }
             dl_skip_reason = DL_SKIP_KEY;
@@ -371,7 +374,7 @@ static void boot(void)
     }
     write_armed();                       /* before the link, so a link that faults or hangs is
                                           * caught too: the next boot skips the set */
-    loaded = dl_link((u32)core_desc, dl_boot_choice, n, (u8 *)drive_staging, DL_STAGING_SIZE);
+    loaded = dl_link((u32)core_desc, dl_boot_choice, n, 0, 0);   /* the stage at the top of the area */
     dl_flush();                          /* after the area, the tables and the sites (each site's
                                           * lines already pushed by dl_apply_site) */
     write_store();                       /* a set that left none loaded parks its fields too */

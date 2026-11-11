@@ -34,7 +34,7 @@ from test_link_refusals import Bench                                      # noqa
 STAGING = 0x10000
 
 
-def flashed(B, pad=0, store=False):
+def flashed(B, pad=0, store=False, stage_top=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
@@ -51,6 +51,9 @@ def flashed(B, pad=0, store=False):
     loader['sections']['.bss'] = {'size': STAGING + pad}   # pad: a bigger build, a smaller area
     loader['symbols'].update({'drive_staging': ['.bss', 0], 'drive_staging_size': ['abs', STAGING]})
     loader['exports'] = ['drive_staging', 'drive_staging_size']
+    if stage_top:                               # the loader stages files at the area's top (ABI 1.3)
+        loader['symbols']['drive_stage_top'] = ['abs', 1]
+        loader['exports'].append('drive_stage_top')
     fa = B.mod('flash-a', resources={'names': ['settings:A']})
     fa['contribute'] = [{'to': 'ev_draw', 'order': 60, 'data': '00000000',
                          'relocs': [[0, 'abs32', 'sym:fn_flash-a', 0]]}]
@@ -63,6 +66,18 @@ def flashed(B, pad=0, store=False):
 def built(B, area=None):
     """The flashed build, and the Build the boot linker sees; with `area`, its loader's .bss grown
     until the +Drive area is about that many bytes (its pools are sized to the area)."""
+    top = area == 'top' or isinstance(area, tuple)   # 'top', or ('top', N): a loader that stages
+    if isinstance(area, tuple):                      # files at the area's top, and its area
+        area = area[1]
+    elif area == 'top':
+        area = None
+    if top:
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stage_top=True)], B.img)
+        b = drive.load_build(out.image)
+        if area is not None:
+            out = link.link([link.Mod2(d, d['id']) for d in flashed(B, b.hi - b.lo - area, stage_top=True)], B.img)
+            b = drive.load_build(out.image)
+        return out, b
     if area == 'store':                         # a build that keeps +Drive storage
         out = link.link([link.Mod2(d, d['id']) for d in flashed(B, store=True)], B.img)
         return out, drive.load_build(out.image)
@@ -709,6 +724,20 @@ class LossyUnit(FakeUnit):
             self.done.add(struct.unpack_from('>I', a)[0])
 
 
+class WrappingUnit(FakeUnit):
+    """A FakeUnit whose read replies carry stock's per-mille progress word, wrapping as stock's does."""
+
+    def send(self, raw):
+        super().send(raw)
+        msg = datarpc.unframe(raw)
+        if msg[4] == datarpc.READ:
+            rep = bytearray(datarpc.unframe(self.out[-1]))
+            j, s = struct.unpack_from('>II', msg, 5)
+            done = min((s + 1) * self.chunks[j], len(self.jobs[j]))
+            struct.pack_into('>I', rep, 14, (done * 1000 & 0xFFFFFFFF) // len(self.jobs[j]))
+            self.out[-1] = datarpc.frame(bytes(rep))
+
+
 def test_a_lost_read_reply_is_the_error_not_the_refused_close():
     """Every read reply lost: after the smaller chunk fails too, the error is the lost reply."""
     with Bench('analog-rytm-mk2') as B:
@@ -754,6 +783,63 @@ def test_a_read_whose_replies_are_lost_starts_again_with_small_chunks():
     assert client.read_chunk == 0x300
     assert mods.get('big.elemod')[1] == body          # whole, and at once this time
     assert client.read_chunk == 0x300
+
+
+def test_a_loader_that_stages_at_the_top_says_so_in_the_descriptor():
+    """ABI 1.3: the loader's export drive_stage_top sets the descriptor's F_STAGE_TOP, and the host's
+    twin then lays the set out as the boot does: a file over the staging buffer (now the floor)
+    but within the area passes; one over the area is too big."""
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B, 'top')
+        assert b.d['abi'] == desc.ABI == (1, 3) and b.d['flags'] == desc.F_STAGE_TOP and b.stage_top
+        assert 'files staged at the area\'s top' in desc.dump(b.d)
+        _o, plain = built(B)
+        assert plain.d['flags'] == 0 and not plain.stage_top
+        big = files(hello(B, description='x' * STAGING))
+        assert drive.check(plain, big).choices[0].code == drive.CODE['too-big']
+        assert drive.check(b, big).choices[0].state == drive.LOADED
+        huge = files(hello(B, description='x' * (b.hi - b.lo)))
+        assert drive.check(b, huge).choices[0].code == drive.CODE['too-big']
+
+
+def test_the_live_stage_from_the_status_limits_uploads():
+    """`elekloader mods` reads /mods/.status's stage line (route.c): the most one upload or read
+    takes on that boot. A file the build takes but the stage can't hold is refused before any
+    upload; with no stage line, the build's staging buffer is the limit."""
+    import argparse
+    assert drive.stage_of('drive-loader route\nstage: 3932160 bytes at 0x40c40000, free tail\n') == 3932160
+    assert drive.stage_of('drive-loader route\nlast: -\n') is None
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B, 'top')
+        blk = out.image[desc.find(out.image)[0]:]
+        unit = FakeUnit(blk[:struct.unpack_from('>I', blk, 8)[0]])
+        mods = datarpc.Mods(datarpc.Client(unit, timeout=0.5))
+        name, raw = files(hello(B, description='x' * (3 * STAGING)))[0]
+        assert drive.upload_room(b, None) == STAGING
+        log = []
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, name)
+            open(p, 'wb').write(raw)
+            unit.files['.status'] = b'drive-loader route\nstage: %d bytes at 0x40c40000, free tail\n' % (len(raw) - 1)
+            assert datarpc.run(argparse.Namespace(op='room'), mods, log.append) == 0
+            assert log[-1] == 'ROOM %d bytes' % (len(raw) - 1)
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 1
+            assert name not in unit.files and 'the unit takes up to %d now' % (len(raw) - 1) in log[-2]
+            unit.files['.status'] = b'drive-loader route\nstage: %d bytes at 0x40c40000, free tail\n' % len(raw)
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 0
+            assert unit.files[name] == raw
+            unit.files['.status'] = b'drive-loader route\n'          # no stage line: the floor
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 1
+
+
+def test_a_read_ignores_the_wrapping_progress_word():
+    """Stock's ReadPartial reports per-mille progress as done * 1000 in 32 bits, which wraps past
+    4,294,967 bytes: the client counts the bytes it gets and never reads that word."""
+    body = bytes(range(256)) * (4300000 // 256 + 1)
+    unit = WrappingUnit(b'')
+    unit.files['big.elemod'] = body
+    mods = datarpc.Mods(datarpc.Client(unit, timeout=0.5))
+    assert mods.get('big.elemod')[1] == body
 
 
 def test_mods_put_ls_get_active_and_rm_over_the_data_router():

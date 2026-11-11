@@ -2786,6 +2786,19 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
     return loaded;
 }
 
+/* The +Drive area [*lo, *hi) the descriptor's area record names. -> 0, or -1 when desc isn't
+ * a descriptor the loader reads (*lo = *hi = 0). */
+int dl_area(u32 desc, u32 *lo, u32 *hi)
+{
+    const u8 *d = DL_MEM(desc);
+    *lo = *hi = 0;
+    if (dl_rd32(d) != 0x454c4b44 || dl_rd16(d + 4) != 1)
+        return -1;
+    *lo = dl_rd32(d + dl_rd32(d + 0x3c) + 4);
+    *hi = dl_rd32(d + dl_rd32(d + 0x3c) + 8);
+    return 0;
+}
+
 int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
 {
     int loaded;

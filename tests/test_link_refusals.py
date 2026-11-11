@@ -1486,7 +1486,7 @@ def test_the_build_descriptor():
         at, end = out.layout['desc']
         assert out.map['core_desc'] == at and found[0] == B.dev.image_end(B.rel) - B.dev.main_load \
             + out.layout['run_load'] - out.layout['boot'][0] + at - out.layout['ddr'][0]
-        assert d['size'] == end - at and d['abi'] == (1, 2) and d['os'] == 'SYN'
+        assert d['size'] == end - at and d['abi'] == (1, 3) and d['os'] == 'SYN'
         assert (d['family'], d['device_key']) == (2, 'analog-rytm-mk2')
         assert [(x['name'], x['kind'], x['flags'], len(x['exports'])) for x in d['modules']] == \
             [('core', 0, 0, 2), ('m', 2, 0, 1), ('n', 1, 1, 0)]

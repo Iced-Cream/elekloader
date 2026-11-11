@@ -32,7 +32,7 @@ export const CODES: Record<number, [string, string]> = {
   0: ['ok', 'loaded'],
   1: ['missing', 'the file is not in /mods'],
   2: ['changed', 'the file is not the one chosen (its CRC-32 differs)'],
-  3: ['too-big', 'the file is larger than the staging buffer'],
+  3: ['too-big', 'the file is larger than the room the boot reads it into'],
   4: ['json', 'not a JSON object'],
   5: ['format', 'not a format-2 mod the loader can read'],
   6: ['target', 'made for another device or OS'],
@@ -103,6 +103,7 @@ export class Build {
   table: Map<string, number>
   claims: string[]
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
+  stageTop: boolean                         // the boot reads each file into the area itself (F_STAGE_TOP)
   globals: Map<string, Global>
   nsyms: number
   pools: Record<keyof typeof POOL_PER_MB, number>
@@ -119,6 +120,7 @@ export class Build {
     this.table = new Map(d.tables.map((t, i) => [t.name, i]))
     this.claims = d.claims.filter(([k]) => k === desc.CLAIM_NAME).map(([, , nm]) => nm)
     ;[this.ramEnd, this.lo, this.hi, this.staging, this.stagingSize] = d.area
+    this.stageTop = !!((d.flags ?? 0) & desc.F_STAGE_TOP)
     this.globals = new Map()
     const put = (k: string, v: Global) => { if (!this.globals.has(k)) this.globals.set(k, v) }
     for (const m of d.modules) for (const [nm, a] of m.exports) put(nm, ['abs', a])
@@ -487,14 +489,35 @@ function layOut(mods: Mod2[], sec: string, at: number, base: Map<string, number>
   return at
 }
 
+/** With the stage at the top: where pass 2 reads c's file. drive._stage_at. */
+function stageAt(build: Build, c: Choice): number {
+  const n = c.raw!.length
+  return n > build.hi - build.lo ? build.lo : (build.hi - n) & ~3
+}
+
+/** The living mods in placement order: id order, or with the stage at the top, the longest file first, ties in id
+ * order. drive.placement. */
+export function placement(build: Build, order: Choice[]): Choice[] {
+  const live = order.filter(c => c.alive)
+  return build.stageTop ? live.map((c, i) => [c, i] as const).sort((a, b) => b[0].raw!.length - a[0].raw!.length || a[1] - b[1])
+    .map(([c]) => c) : live
+}
+
+/** In placement order from the area's start: every .run, then every .bss; with the stage at the top, each file above
+ * its own .run's end. -> [base, end], or null after refusing the last living mod in id order for room. drive._layout. */
 function layout(build: Build, order: Choice[]): [Map<string, number>, number] | null {
-  const live = order.filter(c => c.alive).map(c => c.mod!)
+  const placed = placement(build, order)
   const base = new Map<string, number>()
-  const at = layOut(live, '.run', build.lo, base)
-  const end = align(layOut(live, '.bss', align(at, 4), base), 4)
-  if (end > build.hi) {
+  let at = build.lo, over = 0
+  for (const c of placed) {
+    at = layOut([c.mod!], '.run', at, base)
+    if (build.stageTop) over = Math.max(over, at - stageAt(build, c))
+  }
+  const end = align(layOut(placed.map(c => c.mod!), '.bss', align(at, 4), base), 4)
+  over = Math.max(over, end - build.hi)
+  if (over > 0) {
     const alive = order.filter(c => c.alive)
-    alive[alive.length - 1].refuse('room', '', Math.floor((end - build.hi + 1023) / 1024))
+    alive[alive.length - 1].refuse('room', '', Math.floor((over + 1023) / 1024))
     return null
   }
   return [base, end]
@@ -519,7 +542,8 @@ export function check(build: Build, files: [string, Uint8Array | null][]): Resul
   const state: State = { syms: build.nsyms, contribs: 0, arena: 1, lists: 0, sites: 0, sdata: 0 }
   for (const c of choices) {
     if (c.raw === null) c.refuse('missing', '', 0, '', DROPPED)
-    else if (build.stagingSize && c.raw.length > build.stagingSize) c.refuse('too-big')
+    else if (build.stageTop && c.raw.length > build.hi - build.lo) c.refuse('too-big')
+    else if (!build.stageTop && build.stagingSize && c.raw.length > build.stagingSize) c.refuse('too-big')
     else pass1(build, c, state)
   }
   // by id, stable: of one id, the earlier line first
@@ -544,6 +568,23 @@ export function check(build: Build, files: [string, Uint8Array | null][]): Resul
     if (s && (s[0] === '.run' || s[0] === '.bss')) r.inits.push([c.id!, base.get(`${c.id}\0${s[0]}`)! + s[1]])
   }
   return r
+}
+
+/** `/mods/.status`'s text -> the live stage's size in bytes (its `stage:` line), or null for a loader without
+ * the line. drive.stage_of. */
+export function stageOf(status: string): number | null {
+  for (const ln of status.split('\n')) {
+    const w = ln.split(/\s+/).filter(x => x)
+    if (w.length >= 3 && w[0] === 'stage:' && /^[0-9]+$/.test(w[1]) && w[2] === 'bytes') return parseInt(w[1], 10)
+  }
+  return null
+}
+
+/** The most bytes one upload or read takes on the unit now: the .status `stage:` line, else the build's staging
+ * buffer (only the floor with the stage at the top). drive.upload_room. */
+export function uploadRoom(build: Build, status: string | null): number | null {
+  const n = status !== null ? stageOf(status) : null
+  return n !== null ? n : build.stagingSize || null
 }
 
 /** One line per chosen file: name, state, code, message. drive.status_text. */

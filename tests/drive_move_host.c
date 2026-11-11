@@ -11,6 +11,15 @@
  *   mv FROM|TO     an upload of "FROM\nTO" to .mv     -> "ok" or the refusal
  *   mkdir FOLDER   an upload to FOLDER/.dir           -> "ok" or "failed"
  *   entry NAME     a file's entry (file_perm)          -> "ok SIZE read write clear" or the refusal
+ *   stage N        the live stage: N bytes inside a guarded arena (route.c dl_stage_at, dl_stage_len)
+ *   pre SIZE       an upload's +0x1c with SIZE in the entry (dl_pre)   -> "ok" or the refusal
+ *   hdr SIZE       its +0x6c with a header of SIZE payload bytes (dl_hdr) -> "ok" or the refusal
+ *   read NAME      a read's fill (dl_fill)                -> "read N" (bytes the file put in the stage)
+ *   put NAME SIZE  an upload's commit of SIZE bytes from the stage (dl_hdr, dl_change) -> what .status
+ *                  notes, and the file's size
+ *   status         .status's stage line
+ * Each of the last five ends its line in " GUARD ok" when no byte around the stage changed (" GUARD
+ * bad" when one did); nothing with the stage left at the floor.
  * A tree line "NAME=@N" is a file of N bytes.
  * After each, the tree: "TREE p1 ; p2 ; ..." sorted, and "ACTIVE text" with "|" for newlines. */
 #include <stdio.h>
@@ -21,7 +30,60 @@
 static void *host_new(unsigned n) { return calloc(1, n ? n : 1); }
 #define NEW host_new
 #define DELETE free
+static const char *host_str;                 /* the last std::string the route made */
+static void host_str_new(void *slot, const char *s, void *a) { (void)slot, (void)a; host_str = s; }
+#define STR_NEW host_str_new
 #include "../mods/drive-loader-ar2/route.c"
+
+/* the arena the stage command puts the stage in, with GUARD bytes of 0xa5 around it */
+#define GUARD 4096
+#define ARENA_MAX (1u << 21)
+static unsigned char arena[GUARD + ARENA_MAX + GUARD];
+
+static void stage(unsigned n)
+{
+    memset(arena, 0xa5, sizeof arena);
+    dl_stage_at = arena + GUARD;
+    dl_stage_len = n;
+}
+
+static void guard(void)
+{
+    const unsigned char *lo, *hi, *p;
+    if (dl_stage_at == drive_staging)
+        return;
+    lo = dl_stage_at;
+    hi = dl_stage_at + dl_stage_len;
+    for (p = arena; p < arena + sizeof arena; p++)
+        if ((p < lo || p >= hi) && *p != 0xa5) {
+            printf(" GUARD bad");
+            return;
+        }
+    printf(" GUARD ok");
+}
+
+/* a C_FILE closure for name, as dl_entry makes it */
+static struct clo *file_clo(const char *name)
+{
+    static struct clo c;
+    char path[DL_PATH_MAX];
+    int size;
+    memset(&c, 0, sizeof c);
+    c.what = C_FILE;
+    strcpy(c.name, name);
+    path_of(path, name, "");
+    size = dl_fs_file_size(path);
+    c.size = size < 0 ? 0 : (unsigned)size;
+    return &c;
+}
+
+static void header(unsigned char *h, unsigned size)
+{
+    memset(h, 0, 31);
+    h[H_TYPE] = 'E', h[H_TYPE + 1] = 'M', h[H_TYPE + 2] = 'O', h[H_TYPE + 3] = 'D';
+    h[H_PAYLOAD] = size >> 24, h[H_PAYLOAD + 1] = size >> 16, h[H_PAYLOAD + 2] = size >> 8;
+    h[H_PAYLOAD + 3] = size;
+}
 
 unsigned char drive_staging[DL_STAGING_SIZE];
 volatile int dl_staging_owner;
@@ -294,6 +356,59 @@ int main(void)
                        perm & P_CLEAR ? " clear" : "");
         } else if (!strncmp(line, "mkdir ", 6)) {
             printf("%s\n", make_folder(line + 6) ? "failed" : "ok");
+        } else if (!strncmp(line, "stage ", 6)) {
+            stage((unsigned)strtoul(line + 6, 0, 0));
+            printf("ok\n");
+        } else if (!strncmp(line, "pre ", 4) || !strncmp(line, "hdr ", 4)) {
+            unsigned char res[12], ent[ENTRY_SIZE], h[31];
+            struct clo *c = file_clo("x.elemod");
+            void *f = c;
+            unsigned size = (unsigned)strtoul(line + 4, 0, 0);
+            memset(ent, 0, sizeof ent);
+            *(unsigned *)(ent + E_SIZE) = size;
+            header(h, size);
+            if (line[0] == 'p')
+                dl_pre(res, &f, ent);
+            else
+                dl_hdr(res, &f, h);
+            printf("%s", res[0] ? "ok" : host_str);
+            guard();
+            printf("\n");
+        } else if (!strncmp(line, "read ", 5)) {
+            struct clo *c = file_clo(line + 5);
+            void *f = c;
+            unsigned k, n = 0;
+            dl_fill(&f);
+            for (k = 0; k < c->size && k < dl_stage_len; k++)
+                n += dl_stage_at[k] != 0;
+            printf("read %u", n);
+            guard();
+            printf("\n");
+        } else if (!strncmp(line, "put ", 4)) {
+            char *sp = strrchr(line, ' ');
+            unsigned char res[12], h[31];
+            unsigned size = (unsigned)strtoul(sp + 1, 0, 0), k;
+            struct clo *c;
+            void *f;
+            *sp = 0;
+            c = file_clo(line + 4);
+            f = c;
+            header(h, size);
+            dl_hdr(res, &f, h);
+            for (k = 0; k < size && k < dl_stage_len; k++)
+                dl_stage_at[k] = (unsigned char)(k % 251 + 1);
+            dl_change(&f, h);
+            path_of(path, line + 4, "");
+            printf("%s %d", dl_note, dl_fs_file_size(path));
+            guard();
+            printf("\n");
+        } else if (!strcmp(line, "status")) {
+            const char *t;
+            status_text();
+            t = strstr(dl_status_text, "stage: ");
+            printf("%.*s", (int)strcspn(t, "\n"), t);
+            guard();
+            printf("\n");
         }
         show();
     }

@@ -7,7 +7,7 @@ import { crc32 } from './zip.ts'
 import { ModError } from './elemod.ts'
 
 export const SYM = 'core_desc'
-export const ABI: [number, number] = [1, 2]
+export const ABI: [number, number] = [1, 3]
 export const HEADER = 0x60
 export const SPARE = 16                     // a table's spare entries, unless its collection says
 export const F_MORE = 1, F_RENDER = 2, F_DSP = 4, F_LOADER = 8   // F_LOADER (ABI 1.2): the loader's entries only
@@ -17,6 +17,8 @@ export const KEY_LINKER = 0xffff            // a key's order (ABI 1.0's field) f
 export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
+export const STAGE_TOP = 'drive_stage_top'   // a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
+export const F_STAGE_TOP = 1                 // the header's flags (ABI 1.3)
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16, RANGE = 12
 // a site map range's kind (ABI 1.2)
 export const SITE_SITE = 1, SITE_COPIED = 2, SITE_DEVICE = 3, SITE_BOOT = 4, SITE_RUN = 5, SITE_TRAILER = 6
@@ -33,6 +35,7 @@ export type DescFields = {
   storage: { trailer: [number, number]; scopes: [string, number, number, number][] }
   sites?: [number, number, number, number][]   // ABI 1.2: [lo, hi, kind, module index], sorted
   prelink?: [number, number, number][]          // ABI 1.2: [lo, hi, kind]
+  flags?: number                                // ABI 1.3: F_STAGE_TOP
 }
 
 const utf8 = new TextEncoder()
@@ -81,6 +84,7 @@ export function encode(d: DescFields): Uint8Array {
   ;[oMod, oExp, oTab, oClm, oKey, oArea, oSto].forEach((x, i) => u32(0x28 + 4 * i, x))
   u32(0x44, str(d.deviceKey)); u32(0x48, str(d.os))
   u32(0x4c, oMap); v.setUint16(0x50, sites.length); v.setUint16(0x52, pre.length); u32(0x54, oPre)
+  u32(0x58, d.flags ?? 0)
   let o = oMod, first = 0
   d.modules.forEach((m, i) => {
     u32(o, str(m.name)); u32(o + 4, str(m.version)); b[o + 8] = m.kind; b[o + 9] = m.flags
@@ -175,5 +179,6 @@ export function decode(blk: Uint8Array, at = 0): Decoded {
   return { abi: [major, minor], size, crc, family: u16(0x10), device: u16(0x12), release: u32(0x14),
     deviceKey: name(u32(0x44)), os: name(u32(0x48)), modules, tables, claims,
     area: Array.from({ length: 5 }, (_, i) => u32(oArea + 4 * i)) as [number, number, number, number, number],
-    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes }, sites, prelink }
+    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes }, sites, prelink,
+    flags: minor >= 3 ? u32(0x58) : 0 }     // ABI 1.3
 }

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Top-staging (prototype): the boot linker (mods/drive-loader-ar2/dlink.c with dl_stage_top) reads
+"""Top-staging (decided 2026-11-11): the boot linker (mods/drive-loader-ar2/dlink.c with dl_stage_top) reads
 each file into the +Drive area itself, pass 1 from its start and pass 2 at its top, and places the
 mods by file length, the longest first, so that each file fits above the code placed before it.
 Built for the computer and run against its twin (elekloader/drive.py, Build.stage_top): the same

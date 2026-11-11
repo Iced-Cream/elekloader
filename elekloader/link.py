@@ -1068,6 +1068,7 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
+                'flags': desc.F_STAGE_TOP if w('glob', desc.STAGE_TOP) else 0,
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink]}
 
     def site_map(w):

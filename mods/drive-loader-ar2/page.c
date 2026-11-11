@@ -64,6 +64,9 @@ struct file {                            /* a file the page knows: ticked, saved
     u8 boot_code;
     u16 boot_arg;                        /* the boot record's number (NO ROOM's KB, FULL's spare) */
     u8 checked;                          /* read and checked (crc, id, ver, file_code known) */
+    u8 big;                              /* larger than the live stage but not the +Drive area:
+                                          * read for its size and CRC, and its pass 1 and layout
+                                          * left to the next boot (STAGE.md) */
     char id[DL_ID_MAX];
     char ver[DL_VER_MAX];
     char detail[32];                     /* the file's refusal's name argument */
@@ -710,14 +713,22 @@ static int read_step(const char *name)
         rd_name = name;
     }
     dl_lock();
-    res = dl_read_more(&rd, drive_staging, DL_STAGING_SIZE);
+    res = dl_read_more(&rd, dl_stage_at, dl_stage_len);
     dl_unlock();
     if (!res)
         return 1;
     reading = 0;
     rd_len = res == 1 ? (s32)rd.got : res;
-    rd_crc = ~rd.crc;
+    rd_crc = ~rd.crc;                    /* -2 too: the reader read it to its end */
     return 0;
+}
+
+/* A file of n bytes the boot reads into the +Drive area itself (dl.h, dl_stage_top): pass 1
+ * takes it when it is no larger than the area. */
+static int fits_area(u32 n)
+{
+    u32 lo, hi;
+    return dl_stage_top && dl_area((u32)core_desc, &lo, &hi) == 0 && n <= hi - lo;
 }
 
 /* One file read, a stretch a call (read_step): its CRC-32 and size, then a check of it alone
@@ -739,7 +750,12 @@ static int inspect(struct file *r)
         return c;
     len = rd_len;
     r->checked = 1;
-    if (len == -2)
+    r->big = 0;
+    if (len == -2 && fits_area(rd.got)) {   /* the boot reads it in the area: it checks it */
+        r->big = 1;
+        r->size = rd.got;
+        r->crc = rd_crc;
+    } else if (len == -2)
         r->file_code = DL_R_TOO_BIG;
     else if (len < 0)
         r->file_code = DL_R_MISSING;
@@ -748,7 +764,7 @@ static int inspect(struct file *r)
         r->crc = rd_crc;
         copy_str(one.name, r->name, DL_LINE_NAME_MAX);
         one.crc = r->crc;
-        if (dl_check_buf((u32)core_desc, &one, len, drive_staging, DL_STAGING_SIZE, &one_st, one_det,
+        if (dl_check_buf((u32)core_desc, &one, len, dl_stage_at, dl_stage_len, &one_st, one_det,
                          one_ver) >= 0) {        /* the file just read, not read again */
             c = one_st.code;
             if (real_id(one_st.id, r->name))
@@ -1171,6 +1187,7 @@ enum { FP_READ, FP_WRITE, FP_COMMIT };   /* FORGET DATA's steps, one a tick */
 static struct {
     u8 what, phase, first;
     int m, i, k, n;                      /* set size, next line or file, unloaded, ticked */
+    int c;                               /* the set's files the check reads: m less the big ones */
     u32 tries;                           /* ticks the buffer was busy, in a row */
 } job;
 #define JOB_BUSY 600                     /* ticks (30 s) of a busy buffer before the save gives up */
@@ -1195,6 +1212,10 @@ static void job_saved(void)
     page_rows();
     if (what == J_LOAD)
         cursor_to(0);                    /* as stock after LOAD TO PROJ */
+    if (what == J_LOAD && job.c < job.m) {   /* a big file in the set: only the boot checks it */
+        job_end("SAVED: BIG FILE\nCHECKED AT NEXT BOOT");
+        return;
+    }
     job_end(what == J_LOAD ? (job.first ? count_msg(job.n, "LOADED") : "BUILD UPDATED")
             : what == J_CLEAR ? "BUILD CLEARED" : count_msg(job.k, "UNLOADED"));
 }
@@ -1232,6 +1253,7 @@ static void save_step(void)
     }
     if (job.phase == JP_START) {
         u32 s = (u32)(job.m > 0 ? job.m : 1);
+        job.c = 0;                       /* a big file stays out of the check: the boot checks it */
         choice = dl_alloc(s * sizeof *choice);
         cst = dl_alloc(s * sizeof *cst);
         cdet = dl_alloc(s * sizeof *cdet);
@@ -1240,11 +1262,12 @@ static void save_step(void)
             return;
         }
         for (i = 0, k = 0; i < nfiles && k < job.m; i++)
-            if (files[i].keep) {
+            if (files[i].keep && !files[i].big) {
                 copy_str(choice[k].name, files[i].name, DL_LINE_NAME_MAX);
                 choice[k++].crc = files[i].crc;
             }
-        if (dl_check_start((u32)core_desc, job.m, drive_staging, DL_STAGING_SIZE, cst, cdet, 0) < 0) {
+        job.c = k;
+        if (dl_check_start((u32)core_desc, job.c, dl_stage_at, dl_stage_len, cst, cdet, 0) < 0) {
             job_end("NOT SAVED");
             return;
         }
@@ -1252,7 +1275,7 @@ static void save_step(void)
         job.phase = JP_STEPS;
         return;
     }
-    if (job.phase == JP_STEPS && job.i < job.m) {
+    if (job.phase == JP_STEPS && job.i < job.c) {
         k = read_step(choice[job.i].name);  /* a stretch a tick, as the background's reads */
         if (k < 0) {
             if (++job.tries > JOB_BUSY) {
@@ -1270,12 +1293,12 @@ static void save_step(void)
         return;
     }
     ok = dl_check_finish();
-    if (ok != job.m) {
+    if (ok != job.c) {
         msg[0] = 0;
-        for (k = 0; k < job.m && ok >= 0; k++)
+        for (k = 0; k < job.c && ok >= 0; k++)
             if (cst[k].state != DL_ST_LOADED) {
                 reason(msg, msg + sizeof msg, cst[k].code ? cst[k].code : DL_R_LIMIT, cst[k].arg, cdet[k], cst,
-                       (u32)job.m);
+                       (u32)job.c);
                 break;
             }
         job_end(msg[0] ? msg : "NOT SAVED");
@@ -1284,7 +1307,7 @@ static void save_step(void)
     for (i = 0, k = 0; i < nfiles; i++) {
         files[i].was = files[i].on;
         files[i].on = files[i].keep;
-        if (files[i].keep && k < job.m && real_id(cst[k++].id, files[i].name))   /* the save's check names */
+        if (files[i].keep && !files[i].big && k < job.c && real_id(cst[k++].id, files[i].name))   /* the save's check names */
             copy_str(files[i].id, cst[k - 1].id, sizeof files[i].id);          /* the rows added since boot */
     }
     if (save_active()) {

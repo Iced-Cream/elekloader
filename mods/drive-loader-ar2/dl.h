@@ -134,13 +134,19 @@ extern u32 *dl_inits;                    /* dl_status_n of them, from the heap *
 extern u32 dl_inits_n;
 extern u32 dl_used_lo, dl_used_hi;
 
-/* Top-staging (prototype, off until the route and the page stage in the free tail): with it
- * set, dl_link given no buffer reads each file into the +Drive area itself, pass 1 from its
+/* Top-staging (decided 2026-11-11; dl_boot sets it, the host tests choose): with it set,
+ * dl_link given no buffer reads each file into the +Drive area itself, pass 1 from its
  * start and pass 2 at its top, and the layout places the mods by file length, the longest
  * first, so that each file fits above the code placed before it (docs/DRIVE.md, "The boot
- * link"). dl_check keeps its own buffer for pass 1 but lays out the same way, so the MODS
- * page's verdict stays the boot's. elekloader/drive.py's Build.stage_top is its twin. */
+ * link"). dl_check keeps its own buffer (the live stage) for pass 1 but lays out the same
+ * way, so the MODS page's verdict stays the boot's. The build descriptor's flags bit 0 (ABI
+ * 1.3) tells host tools, whose twin is elekloader/drive.py's Build.stage_top. */
 extern u8 dl_stage_top;
+/* The +Drive area [*lo, *hi) the descriptor names. -> 0, or -1 for a descriptor the loader
+ * doesn't read. The boot gives the live stage its free tail, from dl_used_hi (fs.h,
+ * dl_stage_tail), and the MODS page takes a file over the stage that fits the area as one
+ * the next boot checks. */
+int dl_area(u32 desc, u32 *lo, u32 *hi);
 
 /* ---- +Drive sites (docs/DRIVE.md, "Sites") -------------------------------------------- */
 /* The main OS a site may change runs from DL_MAIN_LO (the Rytm's main_load) to the build's boot
