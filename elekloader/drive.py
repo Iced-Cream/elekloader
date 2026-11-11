@@ -148,6 +148,7 @@ class Build:
                       and [x[0] for x in scopes] == list(mstore.SCOPES)
                       and self.tables[self.table[mstore.IDS_TABLE]]['count'] >= 1)
         self.gens_at = exports.get(STORE_GENS)
+        self.dsts_at = exports.get(ds.LFO_DSTS)          # core-ar2 0.14's core_lfo_dsts, None without
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
         self.main_load = dev.main_load if dev else None
         # the main OS a +Drive site may change: from the device's main_load to the boot copier
@@ -735,7 +736,8 @@ def _place(build, order, prev):
 
 def _store_tables(build, p):
     """What the boot writes from a placement: each loader-only table's bytes (flashed entries, the
-    +Drive ones, zeros to its end) and core_store_gens' 6 bytes. -> ({name: table}, gens)."""
+    +Drive ones, zeros to its end) and core_store_gens' 6 bytes. -> ({name: table}, gens). The core's LFO
+    destination fields the +Drive placed go into core_lfo_dsts too (Placed.lfo_dsts)."""
     out = {}
     adds = {mstore.CODES_TABLE: p.code_entries, mstore.CCS_TABLE: p.cc_entries,
             mstore.INITS_TABLE: p.init_entries, mstore.HANDLES_TABLE: p.handle_entries}
@@ -1089,7 +1091,8 @@ def summary(r, linked=False):
             out['store'] = {'id': '0x%08x' % p.id, 'ancestors': ['0x%08x' % a for a in p.ancestors],
                             'generations': p.generations, 'fields': len(p.state['fields']),
                             'parked': len(p.state['parked']), 'sha256': _sha(p.bytes),
-                            'gens_at': '0x%08x' % b.gens_at, 'notes': p.notes}
+                            'gens_at': '0x%08x' % b.gens_at, 'notes': p.notes,
+                            'lfo_dsts': {s: '0x%08x' % d for s, d in sorted(p.lfo_dsts.items())}}
         out['sites'] = [{'mod': i, 'line': ln, 'addr': '0x%08x' % a, 'len': len(new), 'sha256': _sha(new)}
                         for i, ln, a, new in r.sites]
     return out

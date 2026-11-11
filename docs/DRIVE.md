@@ -169,8 +169,9 @@ A `.store` past the loader's own room (64 KB, 512 fields or parked fields,
 
 It reads only what the unit can read: each scope's room, used bits and
 generation (the descriptor's storage record), the layout ID and ancestors
-(`core_store_ids`), and the codes, CCs and inits the build gives its own
-fields (`core_lock_codes`, `core_lock_ccs`, `core_field_inits`). The
+(`core_store_ids`), the codes, CCs and inits the build gives its own
+fields (`core_lock_codes`, `core_lock_ccs`, `core_field_inits`), and
+whether the core exports `core_lfo_dsts`. The
 descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
 
 - **Pool**: a scope's bits from the build's used bits to its room. Fields
@@ -195,6 +196,15 @@ descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
 - **CCs**: from the device's pool, from its end, past the build's own; a
   kit field skips those stock maps on the FX channel. A full
   `core_lock_ccs` leaves a field on its NRPN only.
+- **LFO destinations**: an `"lfo"` field is an LFO destination only where
+  the core keeps the LFO's code in its own field of that scope
+  (`core_lfo_dst` sound, `core_fx_lfo_dst` kit, 7 bits each). A build
+  places one only for a flashed `"lfo"` field, so with a core that keeps
+  them live (core-ar2 0.14's `core_lfo_dsts`) the allocator places the
+  core's field as one more field of the core's id, only while a chosen mod
+  has an `"lfo"` field of that scope and the build places none, and the
+  loader writes its descriptor into `core_lfo_dsts`. It counts in the room,
+  parks and comes back like a mod's field.
 - **Room**: `fit` refuses the last mod in id order while a scope, the free
   codes, or `core_lock_codes`', `core_field_inits`' or `core_handles`'
   spare entries are short, and checks again.

@@ -140,6 +140,7 @@ static struct {
     u32 sb_anc[DS_MAX_IDS + 1];
     int t_ids, t_codes, t_ccs, t_inits, t_handles;   /* their tables' indexes */
     u32 gens_at;                         /* core_store_gens */
+    u32 dsts_at;                         /* core_lfo_dsts (core-ar2 0.14), 0 without */
     struct fld *fld;
     u32 nfld;
     u32 *fdesc;                          /* each field's descriptor, once placed */
@@ -2163,6 +2164,9 @@ static void store_base(void)
     L.sb.spare[DS_T_CCS] = (s32)(table_cap(L.t_ccs) - table_count(L.t_ccs));
     L.sb.spare[DS_T_INITS] = (s32)(table_cap(L.t_inits) - table_count(L.t_inits));
     L.sb.spare[DS_T_HANDLES] = (s32)(table_cap(L.t_handles) - table_count(L.t_handles));
+    L.dsts_at = flashed_export("core_lfo_dsts");
+    L.sb.live_dst = L.dsts_at != 0;
+    L.sb.core = module_name(0);
     L.store = 1;
 }
 
@@ -2265,7 +2269,8 @@ static void put_entries(int t, const u8 *data, const u32 *words, u32 n)
 }
 
 /* The placement into the core's tables: the live layout ID and its ancestors, each scope's
- * generation, and the +Drive fields' codes, CCs, inits and handles. */
+ * generation, the core's LFO destination fields the +Drive placed, and the +Drive fields' codes,
+ * CCs, inits and handles. */
 static void write_store(void)
 {
     u8 *ids;
@@ -2280,6 +2285,9 @@ static void write_store(void)
     for (i = 0; i < o->nanc && i + 1 < cap; i++)
         dl_wr32(ids + 4 * (i + 1), o->anc[i]);
     dl_memcpy(DL_MEM(L.gens_at), o->gen, DS_SCOPES);
+    for (i = 0; i < 2; i++)              /* the core's LFO fields the +Drive placed; else the build's */
+        if (L.dsts_at && o->lfo_dst[i])
+            dl_wr32(DL_MEM(L.dsts_at + 4 * i), o->lfo_dst[i]);
     put_entries(L.t_codes, o->codes, 0, o->ncodes);
     put_entries(L.t_ccs, o->ccs, 0, o->nccs);
     put_entries(L.t_inits, 0, o->inits, o->ninits);

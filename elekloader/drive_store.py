@@ -35,6 +35,10 @@ The rules mirror elekloader/store.py's, turned to face the flashed build:
   A code the flashed build has taken since is given up;
 - CCs come from the device's pool from its end, past the build's own; a field keeps its CC wherever it
   is placed, a parked field's CC is kept for it until the never-used CCs run out;
+- the core's LFO destination field of a scope (core_lfo_dst, core_fx_lfo_dst) is one more field, of the
+  core's id, placed only while a chosen mod has an "lfo" field of that scope, the flashed build places
+  none and its core keeps them live (core_lfo_dsts, core-ar2 0.14): it counts in the room and parks like
+  a mod's, and the loader writes its descriptor into core_lfo_dsts;
 - the live layout ID is the flashed layout's ID while the .store holds nothing and no generation moved;
   otherwise the first 4 bytes of a SHA-256 of the flashed ID, each scope's generation and every field
   (parked ones too) and lock code (layout_id). A park or a return changes no bit, so it keeps the ID. The
@@ -96,10 +100,14 @@ class Base:
     (core_lock_codes); ccs: [(field descriptor, CC)] (core_lock_ccs); inits: how many entries
     core_field_inits has; room: {table: spare entries} of the four tables the loader adds to (None for a
     table the build lacks). codes and ccs are None where the build's bytes are not known (a descriptor
-    alone): fit() still works, from ncodes (core_lock_codes' count), and allocate() does not."""
+    alone): fit() still works, from ncodes (core_lock_codes' count), and allocate() does not. live_dst: the
+    core keeps its LFO destinations' fields in RAM (core-ar2 0.14's core_lfo_dsts), so the loader can place
+    one at boot; core: the core's id, whose fields those are."""
 
-    def __init__(self, device, scopes, flashed_id, ancestors=(), codes=(), ccs=(), inits=0, room=None, ncodes=0):
+    def __init__(self, device, scopes, flashed_id, ancestors=(), codes=(), ccs=(), inits=0, room=None, ncodes=0,
+                 live_dst=False, core='core'):
         self.device = device
+        self.live_dst, self.core = live_dst, core
         self.scopes = {s: tuple(scopes[s]) for s in store.SCOPES}
         self.flashed_id, self.ancestors = flashed_id, list(ancestors)
         self.codes = None if codes is None else [tuple(c) for c in codes]
@@ -125,6 +133,20 @@ class Base:
         core_fx_lfo_dst for kit)? It does when one of its own fields of the scope is an LFO destination."""
         n = store.SCOPE_NUM[scope]
         return any(c & store.LFO_FLAG and d >> 28 == n for d, c in self.codes or ())
+
+    def dst_fields(self, decls, lfos):
+        """The core's LFO destination fields the +Drive places for these declarations ([(mod, sym, scope,
+        bits)]) and LFO destinations ({(mod, sym)}): for each scope with an "lfo" field, where the core keeps
+        the field live and the flashed build does not place it. -> [(core, sym, scope, bits)]."""
+        if not self.live_dst:
+            return []
+        scope_of = {(d[0], d[1]): d[2] for d in decls}
+        out = []
+        for sym, scope, bits in ((store.LOCK_DST, 'sound', store.lock_dst_bits(self.device)),
+                                 (store.FX_LOCK_DST, 'kit', store.fx_lock_dst_bits(self.device))):
+            if bits and not self.lfo_dst(scope) and any(scope_of.get(k) == scope for k in lfos):
+                out.append((self.core, sym, scope, bits))
+        return out
 
     @classmethod
     def from_build(cls, build):
@@ -158,9 +180,14 @@ class Base:
         fid = ids[0][0] if ids else None        # None: not known from a descriptor alone
         i = build.table.get(store.CODES_TABLE)
         ncodes = 0 if i is None else build.tables[i]['count']
+        core = build.modules[0]['name'] if build.modules else 'core'
         return cls(build.device_key, sc, fid, [a[0] for a in (ids or [])[1:]],
                    [] if codes is None and i is None else codes,
-                   [] if ccs is None and build.table.get(store.CCS_TABLE) is None else ccs, inits, room, ncodes)
+                   [] if ccs is None and build.table.get(store.CCS_TABLE) is None else ccs, inits, room, ncodes,
+                   live_dst=LFO_DSTS in build.flashed_exports, core=core)
+
+
+LFO_DSTS = 'core_lfo_dsts'                      # core-ar2 0.14: the LFO destinations' fields, live (sound, kit)
 
 
 TABLES = (store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE)
@@ -204,10 +231,12 @@ class Want:
 def _needs(base, w):
     """[(what, needed, there is, uses(field))] in the order fit() checks them."""
     out = []
+    extra = base.dst_fields(w.decls, w.lfos)
     for s in store.SCOPES:
         room, used, _g = base.scopes[s]
         mine = {(d[0], d[1]) for d in w.decls if d[2] == s}
-        out.append((s, sum(d[3] for d in w.decls if d[2] == s), room - used, mine.__contains__))
+        more = sum(d[3] for d in extra if d[2] == s)     # the core's LFO field, for the scope's "lfo" fields
+        out.append((s, sum(d[3] for d in w.decls if d[2] == s) + more, room - used, mine.__contains__))
     codes = base.last_code - base.first_code + 1 - base.ncodes
     out.append(('codes', len(w.locks), codes, w.locks.__contains__))
     for t, n, uses in ((store.CODES_TABLE, len(w.locks), w.locks.__contains__),
@@ -386,7 +415,7 @@ class Placed:
     """allocate()'s result: the new state and what the loader writes from it."""
 
     def __init__(self, base, st, notes, want):
-        self.state, self.notes = st, notes
+        self.state, self.notes, self.core = st, notes, base.core
         self.id = st['id']
         anc, seen = [], {self.id}
         for a in st['ids'] + [base.flashed_id] + base.ancestors:
@@ -408,10 +437,15 @@ class Placed:
         self.handle_entries = [self.descriptors[(f['mod'], f['sym'])].to_bytes(4, 'big') for f in st['fields']
                                if (f['mod'], f['sym']) in want.handles]
         scope_of = {(f['mod'], f['sym']): f['scope'] for f in st['fields']}
+        # the core's LFO destination fields the +Drive placed: the loader writes their descriptors into
+        # core_lfo_dsts ([0] sound, [1] kit); a scope with none keeps the flashed build's
+        self.lfo_dsts = {s: self.descriptors.get((base.core, _dst_sym(s))) for s in ('sound', 'kit')}
+        self.lfo_dsts = {s: d for s, d in self.lfo_dsts.items() if d is not None}
         self.code_entries = []
         for c in st['codes']:
             k = (c['mod'], c['sym'])
-            flags = (store.LFO_FLAG if k in want.lfos and base.lfo_dst(scope_of[k]) else 0) \
+            lfo = base.lfo_dst(scope_of[k]) or scope_of[k] in self.lfo_dsts
+            flags = (store.LFO_FLAG if k in want.lfos and lfo else 0) \
                 | (store.SMOOTH_OFF if k in want.rough else 0) | (store.ROUTE_FLAG if k in want.routes else 0)
             self.code_entries.append(self.descriptors[k].to_bytes(4, 'big') + (c['code'] | flags).to_bytes(4, 'big'))
         self.cc_entries = [self.descriptors[(c['mod'], c['sym'])].to_bytes(4, 'big') + c['cc'].to_bytes(4, 'big')
@@ -422,11 +456,20 @@ class Placed:
         """A JSON-ready summary (the vectors' and `--json`'s)."""
         return {'id': '0x%08x' % self.id, 'ancestors': ['0x%08x' % a for a in self.ancestors],
                 'generations': self.generations,
-                'fields': {'%s/%s' % k: '0x%08x' % d for k, d in sorted(self.descriptors.items())},
+                'fields': {'%s/%s' % k: '0x%08x' % d for k, d in sorted(self.descriptors.items())
+                           if k[0] != self.core or k[1] not in DST_SYMS},
                 'parked': ['%s/%s 0x%08x' % (k + (d,)) for k, d in self.parked],
+                'lfo_dsts': {s: '0x%08x' % d for s, d in sorted(self.lfo_dsts.items())},
                 'codes': [e.hex() for e in self.code_entries], 'ccs': [e.hex() for e in self.cc_entries],
                 'inits': [e.hex() for e in self.init_entries], 'handles': [e.hex() for e in self.handle_entries],
                 'notes': self.notes, 'store': self.bytes.hex()}
+
+
+DST_SYMS = (store.LOCK_DST, store.FX_LOCK_DST)
+
+
+def _dst_sym(scope):
+    return store.LOCK_DST if scope == 'sound' else store.FX_LOCK_DST
 
 
 def _bump(g):
@@ -457,7 +500,7 @@ def allocate(base, prev, want):
         raise ModError('.store: a bad state')
     old_id = st['id']
     want_f = {}
-    for mid, sym, scope, bits in want.decls:
+    for mid, sym, scope, bits in want.decls + base.dst_fields(want.decls, want.lfos):
         if any(k[1] == sym for k in want_f):
             raise ModError('the storage field %s is declared by two mods' % sym)
         want_f[(mid, sym)] = (scope, bits, want.inits.get((mid, sym), 0))
@@ -561,8 +604,9 @@ def allocate(base, prev, want):
     _codes(st, base, want.locks, {(f['mod'], f['sym']) for f in kept}, back, notes)
     _ccs(st, base, want.ccs, {(f['mod'], f['sym']) for f in fields if f['scope'] == 'kit'}, notes)
     scope_of = {(f['mod'], f['sym']): f['scope'] for f in fields}
+    placed = {f['sym'] for f in fields if f['mod'] == base.core}
     for k in sorted(want.lfos, key=lambda k: (_b(k[0]), _b(k[1]))):
-        if not base.lfo_dst(scope_of[k]):
+        if not base.lfo_dst(scope_of[k]) and _dst_sym(scope_of[k]) not in placed:
             notes.append('%s %s: not an LFO destination on this build, which places no %s'
                          % (k[0], k[1], store.LOCK_DST if scope_of[k] == 'sound' else store.FX_LOCK_DST))
     st['id'] = layout_id(st, base)

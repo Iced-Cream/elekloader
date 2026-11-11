@@ -10,7 +10,8 @@ import { ModError } from '../src/elemod.ts'
 
 const V = JSON.parse(readFileSync(new URL('./drivestore-vectors.json', import.meta.url), 'utf8'))
 
-const base = (j: any) => new ds.Base(j.device, j.scopes, j.flashed_id, j.ancestors, j.codes, j.ccs, j.inits, j.room)
+const base = (j: any) => new ds.Base(j.device, j.scopes, j.flashed_id, j.ancestors, j.codes, j.ccs, j.inits, j.room, 0,
+  j.live_dst ?? false)
 
 test('the allocator: drive_store.py\'s placements, bytes and notes, step by step', () => {
   for (const run of V.runs) {

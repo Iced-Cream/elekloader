@@ -25,6 +25,7 @@
 #define DS_LFO_FLAG 0x100
 #define DS_SMOOTH_OFF 0x200
 #define DS_ROUTE_FLAG 0x400
+#define DS_LFO_DST_BITS 7                /* the core's LFO destination fields (store.py lock_dst) */
 
 /* a declared field's flags (mod.json "storage") */
 enum { DS_LOCK = 1, DS_CC = 2, DS_LFO = 4, DS_ROUGH = 8, DS_ROUTE = 16, DS_HANDLE = 32 };
@@ -46,6 +47,8 @@ struct ds_base {
     u32 nccs;
     u32 inits;                           /* core_field_inits' flashed entries */
     s32 spare[4];                        /* spare entries: codes, CCs, inits, handles; -1 no table */
+    u32 live_dst;                        /* the core keeps its LFO destinations live (core_lfo_dsts) */
+    const char *core;                    /* the core's id: its LFO destination fields' mod */
 };
 enum { DS_T_CODES, DS_T_CCS, DS_T_INITS, DS_T_HANDLES };
 
@@ -119,6 +122,8 @@ struct ds_out {
     u32 ninits;
     u32 *handles;                        /* core_handles' */
     u32 nhandles;
+    u32 lfo_dst[2];                      /* the core's LFO destination fields the +Drive placed, by
+                                          * scope (sound, kit): core_lfo_dsts' words; 0 none */
     u32 nfields;                         /* placed fields after it */
     u32 nparked;                         /* parked fields after it */
     u8 *bytes;                           /* the new /mods/.store */

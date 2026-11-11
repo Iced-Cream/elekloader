@@ -71,11 +71,14 @@ export class Base {
   lastCode: number
   pool: number[]
   fxTaken: number[]
+  liveDst: boolean
+  core: string
 
   constructor(device: string, scopes: Record<string, [number, number, number]>, flashedId: number | null,
     ancestors: number[] = [], codes: [number, number][] | null = [], ccs: [number, number][] | null = [], inits = 0,
-    room: Record<string, number | null> | null = null, ncodes = 0) {
+    room: Record<string, number | null> | null = null, ncodes = 0, liveDst = false, core = 'core') {
     this.device = device
+    this.liveDst = liveDst; this.core = core
     this.scopes = Object.fromEntries(SCOPES.map(s => [s, [...scopes[s]] as [number, number, number]]))
     this.flashedId = flashedId
     this.ancestors = [...ancestors]
@@ -99,6 +102,19 @@ export class Base {
     return (this.codes ?? []).some(([d, c]) => (c & store.LFO_FLAG) !== 0 && d >>> 28 === n)
   }
 
+  /** The core's LFO destination fields the +Drive places for these declarations and LFO destinations: for each
+   *  scope with an "lfo" field, where the core keeps the field live and the flashed build does not place it.
+   *  drive_store.Base.dst_fields. */
+  dstFields(decls: [string, string, string, number][], lfos: Set<string>): [string, string, string, number][] {
+    if (!this.liveDst) return []
+    const scopeOf = new Map(decls.map(d => [K(d[0], d[1]), d[2]]))
+    const out: [string, string, string, number][] = []
+    for (const [sym, scope, bits] of [[store.LOCK_DST, 'sound', store.lockDstBits(this.device)],
+      [store.FX_LOCK_DST, 'kit', store.fxLockDstBits(this.device)]] as const)
+      if (bits && !this.lfoDst(scope) && [...lfos].some(k => scopeOf.get(k) === scope)) out.push([this.core, sym, scope, bits])
+    return out
+  }
+
   /** A drive.Build (the descriptor alone, on this side) -> Base: its codes, CCs and layout ID are known only
    *  where the tables are empty. drive_store.Base.from_build. */
   static fromBuild(build: Build): Base {
@@ -115,7 +131,8 @@ export class Base {
     const ct = tab(store.CODES_TABLE)
     const codes = entries(store.CODES_TABLE), ccs = entries(store.CCS_TABLE)
     return new Base(build.deviceKey, sc, null, [], codes === null && ct === undefined ? [] : codes,
-      ccs === null && tab(store.CCS_TABLE) === undefined ? [] : ccs, inits, room, ct?.count ?? 0)
+      ccs === null && tab(store.CCS_TABLE) === undefined ? [] : ccs, inits, room, ct?.count ?? 0,
+      build.modules.some(m => m.exports.some(([nm]) => nm === LFO_DSTS)), build.modules[0]?.name ?? 'core')
   }
 }
 
@@ -161,12 +178,19 @@ export class Want {
 
 // ---- the room ------------------------------------------------------------------------------------------------
 
+/** core-ar2 0.14: the core's LFO destinations' fields, live (sound, kit). */
+export const LFO_DSTS = 'core_lfo_dsts'
+const DST_SYMS: string[] = [store.LOCK_DST, store.FX_LOCK_DST]
+const dstSym = (scope: string) => scope === 'sound' ? store.LOCK_DST : store.FX_LOCK_DST
+
 function needs(base: Base, w: Want): [string, number, number, (k: string) => boolean][] {
   const out: [string, number, number, (k: string) => boolean][] = []
+  const extra = base.dstFields(w.decls, w.lfos)
   for (const s of SCOPES) {
     const [room, used] = base.scopes[s]
     const mine = new Set(w.decls.filter(d => d[2] === s).map(d => K(d[0], d[1])))
-    out.push([s, w.decls.filter(d => d[2] === s).reduce((n, d) => n + d[3], 0), room - used, k => mine.has(k)])
+    const more = extra.filter(d => d[2] === s).reduce((n, d) => n + d[3], 0)
+    out.push([s, w.decls.filter(d => d[2] === s).reduce((n, d) => n + d[3], 0) + more, room - used, k => mine.has(k)])
   }
   out.push(['codes', w.locks.size, base.lastCode - base.firstCode + 1 - base.ncodes, k => w.locks.has(k)])
   for (const [t, n, uses] of [[store.CODES_TABLE, w.locks.size, (k: string) => w.locks.has(k)],
@@ -352,10 +376,13 @@ export class Placed {
   descriptors = new Map<string, number>()
   parked: [string, number][] = []
   initEntries: Uint8Array[]; handleEntries: Uint8Array[]; codeEntries: Uint8Array[] = []; ccEntries: Uint8Array[]
+  /** The core's LFO destination fields the +Drive placed, by scope: core_lfo_dsts' words. */
+  lfoDsts: Record<string, number> = {}
+  core: string
   bytes: Uint8Array
 
   constructor(base: Base, st: State, notes: string[], want: Want) {
-    this.state = st; this.notes = notes; this.id = st.id
+    this.state = st; this.notes = notes; this.id = st.id; this.core = base.core
     const anc: number[] = [], seen = new Set([this.id])
     for (const a of [...st.ids, base.flashedId!, ...base.ancestors]) if (a && !seen.has(a)) { seen.add(a); anc.push(a) }
     this.ancestors = anc.slice(0, MAX_ANCESTORS)
@@ -369,9 +396,13 @@ export class Placed {
     this.initEntries = inited.map(f => be(f.init!))
     this.handleEntries = st.fields.filter(f => want.handles.has(K(f.mod, f.sym))).map(f => be(this.descriptors.get(K(f.mod, f.sym))!))
     const scopeOf = new Map(st.fields.map(f => [K(f.mod, f.sym), f.scope]))
+    for (const s of ['sound', 'kit']) {
+      const d = this.descriptors.get(K(base.core, dstSym(s)))
+      if (d !== undefined) this.lfoDsts[s] = d
+    }
     for (const c of st.codes) {
-      const k = K(c.mod, c.sym)
-      const flags = (want.lfos.has(k) && base.lfoDst(scopeOf.get(k)!) ? store.LFO_FLAG : 0)
+      const k = K(c.mod, c.sym), sc = scopeOf.get(k)!
+      const flags = (want.lfos.has(k) && (base.lfoDst(sc) || sc in this.lfoDsts) ? store.LFO_FLAG : 0)
         | (want.rough.has(k) ? store.SMOOTH_OFF : 0) | (want.routes.has(k) ? store.ROUTE_FLAG : 0)
       this.codeEntries.push(new Uint8Array([...be(this.descriptors.get(k)!), ...be(c.code | flags)]))
     }
@@ -382,11 +413,16 @@ export class Placed {
   /** A JSON-ready summary, as drive_store.Placed.summary. */
   summary() {
     const fields: Record<string, string> = {}
-    for (const k of [...this.descriptors.keys()].sort((a, b) => cmpKey(unK(a), unK(b))))
-      fields[unK(k).join('/')] = hex8(this.descriptors.get(k)!)
+    for (const k of [...this.descriptors.keys()].sort((a, b) => cmpKey(unK(a), unK(b)))) {
+      const [m, s] = unK(k)
+      if (m !== this.core || !DST_SYMS.includes(s)) fields[`${m}/${s}`] = hex8(this.descriptors.get(k)!)
+    }
+    const lfoDsts: Record<string, string> = {}
+    for (const s of Object.keys(this.lfoDsts).sort()) lfoDsts[s] = hex8(this.lfoDsts[s])
     return {
       id: hex8(this.id), ancestors: this.ancestors.map(hex8), generations: this.generations, fields,
       parked: this.parked.map(([k, d]) => `${unK(k).join('/')} ${hex8(d)}`),
+      lfo_dsts: lfoDsts,
       codes: this.codeEntries.map(toHex), ccs: this.ccEntries.map(toHex), inits: this.initEntries.map(toHex),
       handles: this.handleEntries.map(toHex), notes: this.notes, store: toHex(this.bytes),
     }
@@ -413,7 +449,7 @@ export function allocate(base: Base, prev: State | null, want: Want): Placed {
   if (st === null) throw new ModError('.store: a bad state')
   const oldId = st.id
   const wantF = new Map<string, [string, number, number]>()
-  for (const [mid, sym, scope, bits] of want.decls) {
+  for (const [mid, sym, scope, bits] of [...want.decls, ...base.dstFields(want.decls, want.lfos)]) {
     if ([...wantF.keys()].some(k => unK(k)[1] === sym)) throw new ModError(`the storage field ${sym} is declared by two mods`)
     wantF.set(K(mid, sym), [scope, bits, want.inits.get(K(mid, sym)) ?? 0])
   }
@@ -503,9 +539,10 @@ export function allocate(base: Base, prev: State | null, want: Want): Placed {
   codes(st, base, want.locks, new Set(kept.map(f => K(f.mod, f.sym))), back, notes)
   ccs(st, base, want.ccs, new Set(fields.filter(f => f.scope === 'kit').map(f => K(f.mod, f.sym))), notes)
   const scopeOf = new Map(fields.map(f => [K(f.mod, f.sym), f.scope]))
+  const placed = new Set(fields.filter(f => f.mod === base.core).map(f => f.sym))
   for (const k of [...want.lfos].sort((a, b) => cmpKey(unK(a), unK(b)))) {
     const sc = scopeOf.get(k)!
-    if (!base.lfoDst(sc)) {
+    if (!base.lfoDst(sc) && !placed.has(dstSym(sc))) {
       const [m, s] = unK(k)
       notes.push(`${m} ${s}: not an LFO destination on this build, which places no ${sc === 'sound' ? store.LOCK_DST : store.FX_LOCK_DST}`)
     }

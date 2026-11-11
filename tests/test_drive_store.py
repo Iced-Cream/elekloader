@@ -19,10 +19,10 @@ ROOM = {'sound': 56, 'kit': 64, 'global': 40, 'track': 16, 'pattern': 32, 'proje
 FID = 0x5a17c0de
 
 
-def base(used=None, gen=None, codes=(), ccs=(), inits=0, spare=32, fid=FID, room=None):
+def base(used=None, gen=None, codes=(), ccs=(), inits=0, spare=32, fid=FID, room=None, live=False):
     used, gen, room = used or {}, gen or {}, dict(ROOM, **(room or {}))
     return ds.Base(DEV, {s: (room[s], used.get(s, 0), gen.get(s, 1)) for s in store.SCOPES}, fid, [0x1234],
-                   codes, ccs, inits, {t: spare for t in ds.TABLES})
+                   codes, ccs, inits, {t: spare for t in ds.TABLES}, live_dst=live)
 
 
 def mod(ident, *fields):
@@ -35,6 +35,7 @@ def f(sym, scope, bits, **kw):
 
 DUCK = mod('duck', f('duck_src', 'kit', 4, lock=True, cc=True), f('duck_amt', 'kit', 28, lock=True, init=5))
 LFO = mod('lfo-rnd', f('lr_a', 'sound', 16, lock=True, lfo=True))
+KLFO = mod('kit-lfo', f('kl_a', 'kit', 8, lock=True, lfo=True))
 FX = mod('fx-sends', f('fx_k', 'kit', 25), f('fx_k2', 'kit', 24), f('fx_s', 'sound', 7, lock=True, cc=True))
 VDAC = mod('voice-dac', f('vd_s', 'sound', 32), f('vd_s2', 'sound', 7), f('vd_g', 'global', 1))
 
@@ -185,6 +186,31 @@ def test_lfo_flag_only_where_the_build_places_the_destination():
     has = base(codes=[(1 << 28 | 3 << 22, 42 | store.LFO_FLAG)])
     p = place(has, None, LFO)
     assert int.from_bytes(p.code_entries[0][4:], 'big') == 127 | store.LFO_FLAG
+
+
+def test_a_live_core_places_its_lfo_fields_only_for_lfo_fields():
+    p = place(base(live=True), None, DUCK)                           # no "lfo" field: nothing of the core's
+    assert p.lfo_dsts == {} and not any(k[0] == 'core' for k in p.descriptors)
+    p = place(base(live=True), None, DUCK, LFO)
+    d = p.descriptors[('core', store.LOCK_DST)]
+    assert p.lfo_dsts == {'sound': d} and d >> 28 == 1 and d >> 22 & 63 == 7
+    assert ('core', store.FX_LOCK_DST) not in p.descriptors          # duck's kit fields are no LFO's
+    mine = p.descriptors[('lfo-rnd', 'lr_a')].to_bytes(4, 'big')
+    assert [int.from_bytes(e[4:], 'big') & store.LFO_FLAG for e in p.code_entries if e[:4] == mine] == [store.LFO_FLAG]
+    p2 = place(base(live=True), p.state, DUCK)                      # lfo-rnd gone: the core's field parks too
+    assert p2.lfo_dsts == {} and any(x[0] == ('core', store.LOCK_DST) for x in p2.parked)
+    p3 = place(base(live=True), p2.state, DUCK, LFO)                # and comes back to its bits
+    assert p3.lfo_dsts == {'sound': d}
+    p = place(base(live=True), None, KLFO)
+    assert set(p.lfo_dsts) == {'kit'}
+    # the flashed build places it itself: the +Drive needs none
+    p = place(base(live=True, codes=[(1 << 28 | 3 << 22, 42 | store.LFO_FLAG)]), None, LFO)
+    assert p.lfo_dsts == {} and int.from_bytes(p.code_entries[0][4:], 'big') & store.LFO_FLAG
+
+
+def test_the_core_s_lfo_field_counts_in_the_room():
+    assert ds.fit(base(), ds.Want([LFO, VDAC])) == []                # 16 + 39 of 56 sound bits
+    assert ds.fit(base(live=True), ds.Want([LFO, VDAC])) == [('voice-dac', 'sound', 6)]    # and 7 more
 
 
 def test_ccs_come_from_the_pool_s_end_and_a_kit_field_skips_the_fx_channel_s():
