@@ -14,7 +14,9 @@
  *     CUT18 (the most cut), none again.
  *   - A bottom bar (rows 56..63, inverted): "USB S<step> H<held> C<checks>
  *     G<setting's step at boot>", core_usb_in_step, 1 while this mod holds
- *     it, the checks passed.
+ *     it, the checks passed. Only on the main screen with nothing over it
+ *     (core_stock_overlay 0), so a menu's rows (AUDIO ROUTING's USB TO
+ *     MAIN) stay readable.
  */
 #include <stdint.h>
 #include "analog-rytm-mk2/usbin.h"
@@ -88,6 +90,8 @@ void ug_draw(void *bmp, void *ctrl)
     uint8_t *p = *(uint8_t **)((uint8_t *)bmp + 16);
     int x;
     (void)ctrl;
+    if (core_stock_overlay())
+        return;
     for (x = 0; x < 128; x++)
         p[8 * x] |= 0xff;   /* rows 56..63: byte 7 - 63 / 8 = 0 */
     o = put(o, "USB S");
