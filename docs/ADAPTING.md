@@ -2725,7 +2725,9 @@ const struct smpl_machine my_smpl = {
   voice would have started its sample. Stock's sample stays silent there.
   0 for none: the page changes and the sample layer is silent.
 - `knobs`: per knob, as a knob face (above), plus `text(buf, value)` for
-  the value's text, 0 for a number.
+  the value's text, 0 for a number. Choosing the machine writes each
+  ranged knob's `def`, except into SMP's word (index 19), which keeps
+  the sample; choosing stock writes stock's SMPL defaults.
 
 The ids come from the build's lockfile (docs/FORMAT.md, "Id pools"), so a
 saved sound finds its machine in the next build. Choosing a machine
