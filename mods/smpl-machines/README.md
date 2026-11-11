@@ -16,8 +16,9 @@ list TRK + SMPL opens.
 | | |
 |---|---|
 | needs | core-ar2 0.15 or later, with knob faces (`core_knob_faces`) and `core_param_set`; `resources` says 0.13, the core on this branch, until that core exists |
-| sites | 3: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs; the entry of the audio side's routine that puts a sound on a track, 0x4011f60a (the kit's sound, or a sound lock's pool sound); and the sound setup menu's build, 0x400ef184, after its MACHINE row |
-| exports | `smpl_track_machine` |
+| sites | 4: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs; the entry of the audio side's routine that puts a sound on a track, 0x4011f60a (the kit's sound, or a sound lock's pool sound); the sound setup menu's build, 0x400ef184, after its MACHINE row; and stock's SRC machine setter's entry, 0x400bd1ba, which it wraps |
+| exports | `smpl_track_machine`; `smpl_face`, `smpl_text`, `smpl_c_get` and `smpl_c_delta` for smpl-knob-c |
+| imports | `smpl_knob_c`, weakly: smpl-knob-c's record (below) |
 | declares | `smpl_machines`, the machines (`elekloader/sdk/include/analog-rytm-mk2/smpl.h`); the id pool `smpl_machines`, ids 0..29 |
 | storage | `smpl_choice`, 5 bits a sound: 0 AUTO, 1 stock, 2 + id a machine |
 | RAM | 2.6 KB code, 7.8 KB data |
@@ -34,7 +35,8 @@ name, look, range, default, value text). docs/ADAPTING.md, "SMPL machines
 Which machine a sound runs:
 
 1. **Required**: one whose `bind` is `SMPL_REQUIRED` for the sound's SRC
-   machine. The menu row then shows it and doesn't turn.
+   machine. The menu row then shows it and doesn't turn. A required machine
+   is never offered in the row or the list: only its SRC machine runs it.
 2. **Chosen**: the sound's `smpl_choice`, picked in the sound setup menu's
    SMPL MACHINE row, under MACHINE, or in the list SMPL opens while TRK is
    held: AUTO, STOCK, then the machines the track's voice may run. The list
@@ -43,16 +45,31 @@ Which machine a sound runs:
    knobs' values as they were. With a required machine, or no machines,
    TRK + SMPL is stock's.
 
-A choice that changes the machine the sound runs writes the new machine's
-defaults, as a knob turn writes them (`core_param_set`): a machine's into
-its knobs that have their own range (`min < max`), stock's from its own
-SMPL page records. SMP's word (index 19) is never written, so the sound
-keeps its sample.
 3. **Auto**: on AUTO, one whose `bind` is `SMPL_DEFAULT` for the SRC
    machine, else stock's.
 
 A machine whose `voices` leave out the track's voice is not offered, and a
 sound that names it plays stock's.
+
+A change of the machine a sound runs, by a choice or by a change of its SRC
+machine, writes the new machine's defaults, as a knob turn writes them
+(`core_param_set`): a machine's into its knobs that have their own range
+(`min < max`), stock's from its own SMPL page records. SMP's word (index
+19) is never written, so the sound keeps its sample.
+
+## Knob C
+
+A machine's page shows its knobs in record order, so its knob C is SMP's
+word, the sample slot stock plays. A machine that leaves knob C blank, or
+uses it for the sample, needs nothing more. One that needs knob C for
+something else sets `SMPL_OWN_C` in its `flags`, and its mod lists
+`smpl-knob-c` in `requires`: that companion (mods/smpl-knob-c) holds one
+lockable 7-bit sound field and one knob id, which every such machine
+shares, as a sound runs one machine at a time. Knob C then shows that knob
+id, with the machine's face; its value is the field, with p-locks, scenes,
+performances, the LFO, routes and a MIDI CC from core, and the engine gets
+it in `words[2]` (`core_param_value`). A build without smpl-knob-c takes
+none of these bits, and knob C stays SMP's word.
 
 ## How it works
 
@@ -75,5 +92,10 @@ sound that names it plays stock's.
   sound's SMPL machine (the choice is a sound field, so it travels with the
   sound). Each UI tick (`ev_tick`, order 40) it also works out the current
   kit's machines, which the page and a track with no sound noted yet use.
-
-
+- **SRC machine changes.** Stock's SRC machine setter (0x400bd1ba: sound,
+  machine, track, flag) is every route to a new SRC machine: its stepper
+  and list, MIDI CC 15 and NRPN, a page's paste and clear, Overbridge.
+  smpl-machines wraps it: it notes the SMPL machine the sound runs, runs
+  stock's body as a call (its link and movem, then 0x400bd1c2), and writes
+  the new SMPL machine's defaults if the change changed it. It reads the
+  machine after the call, since stock can return without writing.

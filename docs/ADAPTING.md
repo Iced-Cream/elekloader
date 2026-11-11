@@ -2021,7 +2021,9 @@ const struct core_knob_faces my_faces = {39, 46, my_face};
   it is next turned or locked.
 
 The value's text is a `core_params` entry's, which may answer stock ids.
-The linker refuses an entry whose ids reach 469..554.
+A mod's own ids (555 up) take faces too, for a knob whose value the mod
+keeps but whose face changes with the sound (smpl-knob-c's knob C). The
+linker refuses an entry whose ids reach 469..554.
 
 ### Knob looks (core-ar2 0.13, Analog Rytm MKII)
 
@@ -2717,17 +2719,21 @@ const struct smpl_machine my_smpl = {
   is left out is not offered it.
 - `bind`, `src`: `SMPL_FREE` is chosen in the sound setup menu's SMPL
   MACHINE row or the list TRK + SMPL opens only; `SMPL_DEFAULT` runs on AUTO for sounds of SRC machine
-  `src`; `SMPL_REQUIRED` always runs for them, and the row doesn't turn.
+  `src`; `SMPL_REQUIRED` always runs for them, is never offered, and the row doesn't turn.
   `src` is a slot, `CORE_MACHINE(i)` for a mod's own SRC machine.
 - `engine`: called in the audio interrupt once a block for each voice that
   runs the machine, with the track's engine words for indices 17..24
   (value << 8, after p-locks, slides and the LFO) and `trig` 1 when the
   voice would have started its sample. Stock's sample stays silent there.
   0 for none: the page changes and the sample layer is silent.
+- `flags`: `SMPL_OWN_C` gives knob C a value of its own instead of SMP's
+  word (index 19), the sample slot; the mod then lists `smpl-knob-c` in
+  `requires`, whose one field every such machine shares
+  (mods/smpl-machines/README.md, "Knob C"). 0 otherwise.
 - `knobs`: per knob, as a knob face (above), plus `text(buf, value)` for
-  the value's text, 0 for a number. Choosing the machine writes each
-  ranged knob's `def`, except into SMP's word (index 19), which keeps
-  the sample; choosing stock writes stock's SMPL defaults.
+  the value's text, 0 for a number. A change to the machine, chosen or by
+  the SRC machine, writes each ranged knob's `def`, except into SMP's word,
+  which keeps the sample; a change to stock writes stock's SMPL defaults.
 
 The ids come from the build's lockfile (docs/FORMAT.md, "Id pools"), so a
 saved sound finds its machine in the next build. Choosing a machine

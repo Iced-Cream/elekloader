@@ -1,6 +1,6 @@
 {
  "id": "smpl-machines",
- "version": "0.1",
+ "version": "0.2",
  "title": "SMPL machines",
  "category": "Framework",
  "license": "GPL-2.0-or-later",
@@ -13,13 +13,15 @@
  "resources": {"core": "0.13"},
  "requires": ["core"],
  "sources": ["smpl.c", "gate.s"],
- "defsym": {"SAMPLE_INTAKE": "0x4011c1e0", "APPLY_BODY": "0x4011f612", "STRING_INIT": "0x401bcff0"},
+ "defsym": {"SAMPLE_INTAKE": "0x4011c1e0", "APPLY_BODY": "0x4011f612", "STRING_INIT": "0x401bcff0", "SRC_BODY": "0x400bd1c2"},
  "sites": [
   {"addr": "0x40121134", "stock": "4eb94011c1e0", "op": "jsr", "target": "smpl_gate_s"},
   {"addr": "0x4011f60a", "stock": "4feffff048d7041c", "op": "jmp", "target": "smpl_apply_s"},
-  {"addr": "0x400ef184", "stock": "4e954fef0020", "op": "jsr", "target": "smpl_menu_s"}
+  {"addr": "0x400ef184", "stock": "4e954fef0020", "op": "jsr", "target": "smpl_menu_s"},
+  {"addr": "0x400bd1ba", "stock": "4e56ffd848d71c7c", "op": "jmp", "target": "smpl_src_s"}
  ],
- "exports": ["smpl_track_machine"],
+ "exports": ["smpl_track_machine", "smpl_face", "smpl_text", "smpl_c_get", "smpl_c_delta"],
+ "weak": ["smpl_knob_c"],
  "collections": {"smpl_machines": 4},
  "subscribe": [{"event": "ev_tick", "fn": "smpl_tick", "order": 40}, {"event": "ev_key", "fn": "smpl_key", "order": 40}],
  "contribute": [
