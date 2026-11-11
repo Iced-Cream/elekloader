@@ -1,0 +1,18 @@
+#!/bin/sh
+# Builds the confirming Sidecar test image SCF1 from this branch.
+# usage: tests/sidecar-confirm/build.sh <stock 1.74 .syx> <out dir> [<lockfile to start from>]
+# analoghealth 1.3 (its own repo) goes in <out dir>/elemods as analoghealth-1.3.elemod
+set -e
+S=$1; O=$2; R=$(cd "$(dirname "$0")/../.." && pwd); H=$R/tests/sidecar-combined
+mkdir -p "$O/elemods" "$O/os"; E=$O/elemods
+cd "$R"
+for d in mods/core-ar2 mods/smpl-machines examples/voiceio-check-ar2 \
+         "$H/check-mods/bcnt" "$H/check-mods/smck"; do
+  python3 -m elekloader.sdk.build "$d" --stock "$S" --out "$E"
+done
+rm -rf "${E:?}"/*.work
+[ -n "$3" ] && cp "$3" "$O/os/SCF1.lock.json"
+python3 -m elekloader.patch --stock "$S" --mod "$E/core-0.13.elemod" --mod "$E/analoghealth-1.3.elemod" \
+  --mod "$E/voiceio-check-0.1.elemod" --mod "$E/bcnt-0.1.elemod" --mod "$E/smpl-machines-0.1.elemod" \
+  --mod "$E/smck-0.1.elemod" --out "$O/os/SCF1.syx" --lockfile "$O/os/SCF1.lock.json" --version SCF1
+cd "$O" && sha256sum os/*.syx elemods/*.elemod
