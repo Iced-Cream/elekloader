@@ -37,6 +37,9 @@
 #define WORDS(t) ((const int16_t *)(0x8000f7a8 + 0x54 * (t)))   /* a track's engine words, by sound index */
 #define STOCK_PAGE_SAMPLE 4             /* the SAMPLE view's pages: 4, and 5 (the same ids) */
 #define STOCK_PAGE_SAMPLE2 5
+#define PLAIN_DIAL 41                   /* BR's record: a plain 0..127 dial, the look of a knob
+                                         * with its own range and no look (the record under it
+                                         * may draw on another range: TUN's is +-24) */
 
 STORE_FIELD(smpl_choice);
 
@@ -163,7 +166,7 @@ static void build(void)
             pages[i].ids[k] = !n->label ? 0 : k == KNOB_C && own_c(m) ? KNOB_C_ID : FIRST_REC + k;  /* 0: an empty cell */
             f->label = n->label ? n->label : "";
             f->name = n->name ? n->name : f->label;
-            f->look = n->look;
+            f->look = n->look || (k == KNOB_C && own_c(m)) || n->min >= n->max ? n->look : PLAIN_DIAL;
             f->ui = 0;
             f->min = n->min;
             f->max = n->max;
