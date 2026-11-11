@@ -276,12 +276,20 @@ void core_voice_off(uint32_t s, uint32_t owner)
     }
 }
 
+#define CHECK_MARK_LONGS 8
 /* [0]: 1 while the block makes a checked call; analoghealth reads and clears
  * it at render-out to time checked and unchecked blocks apart. The rest is
- * padding: with the code this adds to core (16 bytes) and to analoghealth
- * dsp-settings-check-split (84), 28 bytes here move .bss by 128, so
- * frame_before keeps the offset it had before in a 16-byte cache line (14) */
-extern uint32_t core_check_mark[7];
+ * padding, sized so frame_before keeps the offset it has in PPF1 and ASF1 in
+ * a 16-byte cache line (14): 8 longs with the ASF3 trace ring below */
+extern uint32_t core_check_mark[CHECK_MARK_LONGS];
+/* ASF3 trace: per checked call, DTIM0 ticks (132 MHz) of (a) the frame copy, the
+ * record save and idle_clear, (b) the machine call, (c) the record and frame
+ * compare; then slot << 24 | machine << 16 | block & 0xffff. core_check_at is
+ * the next entry (mod 64), counting all calls. Defined last with the mark. */
+#define CHECK_RING 64
+extern uint32_t core_check_ring[CHECK_RING][4];
+extern uint32_t core_check_at;
+#define DTCN0 (*(volatile uint32_t *)0xfc07000c)
 
 /* idle.s, the skip on and the gain small: 0 skips the call, else the
  * pointer runs it */
@@ -368,11 +376,14 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     uint32_t rec0[8], g0 = g[0], g1 = g[1];
     uint32_t rec_n = (RECORD_FREE >> mach & 1) ? 2 : 8;
     core_check_mark[0] = 1;              /* analoghealth: this block made a checked call */
+    uint32_t t0 = DTCN0;
     core_frame_save(frame_before);
     for (uint32_t i = 0; i < rec_n; i++)
         rec0[i] = rec[i];
     idle_clear(s);
+    uint32_t t1 = DTCN0;
     ((void (*)(uint32_t, volatile uint32_t *, uint32_t, uint32_t))ptr)(s, FRAME, PARAM_PTR[s], pitch_of(owner));
+    uint32_t t2 = DTCN0;
     int changed = 0;
     for (uint32_t i = 0; i < rec_n; i++)
         changed |= rec0[i] != rec[i];
@@ -396,6 +407,13 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
             else
                 replay_new[n++] = off << 8 | now >> 24;
         }
+    }
+    {
+        uint32_t *e = core_check_ring[core_check_at++ & (CHECK_RING - 1)];
+        e[0] = t1 - t0;
+        e[1] = t2 - t1;
+        e[2] = DTCN0 - t2;
+        e[3] = s << 24 | (mach & 0xff) << 16 | (core_block & 0xffff);
     }
     if (changed) {
         set(v, BLOCKED, BLOCKED_BLOCKS, 0);
@@ -427,4 +445,6 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     return 0;
 }
 
-uint32_t core_check_mark[7];
+uint32_t core_check_mark[CHECK_MARK_LONGS];
+uint32_t core_check_ring[CHECK_RING][4];
+uint32_t core_check_at;
