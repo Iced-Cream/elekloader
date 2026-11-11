@@ -131,6 +131,12 @@ uint8_t core_voice_due;                     /* slots skipped since their last SY
 static uint32_t replay[8][REPLAY], replay_new[REPLAY];
 static uint8_t replays[8];
 static uint32_t frame_before[FRAME_LONGS];
+/* idle.s: the frame copied by movem, and a bit per 8-long chunk (31 chunks)
+ * that differs from the copy (C's two loops were most of the checked call's
+ * cost, about 5 and 14 instructions a long) */
+extern void core_frame_save(uint32_t *dst);
+extern uint32_t core_frame_diff(const uint32_t *before);
+_Static_assert(FRAME_LONGS == 246, "idle.s copies 41 x 6 longs and checks 30 x 8 + 6");
 static uint8_t snapped;
 /* blocks skipped, for the emulator checks and a meter */
 uint32_t core_voice_skips;
@@ -354,8 +360,7 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     volatile uint32_t *rec = RECORD(s), *g = GAIN(s), *ck = CLICK(s);
     uint32_t rec0[8], g0 = g[0], g1 = g[1];
     uint32_t rec_n = (RECORD_FREE >> mach & 1) ? 2 : 8;
-    for (int i = 0; i < FRAME_LONGS; i++)
-        frame_before[i] = FRAME[i];
+    core_frame_save(frame_before);
     for (uint32_t i = 0; i < rec_n; i++)
         rec0[i] = rec[i];
     idle_clear(s);
@@ -364,17 +369,25 @@ uint32_t core_voice_quiet(uint32_t s, uint32_t owner, uint32_t ptr)
     for (uint32_t i = 0; i < rec_n; i++)
         changed |= rec0[i] != rec[i];
     uint32_t n = 0;
-    for (uint32_t i = 0; i < FRAME_LONGS && !changed; i++) {
-        uint32_t off = 4 * i, was = frame_before[i], now = FRAME[i];
-        uint32_t d = (was ^ now) & ~free_bits(mach, s, off);
-        if (!d)
+    /* only the 8-long chunks holding a long that changed are looked at long
+     * by long; every long of another chunk is unchanged, which the rule below
+     * passes over anyway, so the result is the same */
+    uint32_t diff = changed ? 0 : core_frame_diff(frame_before);
+    for (uint32_t c = 0; diff && !changed; c++, diff >>= 1) {
+        if (!(diff & 1))
             continue;
-        /* one byte, the long's first, set from 0 where the render clears */
-        if (d & 0xffffffU || was >> 24 || off < CLEARED_FIRST
-            || off > CLEARED_LAST || (off - CLEARED_FIRST) % 8 || n == REPLAY)
-            changed = 1;
-        else
-            replay_new[n++] = off << 8 | now >> 24;
+        for (uint32_t i = 8 * c; i < 8 * c + 8 && i < FRAME_LONGS && !changed; i++) {
+            uint32_t off = 4 * i, was = frame_before[i], now = FRAME[i];
+            uint32_t d = (was ^ now) & ~free_bits(mach, s, off);
+            if (!d)
+                continue;
+            /* one byte, the long's first, set from 0 where the render clears */
+            if (d & 0xffffffU || was >> 24 || off < CLEARED_FIRST
+                || off > CLEARED_LAST || (off - CLEARED_FIRST) % 8 || n == REPLAY)
+                changed = 1;
+            else
+                replay_new[n++] = off << 8 | now >> 24;
+        }
     }
     if (changed) {
         set(v, BLOCKED, BLOCKED_BLOCKS, 0);
