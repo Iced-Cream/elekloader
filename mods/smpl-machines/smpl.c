@@ -152,6 +152,17 @@ static const struct smpl_machine *current_machine(void)
     return machine_of(core_current_sound_item(), core_current_track());
 }
 
+/* a knob whose own range differs from the record's under it: the record's
+ * look draws on the record's range (TUN's +-24 stops short at 127), so
+ * it takes a plain dial; one with the record's range keeps the record's look
+ * (LEV's bar) */
+#define RECORD_RANGE(id) ((const int32_t *)(0x401bfbc8 + 0x34 * (id) + 8))
+static int misdrawn(int32_t id, const struct smpl_knob *n)
+{
+    const int32_t *r = RECORD_RANGE(id);
+    return n->min < n->max && (n->min != r[0] || n->max != r[1]);
+}
+
 static void build(void)
 {
     int i, k;
@@ -166,7 +177,7 @@ static void build(void)
             pages[i].ids[k] = !n->label ? 0 : k == KNOB_C && own_c(m) ? KNOB_C_ID : FIRST_REC + k;  /* 0: an empty cell */
             f->label = n->label ? n->label : "";
             f->name = n->name ? n->name : f->label;
-            f->look = n->look || (k == KNOB_C && own_c(m)) || n->min >= n->max ? n->look : PLAIN_DIAL;
+            f->look = n->look || (k == KNOB_C && own_c(m)) || !misdrawn(FIRST_REC + k, n) ? n->look : PLAIN_DIAL;
             f->ui = 0;
             f->min = n->min;
             f->max = n->max;
