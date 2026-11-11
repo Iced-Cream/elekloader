@@ -2728,9 +2728,9 @@ const struct smpl_machine my_smpl = {
   the value's text, 0 for a number.
 
 The ids come from the build's lockfile (docs/FORMAT.md, "Id pools"), so a
-saved sound finds its machine in the next build. Defaults written on
-choosing a machine wait for core's `core_param_set`; until then `def` is
-the knob's default for a new sound and the pop-up.
+saved sound finds its machine in the next build. Choosing a machine
+writes each `def` of a knob with `min < max` into the sound
+(`core_param_set`).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
