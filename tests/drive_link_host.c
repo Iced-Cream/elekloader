@@ -11,7 +11,8 @@
  * DL_HOST_CHECK set it runs the MODS page's dl_check instead of dl_link: the same summary
  * from the check's own records, plus each file's version. A file MODS_DIR/.store is the
  * +Drive storage's /mods/.store as the boot reads it; the link's new one goes to OUT.bin.store
- * (on a build that keeps +Drive storage). */
+ * (on a build that keeps +Drive storage). With DL_HOST_TOP set, the stage is at the top of the
+ * area (dl_stage_top): the link gets no buffer, and a check lays out with the reservation. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -137,6 +138,7 @@ int main(int argc, char **argv)
         printf("{\"skip\": \"count\"}\n");
         return 0;
     }
+    dl_stage_top = getenv("DL_HOST_TOP") != 0;
     if (getenv("DL_HOST_CHECK")) {
         static struct dl_status st[DL_MAX_MODS];
         static char det[DL_MAX_MODS][32], ver[DL_MAX_MODS][DL_VER_MAX];
@@ -180,7 +182,8 @@ int main(int argc, char **argv)
     }
     snprintf(path, sizeof path, "%s/.store", dir);
     dl_store_prev = slurp(path, &dl_store_prev_n);
-    loaded = dl_link(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging);
+    /* top-staging: the link reads into the area itself */
+    loaded = dl_link(strtoul(argv[5], 0, 0), ch, k, dl_stage_top ? 0 : staging, dl_stage_top ? 0 : sizeof staging);
     f = fopen(argv[7], "wb");
     fwrite(ram, 1, ram_len, f);
     fclose(f);

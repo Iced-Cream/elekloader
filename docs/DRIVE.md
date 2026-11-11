@@ -37,7 +37,13 @@ The link runs in this order:
    4-aligned. Past the area's end, the last living mod is refused and the
    check runs again. Then the living mods' storage fields are placed from
    `/mods/.store` ("+Drive storage"), which gives each field's symbol its
-   descriptor.
+   descriptor. With top-staging (a prototype, off in every build:
+   `dl_stage_top`, `Build.stage_top`), the link reads each file into the
+   area itself, and the layout places the mods by file length, the longest
+   first (ties in id order), and also refuses when a mod's file, read just
+   under the area's end, would reach below the end of its own `.run`; the
+   refusal's KB is the worse of the two overruns. Pass 2 then runs in that
+   order, and every `.bss` and the bytes above it are zeroed after it.
 4. *Pass 2*, in id order: `.run` decoded into place (a `stock` part is
    copied from the running OS), `.bss` zeroed, relocations applied (a
    symbol is the mod's own first, then a global name, then `core_zero` for

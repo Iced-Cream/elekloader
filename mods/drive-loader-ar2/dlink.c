@@ -52,6 +52,7 @@ struct dmod {
     u16 id, version, core;               /* arena offsets (NONE: not given) */
     u32 run_len, run_align, bss_len, bss_align;
     u32 run_base, bss_base;
+    u32 file_len;                        /* its file's length, from pass 1 */
     struct list imports, weak, requires, conflicts, names;
     u16 exp_first, exp_n;                /* its exports in syms */
     u16 ctr_first, ctr_n;                /* its contributions */
@@ -113,6 +114,11 @@ static struct {
     int nmods;
     struct dmod *mods;                   /* n of them */
     u16 *order;                          /* mods by id */
+    u16 *place;                          /* the living mods in placement order (layout) */
+    int nplace;
+    u32 runs_end;                        /* the layout's .run end, aligned 4: .bss starts here */
+    u32 buf_at;                          /* the buffer's address when it is in the area, else 0 */
+    u32 read_hi;                         /* the highest end a read into the area reached */
     u32 arena_n, lists_n, nsyms, nlocals, nctr, nent, edata_n, nerel, nsite, sdata_n;
     u32 flashed_syms;
     /* the pools' sizes (dl.h, DL_POOL_*; the merge's from the descriptor) */
@@ -160,6 +166,7 @@ const u8 *dl_store_prev;
 u32 dl_store_prev_n;
 struct ds_out dl_store_out;
 u32 dl_used_lo, dl_used_hi;
+u8 dl_stage_top;
 struct dl_site *dl_sites;
 u8 *dl_site_orig;
 u32 dl_sites_n;
@@ -1506,16 +1513,49 @@ static int check_round(void)
 /* ---- layout ------------------------------------------------------------------------------- */
 static u32 align(u32 v, u32 a) { return (v + a - 1) & ~(a - 1); }
 
-/* -> 1 when it fits; else the last living mod is refused and 0. */
+/* Where pass 2 reads a mod's file with the stage at the top: the highest word-aligned
+ * address it fits below the area's end. */
+static u32 stage_at(const struct dmod *m)
+{
+    u32 room = L.area_hi - L.area_lo;
+    return m->file_len > room ? L.area_lo : (L.area_hi - m->file_len) & ~3u;
+}
+
+/* The living mods in placement order: id order, or with the stage at the top, the longest
+ * file first, ties in id order (a stable insertion sort). Swapping two neighbours so that the
+ * longer file goes first never raises the highest point a file reaches, so this order gives
+ * the lowest peak. Exports, tables, sites and inits keep the id order. -> how many. */
+static int placement(void)
+{
+    int i, k, n = 0;
+    for (i = 0; i < L.nmods; i++) {
+        u16 x = L.order[i];
+        if (!L.mods[x].alive)
+            continue;
+        k = n++;
+        while (dl_stage_top && k > 0 && L.mods[L.place[k - 1]].file_len < L.mods[x].file_len) {
+            L.place[k] = L.place[k - 1];
+            k--;
+        }
+        L.place[k] = x;
+    }
+    L.nplace = n;
+    return n;
+}
+
+/* Every .run in placement order from the area's start, then every .bss. With the stage at the
+ * top, each mod's file must also fit between the end of its own .run and the area's end, as
+ * pass 2 reads it there after writing the code below. -> 1 when it fits; else the last living
+ * mod in id order is refused, with the KB the worst of those is over, and 0. */
 static int layout(void)
 {
-    u32 a = L.area_lo;
-    int i, last = -1;
-    for (i = 0; i < L.nmods; i++) {
-        struct dmod *m = &L.mods[L.order[i]];
-        if (!m->alive)
-            continue;
-        last = i;
+    u32 a = L.area_lo, over = 0;
+    int i, last = -1, n = placement();
+    for (i = 0; i < L.nmods; i++)
+        if (L.mods[L.order[i]].alive)
+            last = i;
+    for (i = 0; i < n; i++) {
+        struct dmod *m = &L.mods[L.place[i]];
         if (m->run_len) {
             a = align(a, m->run_align < 4 ? 4 : m->run_align);
             m->run_base = a;
@@ -1523,12 +1563,13 @@ static int layout(void)
         } else {
             m->run_base = 0;
         }
+        if (dl_stage_top && a > stage_at(m) && a - stage_at(m) > over)
+            over = a - stage_at(m);
     }
     a = align(a, 4);
-    for (i = 0; i < L.nmods; i++) {
-        struct dmod *m = &L.mods[L.order[i]];
-        if (!m->alive)
-            continue;
+    L.runs_end = a;
+    for (i = 0; i < n; i++) {
+        struct dmod *m = &L.mods[L.place[i]];
         if (m->bss_len) {
             a = align(a, m->bss_align < 4 ? 4 : m->bss_align);
             m->bss_base = a;
@@ -1538,8 +1579,9 @@ static int layout(void)
         }
     }
     a = align(a, 4);
-    if (a > L.area_hi) {
-        u32 over = a - L.area_hi;
+    if (a > L.area_hi && a - L.area_hi > over)
+        over = a - L.area_hi;
+    if (over) {
         refuse(&L.mods[L.order[last]], DL_R_ROOM, (over + 1023) / 1024, 0);
         return 0;
     }
@@ -1682,8 +1724,8 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
             }
         }
     }
-    if (m->bss_len)
-        dl_memset(DL_MEM(m->bss_base), 0, m->bss_len);
+    if (m->bss_len)                      /* with the stage in the area, a file read later may */
+        dl_memset(DL_MEM(m->bss_base), 0, m->bss_len);   /* cover it: link_set zeroes it again */
     /* relocations */
     if (k[K_RELOCS]) {
         at(&j, k[K_RELOCS], buf, len);
@@ -2016,7 +2058,7 @@ static void *take(u32 n) { return dl_alloc(n ? n : 4); }
 /* Every block begin() took goes back. */
 static void finish(void)
 {
-    static void **const p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.arena, (void **)&L.lists,
+    static void **const p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.place, (void **)&L.arena, (void **)&L.lists,
                                (void **)&L.syms, (void **)&L.sym_next, (void **)&L.sym_head, (void **)&L.locals,
                                (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
                                (void **)&L.items, (void **)&L.mdata, (void **)&L.fld, (void **)&L.fdesc,
@@ -2063,6 +2105,7 @@ static int pools(int n)
     L.SDATA = pool_n(DL_POOL_SDATA, mb, 0);
     L.mods = take((u32)n * sizeof *L.mods);
     L.order = take((u32)n * sizeof *L.order);
+    L.place = take((u32)n * sizeof *L.place);
     L.arena = take(L.ARENA);
     L.lists = take(L.LISTS * sizeof *L.lists);
     L.syms = take(L.SYMS * sizeof *L.syms);
@@ -2084,7 +2127,7 @@ static int pools(int n)
     }
     L.site = take(L.SITES * sizeof *L.site);
     L.sdata = take(L.SDATA);
-    return L.mods && L.order && L.arena && L.lists && L.syms && L.sym_next && L.locals && L.ctr
+    return L.mods && L.order && L.place && L.arena && L.lists && L.syms && L.sym_next && L.locals && L.ctr
            && L.ent && L.edata && L.erel && L.items && L.mdata && L.site && L.sdata;
 }
 
@@ -2092,6 +2135,8 @@ static int pools(int n)
 static s32 load(struct dmod *m, const struct dl_choice *ch)
 {
     s32 len = dl_read_file(ch->name, L.buf, L.max);
+    if (L.buf_at && L.buf_at + (len > 0 ? (u32)len : L.max) > L.read_hi)
+        L.read_hi = L.buf_at + (len > 0 ? (u32)len : L.max);   /* a failed read may have written */
     if (len == -1)
         return -DL_R_MISSING;
     if (len == -2)
@@ -2308,6 +2353,11 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
     L.pool = D32(0x18);
     L.area_lo = D32(D32(0x3c) + 4);
     L.area_hi = D32(D32(0x3c) + 8);
+    if (dl_stage_top && !buf) {          /* a link with the stage in the area: pass 1 from its start */
+        L.buf_at = L.area_lo;
+        L.buf = DL_MEM(L.area_lo);
+        L.max = L.area_hi - L.area_lo;
+    }
     store_base();
     for (e = 0; e < n_map(); e++)        /* the main OS ends where the boot copier starts */
         if (D16(o_map(e) + 8) == 4 && (!L.main_hi || D32(o_map(e)) < L.main_hi))
@@ -2361,6 +2411,7 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
         set_status(m, -len == DL_R_TOO_BIG ? DL_ST_REFUSED : DL_ST_DROPPED, -len, 0, 0);
         return;
     }
+    m->file_len = (u32)len;
     code = scan(m, L.buf, (u32)len, &what);
     if (code) {
         /* a file pass 1 refuses leaves nothing behind: its exports, its entries */
@@ -2639,8 +2690,11 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
     b = begin(desc, choice, n, buf, max, dl_status, dl_detail);
     if (b <= 0) {
         dl_skip_reason = b < 0 ? DL_SKIP_MEMORY : DL_SKIP_ABI;
+        if (L.read_hi > L.area_lo)       /* pass 1 read into the area */
+            dl_memset(DL_MEM(L.area_lo), 0, L.read_hi - L.area_lo);
         return 0;
     }
+    dirty_hi = L.read_hi;                /* with the stage in the area, pass 1's reads */
 
     /* check, layout and pass 2, until a pass 2 refuses nothing */
     for (rounds = 0; rounds < 4 * DL_MAX_MODS; rounds++) {
@@ -2648,6 +2702,8 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         settle();
         if (!layout())
             continue;
+        if (L.read_hi > dirty_hi)        /* an earlier round's reads at the top */
+            dirty_hi = L.read_hi;
         if (!place_store()) {
             dl_skip_reason = DL_SKIP_MEMORY;
             for (i = 0; i < L.nmods; i++)
@@ -2663,26 +2719,38 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
             dirty_hi = dl_used_hi;       /* this layout's end: zero that too */
         if (dirty_hi > dl_used_lo)
             dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
-        for (i = 0; i < L.nmods && !restart; i++) {
-            struct dmod *m = &L.mods[L.order[i]];
+        for (i = 0; i < L.nplace && !restart; i++) {   /* in address order: a file at the top */
+            struct dmod *m = &L.mods[L.place[i]];         /* never covers code already placed */
             s32 len;
             int code;
             if (!m->alive)
                 continue;
+            if (L.buf_at) {
+                L.buf_at = stage_at(m);
+                L.buf = DL_MEM(L.buf_at);
+                L.max = L.area_hi - L.buf_at;
+            }
             len = load(m, &choice[m->choice]);
             if (len < 0) {
                 refuse(m, -len, 0, 0);
                 restart = 1;
                 break;
             }
-            code = place(m, buf, (u32)len, &what);
+            code = place(m, L.buf, (u32)len, &what);
             if (code) {
                 refuse(m, code, 0, what);
                 restart = 1;
             }
         }
+        if (L.read_hi > dirty_hi)
+            dirty_hi = L.read_hi;
         if (!restart)
             break;
+    }
+    if (L.buf_at && rounds < 4 * DL_MAX_MODS) {   /* every .bss, and the files' bytes above */
+        u32 hi = dirty_hi > dl_used_hi ? dirty_hi : dl_used_hi;
+        if (hi > L.runs_end)
+            dl_memset(DL_MEM(L.runs_end), 0, hi - L.runs_end);
     }
     b = rounds < 4 * DL_MAX_MODS && bind(0);
     if (!b || !keep_sites()) {           /* never settled, past the loader's room, or no heap
