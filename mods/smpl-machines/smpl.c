@@ -255,6 +255,17 @@ static const struct core_page *smpl_info(int32_t page)
 const struct core_page_fn smpl_page_fn4 = {STOCK_PAGE_SAMPLE, smpl_info};
 const struct core_page_fn smpl_page_fn5 = {STOCK_PAGE_SAMPLE2, smpl_info};
 
+/* the SAMPLE view's page 2 (core_view_pages, a stock page's shown): stock's,
+ * or a machine that keeps stock's waveform (SMPL_WAVEFORM) */
+static int32_t smpl_page2_shown(void *view)
+{
+    const struct smpl_machine *m = current_machine();
+    (void)view;
+    return !m || (m->flags & SMPL_WAVEFORM);
+}
+
+const struct core_view_page smpl_view_page2 = {CORE_VIEW_SAMPLE, STOCK_PAGE_SAMPLE2, smpl_page2_shown};
+
 /* also smpl-knob-c's, for its knob id: the face of the machine's knob C */
 const struct core_knob_face *smpl_face(int32_t id, void *sound)
 {

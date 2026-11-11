@@ -80,7 +80,7 @@ struct smpl_machine {
     const char *label;      /* four letters */
     uint8_t voices;         /* bit v: voice v may run it (CORE_VOICE_*, machines.h) */
     uint8_t bind;           /* SMPL_FREE, SMPL_DEFAULT or SMPL_REQUIRED, with src */
-    uint16_t flags;         /* SMPL_OWN_C; 0 */
+    uint16_t flags;         /* SMPL_OWN_C, SMPL_WAVEFORM; 0 */
     int32_t src;            /* the SRC machine (its slot: CORE_MACHINE(i), or a number) bind names */
     smpl_engine engine;     /* 0: none */
     struct smpl_knob knobs[8];  /* sound indices 17..24, records 39..46, knobs A..H */
@@ -91,6 +91,13 @@ struct smpl_machine {
  * when the companion smpl-knob-c is in the build: a mod with such a machine
  * lists "smpl-knob-c" in its "requires". Without it knob C stays SMP's word. */
 #define SMPL_OWN_C 0x0001
+
+/* (smpl-machines 0.3, core-ar2 0.15) The SAMPLE view's second page, SMPL
+ * WAVEFORM, draws stock's waveform of the sample SMP's word names. A machine
+ * that plays that sample sets SMPL_WAVEFORM to keep the page (its knobs,
+ * compact, over stock's waveform); without it the machine has one page:
+ * the SMPL key stays on it, and a view on page 2 moves back to it. */
+#define SMPL_WAVEFORM 0x0002
 
 /* smpl-knob-c's record (smpl-machines imports it weakly: zeros without it) */
 struct smpl_knob_c {
