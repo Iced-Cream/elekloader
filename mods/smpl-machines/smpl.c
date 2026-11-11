@@ -21,6 +21,7 @@
 #include "analog-rytm-mk2/moments.h"
 #include "analog-rytm-mk2/machines.h"
 #include "analog-rytm-mk2/smpl.h"
+#include "analog-rytm-mk2/lock.h"     /* core_param_value: knob C's own value */
 
 #define FIRST_REC 39                    /* the SMPL page's records: sound indices 17..24 */
 #define LAST_REC 46
@@ -38,6 +39,20 @@
 #define STOCK_PAGE_SAMPLE2 5
 
 STORE_FIELD(smpl_choice);
+
+/* knob C: SMP's word (index 19), the sample stock plays, unless the machine
+ * asks for a value of its own (SMPL_OWN_C) and the companion smpl-knob-c is
+ * in the build: then its knob id and lockable sound field (smpl.h), so
+ * p-locks, scenes, performances, the LFO, routes and MIDI come from core
+ * and the sample stays put. Without the companion the record reads zeros. */
+#define KNOB_C 2
+extern const struct smpl_knob_c smpl_knob_c;   /* weak: smpl-knob-c's */
+#define KNOB_C_ID (smpl_knob_c.id)
+
+static int own_c(const struct smpl_machine *m)
+{
+    return m && (m->flags & SMPL_OWN_C) && smpl_knob_c.id && m->knobs[KNOB_C].label;
+}
 
 extern const struct smpl_machine *const smpl_machines[];   /* zero-terminated */
 
@@ -90,6 +105,13 @@ static const struct smpl_machine *by_id(int id)
     return 0;
 }
 
+/* a choice the menu row and the list offer: not a SMPL_REQUIRED machine,
+ * which only its SRC machine runs */
+static int offered(const struct smpl_machine *m, int track)
+{
+    return m && m->bind != SMPL_REQUIRED && fits(m, track);
+}
+
 /* the machine sound s (a live sound item of track t) runs, or 0 for stock */
 static const struct smpl_machine *machine_of(const unsigned char *s, int track)
 {
@@ -138,7 +160,7 @@ static void build(void)
         for (k = 0; k < 8; k++) {
             const struct smpl_knob *n = &m->knobs[k];
             struct core_knob_face *f = &faces[i][k];
-            pages[i].ids[k] = n->label ? FIRST_REC + k : 0;     /* 0: an empty cell */
+            pages[i].ids[k] = !n->label ? 0 : k == KNOB_C && own_c(m) ? KNOB_C_ID : FIRST_REC + k;  /* 0: an empty cell */
             f->label = n->label ? n->label : "";
             f->name = n->name ? n->name : f->label;
             f->look = n->look;
@@ -203,8 +225,15 @@ void smpl_gate(uint32_t *masks)
         if (e <= 0 || e > n_machines)
             continue;
         m = smpl_machines[e - 1];
-        if (m->engine)
-            m->engine(v, (int32_t)t, WORDS(t) + 17, (int32_t)(masks[0] >> v & 1));
+        if (m->engine) {
+            int16_t w[8];
+            int k, c;
+            for (k = 0; k < 8; k++)
+                w[k] = WORDS(t)[17 + k];
+            if (own_c(m) && (c = core_param_value((int)t, smpl_knob_c.field)) != CORE_PARAM_NONE)
+                w[KNOB_C] = (int16_t)c;
+            m->engine(v, (int32_t)t, w, (int32_t)(masks[0] >> v & 1));
+        }
         masks[0] &= ~(1u << v);
         masks[1] |= 1u << v;
     }
@@ -223,13 +252,18 @@ static const struct core_page *smpl_info(int32_t page)
 const struct core_page_fn smpl_page_fn4 = {STOCK_PAGE_SAMPLE, smpl_info};
 const struct core_page_fn smpl_page_fn5 = {STOCK_PAGE_SAMPLE2, smpl_info};
 
-static const struct core_knob_face *smpl_face(int32_t id, void *sound)
+/* also smpl-knob-c's, for its knob id: the face of the machine's knob C */
+const struct core_knob_face *smpl_face(int32_t id, void *sound)
 {
     const struct smpl_machine *m;
-    int i;
-    if (id < FIRST_REC || id > LAST_REC)
+    int i, own = id && id == KNOB_C_ID;
+    if (own)
+        id = FIRST_REC + KNOB_C;
+    else if (id < FIRST_REC || id > LAST_REC)
         return 0;
     m = sound ? machine_of(sound, track_of(sound)) : current_machine();
+    if (own && !own_c(m))
+        return 0;
     i = index_of(m);
     return i < 0 ? 0 : &faces[i][id - FIRST_REC];
 }
@@ -254,13 +288,15 @@ static int put_num(char *buf, int32_t v)
     return n;
 }
 
-static int smpl_text(struct core_text *t)
+/* also smpl-knob-c's, for its knob id */
+int smpl_text(struct core_text *t)
 {
     const struct smpl_machine *m;
     const struct smpl_knob *k;
-    if (t->id < FIRST_REC || t->id > LAST_REC || !(m = current_machine()))
+    int n = t->id && t->id == KNOB_C_ID ? KNOB_C : t->id - FIRST_REC;
+    if (n < 0 || n > 7 || !(m = current_machine()))
         return CORE_TEXT_PASS;
-    k = &m->knobs[t->id - FIRST_REC];
+    k = &m->knobs[n];
     if (!k->label)
         t->buf[0] = 0;
     else if (k->text)
@@ -271,6 +307,47 @@ static int smpl_text(struct core_text *t)
 }
 
 const struct core_param smpl_params = {FIRST_REC, LAST_REC, 0, 0, smpl_text};
+
+/* knob C's own value (smpl-knob-c's core_params entry): the current
+ * sound's field, in the machine's range */
+static int c_range(int32_t *lo, int32_t *hi)
+{
+    const struct smpl_machine *m = current_machine();
+    const struct smpl_knob *n = m ? &m->knobs[KNOB_C] : 0;
+    *lo = 0;
+    *hi = 127;
+    if (!own_c(m))
+        return 0;
+    if (n->min < n->max) {
+        *lo = n->min >> 8 < 0 ? 0 : n->min >> 8;
+        *hi = n->max >> 8 > 127 ? 127 : n->max >> 8;
+    }
+    return 1;
+}
+
+int smpl_c_get(int32_t id, int32_t *value)
+{
+    unsigned char *s = core_current_sound_item();
+    int32_t lo, hi;
+    if (!id || id != KNOB_C_ID || !s || !c_range(&lo, &hi))
+        return 0;
+    *value = (int32_t)core_store_get(smpl_knob_c.field, s, 0) << 8;
+    return 1;
+}
+
+int smpl_c_delta(void *view, int32_t id, int32_t delta, int32_t func)
+{
+    unsigned char *s = core_current_sound_item();
+    int32_t lo, hi, v;
+    (void)view;
+    (void)func;
+    if (!id || id != KNOB_C_ID || !s || !c_range(&lo, &hi))
+        return 0;
+    v = (int32_t)core_store_get(smpl_knob_c.field, s, 0) +
+        (delta > 0 ? (delta + 255) / 256 : -((255 - delta) / 256));
+    core_store_set(smpl_knob_c.field, s, 0, (unsigned)(v < lo ? lo : v > hi ? hi : v));
+    return 1;
+}
 
 /* ---- the choice: AUTO, STOCK, then the machines the voice may run ------ */
 
@@ -286,7 +363,7 @@ static unsigned step_choice(unsigned c, int dir, int track)
         if (n < CHOICE_FIRST)
             return n;
         m = by_id((int)n - CHOICE_FIRST);
-        if (m && fits(m, track))
+        if (offered(m, track))
             return n;
     }
 }
@@ -345,18 +422,59 @@ static int knob_default(const struct smpl_machine *m, int k, int32_t *def)
     return 1;
 }
 
-static void choice_set(unsigned char *s, int t, unsigned c)
+/* sound s of track t now runs after: its defaults into the knobs */
+static void write_defaults(unsigned char *s, int t, const struct smpl_machine *after)
 {
-    const struct smpl_machine *before = machine_of(s, t), *after;
     int32_t def;
     int k;
-    core_store_set(STORE(smpl_choice), s, 0, c);
-    after = machine_of(s, t);
-    if (after == before)
-        return;
     for (k = 0; k < 8; k++)
         if (knob_default(after, k, &def))
             core_param_set(t, FIRST_INDEX + k, def, 0);
+    if (own_c(after) && after->knobs[KNOB_C].min < after->knobs[KNOB_C].max) {
+        def = after->knobs[KNOB_C].def >> 8;
+        core_store_set(smpl_knob_c.field, s, 0, (unsigned)(def < 0 ? 0 : def > 127 ? 127 : def));
+    }
+}
+
+static void choice_set(unsigned char *s, int t, unsigned c)
+{
+    const struct smpl_machine *before = machine_of(s, t), *after;
+    core_store_set(STORE(smpl_choice), s, 0, c);
+    after = machine_of(s, t);
+    if (after != before)
+        write_defaults(s, t, after);
+}
+
+/* gate.s, around stock's SRC machine setter 0x400bd1ba (sound, machine,
+ * track, flag), whose callers are the SRC machine's stepper, its list, MIDI
+ * CC 15 and NRPN, a page's paste and clear, and Overbridge. sound is an
+ * object whose vtable +0x28 answers the live sound item (stock writes the
+ * machine byte at its +0x68). Before: the SMPL machine the sound runs (its
+ * index + 1, 0 stock; -1 none); after: if the SRC machine's change changed
+ * it, the new one's defaults, as a choice in the row writes them. */
+#define SOUND_ITEM(o) (((uint32_t (*)(void *))(*(void ***)(o))[0x28 / 4])(o))
+
+int32_t smpl_src_before(void *sound, int32_t track)
+{
+    unsigned char *s;
+    if (!sound || (uint32_t)track >= 12 || n_machines <= 0)
+        return -1;
+    s = (unsigned char *)SOUND_ITEM(sound);
+    return s ? index_of(machine_of(s, (int)track)) + 1 : -1;
+}
+
+void smpl_src_after(void *sound, int32_t track, int32_t before)
+{
+    unsigned char *s;
+    const struct smpl_machine *after;
+    if (before < 0 || !sound || (uint32_t)track >= 12)
+        return;
+    s = (unsigned char *)SOUND_ITEM(sound);
+    if (!s)
+        return;
+    after = machine_of(s, (int)track);
+    if (index_of(after) + 1 != before)
+        write_defaults(s, (int)track, after);
 }
 
 static void choice_turn(int delta)
@@ -469,6 +587,7 @@ uint32_t smpl_menu_row(void *view)
 extern char smpl_list_label_s[];                                    /* gate.s */
 static void *list_view;
 static int16_t list_words[8];           /* knobs A..H as the list opened */
+static unsigned list_c;                  /* knob C's own value as the list opened */
 static uint32_t list_ctrl;              /* a weak hold on the open list */
 static int trk_down, smpl_taken;
 static char list_text[16];
@@ -513,6 +632,8 @@ static void list_revert(void *f, int32_t first)
     if (!s || t < 0 || t >= 12 || first < 0 || first >= CHOICE_FIRST + MAX_MACHINES)
         return;
     core_store_set(STORE(smpl_choice), s, 0, (unsigned)first);
+    if (smpl_knob_c.id)
+        core_store_set(smpl_knob_c.field, s, 0, list_c);
     for (k = 0; k < 8; k++)
         if (SOUND_WORD(s, FIRST_INDEX + k) != list_words[k])
             core_param_set(t, FIRST_INDEX + k, (uint16_t)list_words[k], 0);
@@ -544,6 +665,7 @@ static void list_open(void)
     c = core_store_get(STORE(smpl_choice), s, 0);
     for (k = 0; k < 8; k++)
         list_words[k] = SOUND_WORD(s, FIRST_INDEX + k);
+    list_c = smpl_knob_c.id ? core_store_get(smpl_knob_c.field, s, 0) : 0;
     if (!(view = NEW(LIST_SIZE)))
         return;
     LIST_CTOR((void *)view, t, (int32_t)c, 0, 0, 0, 0, 0x46, 0x3a, 1);
@@ -564,8 +686,7 @@ static void list_open(void)
     list_add((char *)view + 0x4c, CHOICE_AUTO);
     list_add((char *)view + 0x4c, CHOICE_STOCK);
     for (k = 0; k < MAX_MACHINES; k++) {
-        const struct smpl_machine *m = by_id(k);
-        if (m && fits(m, t))
+        if (offered(by_id(k), t))
             list_add((char *)view + 0x4c, CHOICE_FIRST + k);
     }
     LIST_SELECT((void *)view, (int32_t)c);

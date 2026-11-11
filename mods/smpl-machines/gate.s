@@ -101,3 +101,37 @@ smpl_list_label_s:
         move.l  -8(%a6),%d2
         unlk    %a6
         rts
+
+| Stock's SRC machine setter, 0x400bd1ba (sound, machine, track, flag):
+| smpl_src_before notes the SMPL machine the sound runs, stock's body runs
+| as a call (smpl_src_orig: its link and movem, then 0x400bd1c2), and
+| smpl_src_after writes the new SMPL machine's defaults if it changed. The
+| setter's result stays in %d0.
+        .globl  smpl_src_s
+        .align  2
+smpl_src_s:
+        move.l  12(%sp),-(%sp)          | track
+        move.l  8(%sp),-(%sp)           | sound
+        jsr     smpl_src_before
+        addq.l  #8,%sp
+        move.l  %d0,-(%sp)              | before
+        move.l  20(%sp),-(%sp)          | flag
+        move.l  20(%sp),-(%sp)          | track
+        move.l  20(%sp),-(%sp)          | machine
+        move.l  20(%sp),-(%sp)          | sound
+        jsr     smpl_src_orig
+        lea     16(%sp),%sp
+        move.l  %d0,-(%sp)              | the setter's result
+        move.l  4(%sp),-(%sp)           | before
+        move.l  24(%sp),-(%sp)          | track
+        move.l  20(%sp),-(%sp)          | sound
+        jsr     smpl_src_after
+        lea     12(%sp),%sp
+        move.l  (%sp)+,%d0
+        addq.l  #4,%sp                  | before
+        rts
+
+smpl_src_orig:
+        link.w  %a6,#-0x28
+        movem.l %d2-%d6/%a2-%a4,(%sp)
+        jmp     SRC_BODY

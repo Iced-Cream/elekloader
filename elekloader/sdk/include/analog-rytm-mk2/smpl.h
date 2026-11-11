@@ -15,7 +15,8 @@
  * A machine's page shows its knobs in record order, so knob C is SMP's word
  * (index 19, CC 27), where stock's page shows BR. It is the sound's sample
  * slot: a move never writes it, and what it holds is the sample stock plays.
- * Leave it blank, or use it for something that follows the sample.
+ * A machine that needs knob C for something else sets SMPL_OWN_C (below),
+ * which gives it a value of its own.
  *
  * A mod adds machines through the table smpl_machines, and asks the
  * framework for their ids by count; the build's lockfile keeps them, so a
@@ -40,7 +41,10 @@
  * in the sound setup menu's SMPL MACHINE row (kept in a sound field of
  * smpl-machines'), whose AUTO is the one its SRC machine names as
  * SMPL_DEFAULT, or stock's. A machine whose voices leave out the track's
- * voice is not offered there, and a sound that names it plays stock's.
+ * voice is not offered there, and a sound that names it plays stock's. A
+ * SMPL_REQUIRED machine is not offered either: only its SRC machine runs it.
+ * A change of SRC machine that changes the SMPL machine writes the new one's
+ * defaults, as a choice in the row does.
  *
  * The engine runs in the audio interrupt, once a block for each voice whose
  * owner track plays a sound that runs the machine (a sound-locked step's
@@ -74,10 +78,22 @@ struct smpl_machine {
     const char *label;      /* four letters */
     uint8_t voices;         /* bit v: voice v may run it (CORE_VOICE_*, machines.h) */
     uint8_t bind;           /* SMPL_FREE, SMPL_DEFAULT or SMPL_REQUIRED, with src */
-    uint16_t pad;
+    uint16_t flags;         /* SMPL_OWN_C; 0 */
     int32_t src;            /* the SRC machine (its slot: CORE_MACHINE(i), or a number) bind names */
     smpl_engine engine;     /* 0: none */
     struct smpl_knob knobs[8];  /* sound indices 17..24, records 39..46, knobs A..H */
+};
+
+/* flags: knob C keeps a value of its own, a lockable sound field, instead of
+ * SMP's word (index 19, the sample stock plays). The bits are taken only
+ * when the companion smpl-knob-c is in the build: a mod with such a machine
+ * lists "smpl-knob-c" in its "requires". Without it knob C stays SMP's word. */
+#define SMPL_OWN_C 0x0001
+
+/* smpl-knob-c's record (smpl-machines imports it weakly: zeros without it) */
+struct smpl_knob_c {
+    int32_t id;             /* its knob id (CORE_KNOB(0)), 0 when absent */
+    uint32_t field;         /* STORE() of its lockable sound field */
 };
 
 #define SMPL_FREE 0         /* chosen in the sound setup menu only */

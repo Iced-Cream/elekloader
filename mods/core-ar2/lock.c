@@ -524,7 +524,7 @@ static const struct core_knob_face *set_face(void *set, int id)
 {
     int fx;
     unsigned char *s;
-    if (id <= 0 || id >= 469)
+    if (id <= 0 || (id >= 469 && id < 555))    /* (0.15) own ids take faces too */
         return 0;
     s = core_lock_item(set, &fx);
     return core_knob_face(id, fx ? 0 : s);
@@ -537,15 +537,13 @@ unsigned core_knob_label(void *set, int id)
     unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
+    const struct core_knob_face *f = set_face(set, id);
+    if (f && f->label)                  /* (0.15) a face first: a framework's machine names its knob */
+        return (unsigned)f->label;
     if (p && p->short_name)
         return (unsigned)shorts[code - FIRST_CODE];
     if ((l = core_param_lock_label(id)) != 0)
         return l;
-    {
-        const struct core_knob_face *f = set_face(set, id);
-        if (f && f->label)
-            return (unsigned)f->label;
-    }
     return KNOB_LABEL(set, id);
 }
 
@@ -596,14 +594,12 @@ unsigned core_knob_name(void *set, int id)
     unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
+    const struct core_knob_face *f = set_face(set, id);
+    if (f && f->name)                   /* (0.15) a face first, as core_knob_label */
+        return (unsigned)f->name;
     if (p && p->name)
         return (unsigned)names[code - FIRST_CODE];
     if ((l = core_param_lock_name(id)) != 0)
         return l;
-    {
-        const struct core_knob_face *f = set_face(set, id);
-        if (f && f->name)
-            return (unsigned)f->name;
-    }
     return KNOB_NAME(set, id);
 }
