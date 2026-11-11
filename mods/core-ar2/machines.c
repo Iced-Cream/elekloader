@@ -19,6 +19,11 @@
  * own machines. elekloader refuses two entries for one slot (the profile's
  * slot_claims), so the first entry for a slot is the only one.
  *
+ * An entry whose engine is 0 keeps the slot's stock engine (no trampoline: the
+ * trig getters are not latched for it), and one whose name or label is 0 keeps
+ * the slot's stock name or label, so a mod can unhide a stock hidden machine as
+ * a claim the linker checks (machines.h).
+ *
  * (0.13) The engine table gets core's trampoline for the slot, which latches
  * the voice's trig and velocity for core_voice_trigged and
  * core_voice_velocity (and its note end for core_voice_released) and calls
@@ -139,12 +144,16 @@ void core_boot_init(void)
         if (s < SLOT_FIRST || s > SLOT_LAST || (done >> (s - SLOT_FIRST) & 1))
             continue;
         done |= 1u << (s - SLOT_FIRST);
-        mod_engine[s - SLOT_FIRST] = m->engine;
-        ENGINES[s] = tramps[s - SLOT_FIRST];
+        if (m->engine) {                /* 0: the slot's stock engine, as it is */
+            mod_engine[s - SLOT_FIRST] = m->engine;
+            ENGINES[s] = tramps[s - SLOT_FIRST];
+        }
         AVAIL[2 * s] = (uint8_t)m->home;
         AVAIL[2 * s + 1] = m->voices;
-        NAMES[2 * s] = m->name;
-        NAMES[2 * s + 1] = m->label;
+        if (m->name)                    /* 0: the slot's stock names, as they are */
+            NAMES[2 * s] = m->name;
+        if (m->label)
+            NAMES[2 * s + 1] = m->label;
         for (int id = 0; id < RECORD_COUNT; id++) {
             uint8_t *r = RECORDS + RECORD_SIZE * id;
             int32_t k = L(r, 0x04) - 9;
@@ -158,7 +167,8 @@ void core_boot_init(void)
             L(r, 0x10) = n->def << 8;
             L(r, 0x14) = n->centred;
             L(r, 0x28) = (int32_t)n->name;
-            L(r, 0x2c) = (int32_t)m->name;         /* the group: the machine */
+            if (m->name)
+                L(r, 0x2c) = (int32_t)m->name;     /* the group: the machine */
             L(r, 0x30) = (int32_t)n->label;
             if (s >= SLOT_TEST) {
                 uint8_t *q = ref_record(k);
