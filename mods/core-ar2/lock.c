@@ -53,6 +53,10 @@
 #define FX_TRACK 12
 #define LIST_APPEND ((void (*)(void *, int *))0x40197a94)   /* (vector, &id) */
 #define RANDOM ((unsigned (*)(void))0x4002a6e0)   /* as stock's randomize uses */
+#define ID_OWNER ((int (*)(int))0x40006eca)        /* a stock id's owner: its record's +0 */
+#define OWNER_NAME ((uintptr_t (*)(int))0x40007296)  /* an owner's short name (in %d0) */
+#define FIRST_OWNER 0x35                      /* the owners named by category: AMP, SAMP, FILT, */
+#define LAST_OWNER 0x3e                       /* REV, DEL, COMP, DIST, LFO, TRIG, META */
 
 struct core_lock_param {
     unsigned field;
@@ -257,6 +261,53 @@ int core_pseudo_slot(int id)
  * parameters, by code; the LFO's list (kind 0x600, 0x400 set) those with
  * LFO, the velocity and aftertouch lists (kind 0x200) those with ROUTE.
  * For the FX set (fx): the FX LFO's list, the kit parameters with LFO. */
+static int same_category(const char *a, const char *b)
+{
+    int i;
+    for (i = 0; i < CATEGORY_MAX; i++) {
+        if (a[i] != b[i])
+            return 0;
+        if (!a[i])
+            return 1;
+    }
+    return 1;
+}
+
+/* (0.15) an id's category: a stock id's owner's name (SAMP, FILT, AMP,
+ * as the menu's label: 0x40007296 of 0x40006eca), a pseudo id's own; 0 for
+ * a machine's parameters and a pseudo id with none */
+static const char *category_of(int id)
+{
+    unsigned code;
+    int owner;
+    if (id >= PSEUDO)
+        return (code = pseudo_code(id)) != 0 && categories[code - FIRST_CODE][0] ? categories[code - FIRST_CODE] : 0;
+    if (id <= 0)
+        return 0;
+    owner = ID_OWNER(id);
+    return owner >= FIRST_OWNER && owner <= LAST_OWNER ? (const char *)OWNER_NAME(owner) : 0;
+}
+
+/* (0.15) the id just appended moves to after the list's last entry of its
+ * category, so SAMP: SMPL Machine C sits after SAMP's own; one whose
+ * category no entry has stays at the end. The list holds ids, and what a
+ * pick stores is the id's slot (0x400aa32a, 0x400aa546), never an index. */
+static void place(void *vector, int id)
+{
+    int *b = ((int **)vector)[0], n = (int)(((int **)vector)[1] - b), i, at = -1;
+    const char *cat = category_of(id), *c;
+    if (!cat || n < 2 || b[n - 1] != id)
+        return;
+    for (i = 0; i < n - 1; i++)
+        if ((c = category_of(b[i])) != 0 && same_category(c, cat))
+            at = i;
+    if (at < 0)
+        return;
+    for (i = n - 1; i > at + 1; i--)
+        b[i] = b[i - 1];
+    b[at + 1] = id;
+}
+
 void core_dst_append(void **list, unsigned kind, int fx)
 {
     int code, id;
@@ -265,6 +316,7 @@ void core_dst_append(void **list, unsigned kind, int fx)
                : !is_kit(code) && (kind & 0x400 ? lfo_param(code) != 0 : route_param(code) != 0)) {
             id = PSEUDO + code - FIRST_CODE;
             LIST_APPEND(*list, &id);
+            place(*list, id);
         }
 }
 
