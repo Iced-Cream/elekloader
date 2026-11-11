@@ -134,6 +134,14 @@ extern u32 *dl_inits;                    /* dl_status_n of them, from the heap *
 extern u32 dl_inits_n;
 extern u32 dl_used_lo, dl_used_hi;
 
+/* Top-staging (prototype, off until the route and the page stage in the free tail): with it
+ * set, dl_link given no buffer reads each file into the +Drive area itself, pass 1 from its
+ * start and pass 2 at its top, and the layout places the mods by file length, the longest
+ * first, so that each file fits above the code placed before it (docs/DRIVE.md, "The boot
+ * link"). dl_check keeps its own buffer for pass 1 but lays out the same way, so the MODS
+ * page's verdict stays the boot's. elekloader/drive.py's Build.stage_top is its twin. */
+extern u8 dl_stage_top;
+
 /* ---- +Drive sites (docs/DRIVE.md, "Sites") -------------------------------------------- */
 /* The main OS a site may change runs from DL_MAIN_LO (the Rytm's main_load) to the build's boot
  * copier, the first byte the flashed build appends (its site map's kind 4). */

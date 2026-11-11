@@ -129,6 +129,10 @@ class Build:
         self.table = {t['name']: i for i, t in enumerate(self.tables)}
         self.claims = [nm for kind, _mi, nm in d['claims'] if kind == desc.CLAIM_NAME]
         self.ram_end, self.lo, self.hi, self.staging, self.staging_size = d['area']
+        # top-staging (prototype; dlink.c dl_stage_top): the boot reads each file into the area
+        # itself, so a file may be as large as the area, and the layout places the mods by file
+        # length with room for each file above the code before it. No descriptor says so yet.
+        self.stage_top = False
         # the global names, in the boot linker's order: flashed exports, tables, NAME_n, core_desc
         self.globals = {}
         for m in self.modules:
@@ -758,16 +762,34 @@ def _store_tables(build, p):
     return out, bytes(p.generations[s] for s in mstore.SCOPES)
 
 
+def _stage_at(build, c):
+    """With the stage at the top: where pass 2 reads c's file (dlink.c stage_at)."""
+    n = len(c.raw)
+    return build.lo if n > build.hi - build.lo else (build.hi - n) & ~3
+
+
+def placement(build, order):
+    """The living mods in placement order (dlink.c placement): id order, or with the stage at the
+    top, the longest file first, ties in id order."""
+    live = [c for c in order if c.alive]
+    return sorted(live, key=lambda c: -len(c.raw)) if build.stage_top else live
+
+
 def _layout(build, order):
-    """In id order from the area's start: every .run at its alignment, then every .bss. -> (base,
-    end), or None after refusing the last living mod for room."""
-    live = [c.mod for c in order if c.alive]
-    base = {}
-    at = lay_out(live, '.run', build.lo, base)
-    end = _align(lay_out(live, '.bss', _align(at, 4), base), 4)
-    if end > build.hi:
+    """In placement order from the area's start: every .run at its alignment, then every .bss; with
+    the stage at the top, each file above its own .run's end. -> (base, end), or None after
+    refusing the last living mod in id order for room (the KB the worst point is over)."""
+    placed = placement(build, order)
+    base, at, over = {}, build.lo, 0
+    for c in placed:
+        at = lay_out([c.mod], '.run', at, base)
+        if build.stage_top:
+            over = max(over, at - _stage_at(build, c))
+    end = _align(lay_out([c.mod for c in placed], '.bss', _align(at, 4), base), 4)
+    over = max(over, end - build.hi)
+    if over > 0:
         last = [c for c in order if c.alive][-1]
-        last.refuse('room', arg=(end - build.hi + 1023) // 1024)
+        last.refuse('room', arg=(over + 1023) // 1024)
         return None
     return base, end
 
@@ -946,7 +968,9 @@ def check(build, files, deep=False, store=None):
     for c in choices:
         if c.raw is None:
             c.refuse('missing', state=DROPPED)
-        elif build.staging_size and len(c.raw) > build.staging_size:
+        elif build.stage_top and len(c.raw) > build.hi - build.lo:
+            c.refuse('too-big')
+        elif not build.stage_top and build.staging_size and len(c.raw) > build.staging_size:
             c.refuse('too-big')
         else:
             pass1(build, c, state)
@@ -968,9 +992,7 @@ def check(build, files, deep=False, store=None):
                     for f in c.fields:
                         glob[f['sym']] = (lambda v=r.placed.descriptors[(c.id, f['sym'])]: v)
         placed, edata, again = {}, [0, 0], False   # entry bytes, entry relocations
-        for c in order:
-            if not c.alive:
-                continue
+        for c in placement(build, order):          # in address order, as the boot reads them
             got, why = _pass2(build, c, lay[0], glob, edata)
             if why:
                 c.refuse(why[0], why[1])
