@@ -3,16 +3,9 @@
 The boot copier, the hook bus, mod storage, parameter pages and added machines for the Analog Rytm MKII. From
 0.3 it is for OS 1.74 only; 0.2 is the last core with 1.73 (below). It builds the Digitakt mk1's `core.s`, `settings.s` and
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
-`sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
-from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, from 0.7 with
-write-through storage (Write-through, below) and `finish.s` (The OS upgrade's restart, below),
-and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
-their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
-velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
-defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
-itself (below). On its own it changes nothing
-the unit does, apart from that restart, which it makes safe.
+`sites`), and its own sources, each in its section below with the version
+that added it. On its own it changes nothing
+the unit does, apart from the OS upgrade's restart (below), which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -1180,23 +1173,35 @@ the value and its text `core_params'`, and the parameter record's other
 fields (its sound slot, the +0x24 flags that put it in the LFO and
 modulation lists and open a list on a turn, MIDI) are read for the knob's
 own id as before, so a knob that looks like a stock one does nothing that
-stock one does. Stock's graphics draw the knob's value on the scale of
-the parameter they were made for (the dial's 0..127, which several graphics
-map their value to and clamp, 0x400ff86c..0x400ffa14), not on the range. So
-for an entry with min < max core also takes the graphic's call, 0x400a85e8
-(the knob sets' vtable +88, which calls the delegate at +0x24 with the
-value), and moves the value from min..max onto look's range there: the
-graphic spans the knob's own range. The value text and the knob's value
-are unchanged.
+stock one does. Stock's graphics draw on the scale of the parameter they
+were made for (the dial's 0..127, 0x400ff86c..0x400ffa14), so for min <
+max core moves the value onto look's range at 0x400a85e8 (the knob sets'
+vtable +88); the value and its text are unchanged.
 
-A stock 1.74 boot builds 87 different UI records (by their flags, steps and
-delegates) over 469 ids, with 46 different graphics;
-`examples/look-check-ar2` draws one stock id of each beside a mod knob that
-takes its look (its `looks.h` lists a sample id of each, and its
-`looks_table.py` prints their stock names from your own OS file). A mod that kept its knobs on hidden
+A stock 1.74 boot builds 87 different UI records over 469 ids, with 46
+different graphics; `examples/look-check-ar2` draws one of each. A mod that kept its knobs on hidden
 machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
+
+## Knob faces (0.15)
+
+`core_knob_faces` (docs/ADAPTING.md, "Knob faces (core-ar2 0.15, Analog
+Rytm MKII)") gives stock ids 1..468 another label, name, look, range and
+default for the sounds a mod says, on the hooks above: the label and name
+lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
+`uirec`, `range` (which the setter 0x400a906c clamps to) and the graphic
+(`looks.c`, sound 0: the current track's). No code site of its own.
+
+## Note ends, track mutes and DIN MIDI out (0.15 or later)
+
+No new sites; the traces are in `machines.c` and `voiceio.c`.
+
+| what | where (OS 1.74) | context |
+|---|---|---|
+| `core_voice_released(v)` | trig state 0x8000e508 + 4t in the trig latch: 2 (release) gives 1, 3 (cut) gives 2 | the engine |
+| `core_track_mutes()`, `core_set_track_mutes(mask)` | settings model (0x400ae492) data +0x20; 0x400b6d94, 0x400b6dd8 | UI task |
+| `core_midi_din_try_send(len, msg)`, `core_midi_din_up()` | DIN sender 0x40001dea, its room test under a mask; OUT PORT FUNC 0x400b5424 | any |
 
 ## Checked so far
 
