@@ -22,8 +22,12 @@ tick, the ticks it was seen set, the seven counts, the three project fields,
 the encoder events taken, the `core_project_edited` calls, whether MARK
 CHECK is up and `ev_project`'s count and last `how`. On the screen's
 bottom edge (y from the bottom row): a 5x5 square at the right end while the
-mark is set, a bar at y 0..1 two pixels for each item not reading its init,
-and at y 4..5 a dot for each scope with one (`check.c`'s header).
+mark is set and its outline while it is clear, a bar at y 0..1 two pixels for
+each item not reading its init, at y 4..5 a dot for each scope with one, and
+a dot at x 40..41 once the count has run on the project now loaded
+(`check.c`'s header). Since 0.2 the bottom rows are never blank while the mod
+draws, so a screen check of "mark clear, every field at its init" compares
+lit pixels.
 
 In rytm-emu's A4 build (11 Nov 2026) [emu], MK60 passed its plan's gate
 from every start. Every field read its init after CREATE NEW and in a new

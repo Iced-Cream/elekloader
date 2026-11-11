@@ -25,10 +25,13 @@
  * (0x4045c8c2) at each tick, the counts, the three project fields, the
  * encoder events taken, whether MARK CHECK is up, ev_project's count and
  * last how. On the screen, along the bottom edge (y counts from the bottom
- * row): a 5x5 square at the right end while the mark is set; at y 0..1 a bar
- * two pixels a step for the items not reading their init (all scopes, up to
- * 60); at y 4..5 a dot per scope with any such item (track, pattern, kit
- * sound, pool sound, kit, global, project, 4 pixels apart).
+ * row): a 5x5 square at the right end while the mark is set, its outline
+ * only while it is clear (0.2); at y 0..1 a bar two pixels a step for the
+ * items not reading their init (all scopes, up to 60); at y 4..5 a dot per
+ * scope with any such item (track, pattern, kit sound, pool sound, kit,
+ * global, project, 4 pixels apart), and a dot at x 40..41 once the walk has
+ * run on the project now loaded (0.2: so "no bar, no dots" is a walk's
+ * answer, not a mod that draws nothing).
  */
 #include <stdint.h>
 #include "analog-four-mk2/store.h"
@@ -216,6 +219,14 @@ void mk_draw(void *bmp, void *ctrl)
         total = 60;
     if (total)
         FILLRECT(bmp, 0, 0, 2 * (int)total - 1, 1, 1);
+    if (mk.walks && !walk_now)
+        FILLRECT(bmp, 40, 4, 41, 5, 1);
     if (mk.mark)
         FILLRECT(bmp, 123, 0, 127, 4, 1);
+    else {                               /* 0.2: the outline while it is clear */
+        FILLRECT(bmp, 123, 0, 127, 0, 1);
+        FILLRECT(bmp, 123, 4, 127, 4, 1);
+        FILLRECT(bmp, 123, 0, 123, 4, 1);
+        FILLRECT(bmp, 127, 0, 127, 4, 1);
+    }
 }
