@@ -1361,6 +1361,22 @@ Input that is not 0 gives each part back to stock in that block. After a
 clear, the next delay or reverb tail starts from silence, as after a power-on. Both routines leave
 the MAC unit as they found it, so a call left out does too.
 
+## Submenus (0.14)
+
+`submenu.s` (`analog-rytm-mk2/settings.h`): a row a mod adds to the GLOBAL
+menu in `ev_settings` (`core_additem`) can open a menu of rows of its own.
+From the row's select, `core_submenu_open(menu, &sm)` shows stock's own
+checkbox menu view, the one MIDI CONFIG > SYNC and the +Drive's FORMAT are
+(0x400780e8, the whole screen): `sm.title` in the header, `sm.icon` (a stock
+bitmap, or 0 for none, as FORMAT has) beside it, and `sm.rows`, each added
+with `core_additem` as in SETTINGS, so their select and change get the
+submenu as payload. It is shown as stock's GLOBAL rows show theirs
+(0x40077a16, from 0x400dae7a), one level deeper than its parent (0x40078974:
+GLOBAL 2, its submenus 3), and NO goes back to the parent. Core builds it the
+first time and keeps it, as GLOBAL keeps its submenus, so the cursor stays
+where it was; it is built again only if the parent is another menu. On its
+own it adds nothing to any menu.
+
 ## Checked so far
 
 On a unit (OS 1.73 and 1.74): the boot site and its DDR area, both render
