@@ -1,0 +1,465 @@
+format = 1
+name = SCF F2 SCF2 checks
+unit = rytm
+refs = refs/f2
+out = ../runs
+os = ../os/SCF2.syx
+note = ~T SCF (slot 121, CREATE NEW) active; SD BYCOUNT4, SD SC FREE (HRM 127) and BD SMPLREQ with SC REQ (knob C turned) kept in it
+
+[start]
+say contrast occupied, testslot: slot 121 holds a project, so the cleared-slot check stops the run
+# Boot prompts away, then MANAGE PROJECTS from its top, cursor on 121 (the setup template's start).
+wait 3
+tap NO
+wait 0.5
+tap NO
+wait 0.5
+tap NO
+wait 1.0
+keys GLOBAL,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,YES,UP,UP,UP,DOWN,DOWN,YES
+wait 0.8
+keys FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),UP,UP,UP,UP,UP,UP,UP
+wait 0.6
+shot start-manage-121.png
+expect-screen manage-cursor-121 2 rows=0-6 cols=0-27
+expect-screen manage-121-empty 2 rows=0-6 cols=32-127
+tap NO
+wait 0.5
+tap NO
+wait 0.5
+tap NO
+wait 0.5
+tap NO
+wait 1.0
+
+[setup: CREATE NEW]
+say proves setup: a new project is the working project (the load questions it answers)
+keys TRK(BD)
+wait 0.4
+tap TRIG
+wait 0.8
+tap LFO
+wait 1.5
+turn A 24 1
+wait 1.0
+tap GLOBAL
+wait 0.5
+keys UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP
+tap YES
+wait 0.5
+keys UP,UP,UP
+tap YES
+wait 0.8
+keys FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN)
+wait 0.4
+shot f2-createnew.png
+tap YES
+wait 0.8
+shot f2-save-prompt.png
+expect-screen save-before-loading 2 rows=34-40 cols=22-106
+tap NO
+wait 0.8
+shot f2-proceed.png
+expect-screen proceed-with-loading 2 rows=21-44 cols=8-120
+tap YES
+wait 3
+wait 0.1
+expect-screen f2-cn-done 12 settle rows=0-54
+wait 1
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2-cn-no-1 3 settle rows=0-54
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2-cn-no-2 3 settle rows=0-54
+shot f2-new-home.png
+
+
+[B1 set: SD BYCOUNT4]
+say proves setup: SD BYCOUNT4 (slot 45) is picked through the SD machine list and read back twice; SD sound block dumped before and after
+keys TRK(SD)
+wait 2.5
+tap SRC
+wait 1.0
+shot b1sd-pre.png
+expect-screen b1-sd-pre 2 rows=8-52
+dump 0x412559a5 152 b1sd-before.bin
+keys FUNC(SRC)
+wait 1.5
+keys UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP
+wait 0.5
+wait 0.8
+shot b1sd-preview.png
+tap YES
+wait 2.0
+shot b1sd-picked.png
+dump 0x412559a5 152 b1sd-after.bin
+keys FUNC(SRC)
+wait 1.5
+shot b1sd-list.png
+expect-screen b1-sd-list 2 rows=8-52 cols=56-127
+tap NO
+wait 1.0
+tap LFO
+wait 1.5
+tap SRC
+wait 1.5
+shot b1sd-page.png
+expect-screen b1-sd-page 2 rows=8-52
+
+
+[S5 stock knobs turned]
+say proves setup: on SD (SMPL machine AUTO, the stock SMPL page) knob A (TUN) is turned fully up and knob H (LEV) fully down, so the knob words are not the SC FREE defaults before the pick
+tap SMPL
+wait 1.0
+shot s5-stock-pre.png
+expect-screen s5-stock-pre 2 rows=8-52
+turn A 300 30
+wait 0.5
+turn H -300 30
+wait 1.0
+shot s5-stock-turned.png
+expect-screen s5-stock-turned 2 rows=8-52
+dump 0x412559a5 152 s5-before.bin
+
+[S1 set: SC FREE on SD, defaults written]
+say proves works: TRK + SMPL on SD opens the list AUTO, STOCK, SC FREE; two DOWNs and YES pick SC FREE (CONFIRM? then CONFIRMED!); the SC FREE page then shows its defaults (HRM 64, TIM 25 %, MOD 3, LEV 100; MRF shares the SMP word and keeps it), not the turned stock values; SD sound block dumped after
+tap SRC
+wait 1.0
+hold TRK 2000
+wait 0.4
+tap SMPL
+wait 0.6
+release TRK
+wait 0.8
+shot s1-list.png
+expect-screen s1-list-open 2 rows=0-52 cols=56-127
+keys DOWN
+wait 0.5
+keys DOWN
+wait 0.5
+shot s1-confirm.png
+expect-screen s1-list-confirm 2 rows=0-52 cols=56-127
+tap YES
+wait 1.0
+shot s1-confirmed.png
+tap SMPL
+wait 1.0
+shot s1-scfree-page.png
+expect-screen s1-scfree-defaults 2 rows=8-52
+dump 0x412559a5 152 s1-after.bin
+
+[S6 NO restores the knobs]
+say proves works: on SC FREE, HRM is turned fully up (64 -> 127); the list opened again, UP (STOCK) and DOWN (SC FREE, which writes its defaults again) then NO gives back SC FREE with HRM 127, the words as the list opened
+turn A 300 30
+wait 1.0
+shot s6-turned.png
+expect-screen s6-hrm127 2 rows=8-52
+dump 0x412559a5 152 s6-before.bin
+hold TRK 2000
+wait 0.4
+tap SMPL
+wait 0.6
+release TRK
+wait 0.8
+shot s6-list.png
+keys UP
+wait 0.5
+keys DOWN
+wait 0.5
+shot s6-list-moved.png
+tap NO
+wait 1.0
+shot s6-after-no.png
+tap SRC
+wait 1.0
+tap SMPL
+wait 1.0
+shot s6-page.png
+expect-screen s6-hrm127 2 rows=8-52
+dump 0x412559a5 152 s6-after.bin
+
+[K1 bound machine hidden on BD]
+say proves works: TRK + SMPL on BD opens the list with only AUTO, STOCK and SC FREE (SC REQ, a bound machine, is not offered); NO closes it
+keys TRK(BD)
+wait 2.5
+tap SRC
+wait 1.0
+hold TRK 2000
+wait 0.4
+tap SMPL
+wait 0.6
+release TRK
+wait 0.8
+shot k1-bd-list.png
+expect-screen k1-bd-list 2 rows=0-52 cols=56-127
+tap NO
+wait 1.0
+
+[K2 BD stock knobs turned]
+say proves setup: on BD (stock SMPL page) knob A (TUN) fully up and knob H (LEV) fully down, so the words differ from both machines defaults; BD sound block and smck dumped
+tap SRC
+wait 1.0
+tap SMPL
+wait 1.0
+shot k2-bd-stock-pre.png
+expect-screen k2-bd-stock-pre 2 rows=8-52
+turn A 300 30
+wait 0.5
+turn H -300 30
+wait 1.0
+shot k2-bd-stock-turned.png
+expect-screen k2-bd-stock-turned 2 rows=8-52
+dump 0x4125590d 152 k2-bd-before.bin
+
+[K2 SRC list onto BD SMPLREQ writes SC REQ defaults]
+say proves works: FUNC + SRC, the top of the list then DOWN (BD SMPLREQ), YES; the SMPL page is then SC REQ with AAA 10, CCC 50, FFF 5 (its defaults), the SMP word kept; BD sound block and smck dumped after
+tap SRC
+wait 1.0
+keys FUNC(SRC)
+wait 1.5
+keys UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP
+wait 0.5
+keys DOWN
+wait 0.8
+shot k2-preview.png
+tap YES
+wait 2.0
+shot k2-picked.png
+tap LFO
+wait 1.5
+tap SRC
+wait 1.5
+shot k2-src-page.png
+expect-screen k2-smplreq-page 2 rows=8-52
+tap SMPL
+wait 1.0
+shot k2-screq-page.png
+expect-screen k2-screq-defaults 2 rows=8-52
+dump 0x4125590d 152 k2-bd-after.bin
+dump 0x47b21488 156 k2-smck.bin
+
+[K3 CC 15 off to BD HARD writes stock defaults]
+say proves works: CC 15 = 0 on channel 1 moves BD to BD HARD; the stock SMPL page then shows the stock defaults (TUN 0, FIN 0, BR 0, STA 0, END 120, LOP off, LEV 100) and the same SMP as before
+cc 1 15 0
+wait 1.5
+tap SRC
+wait 1.0
+shot k3-src-page.png
+expect-screen k3-bdhard-page 2 rows=8-52
+tap SMPL
+wait 1.0
+shot k3-stock-page.png
+expect-screen k3-bd-stock-defaults 2 rows=8-52
+dump 0x4125590d 152 k3-bd-after.bin
+
+[K4 CC 15 onto BD SMPLREQ again]
+say proves works: CC 15 = 36 on channel 1 moves BD to BD SMPLREQ again; the SMPL page is SC REQ with its defaults again
+cc 1 15 36
+wait 1.5
+tap SRC
+wait 1.0
+shot k4-src-page.png
+expect-screen k2-smplreq-page 2 rows=8-52
+tap SMPL
+wait 1.0
+shot k4-screq-page.png
+expect-screen k2-screq-defaults 2 rows=8-52
+dump 0x4125590d 152 k4-bd-after.bin
+
+[K5 knob C turned]
+say proves works: knob C (CCC) turned right 160 counts moves only CCC (the other knobs and the SMP word stay); the shot shows how far 160 counts take it (the slow-turn question); BD sound block and smck dumped
+turn C 160 30
+wait 1.0
+shot k5-ccc-turned.png
+expect-screen k5-ccc-turned 2 rows=8-52
+dump 0x4125590d 152 k5-bd-after.bin
+dump 0x47b21488 156 k5-smck.bin
+
+[save B: SAVE PROJECT AS 121 (SD and BD machines)]
+say proves setup: the project with SD BYCOUNT4, SD on SC FREE, BD on BD SMPLREQ with CCC turned saved over 121 (proven by the reload below)
+tap SRC
+wait 1.0
+wait 5
+save-project 121 "~T SCF" GLOBAL,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,YES,UP,UP,UP,DOWN,YES,FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),UP,UP,UP,UP,UP,UP,UP,YES,YES
+wait 3
+wait 0.1
+expect-screen f2-svb-done 12 settle rows=0-54
+wait 1
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2-svb-no-1 3 settle rows=0-54
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2-svb-no-2 3 settle rows=0-54
+shot f2-svb-saved.png
+
+[CREATE NEW 3]
+say proves setup: a new project is the working project (the load questions it answers)
+keys TRK(BD)
+wait 0.4
+tap TRIG
+wait 0.8
+tap LFO
+wait 1.5
+turn A 24 1
+wait 1.0
+tap GLOBAL
+wait 0.5
+keys UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP
+tap YES
+wait 0.5
+keys UP,UP,UP
+tap YES
+wait 0.8
+keys FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN)
+wait 0.4
+shot f2e-createnew.png
+tap YES
+wait 0.8
+shot f2e-save-prompt.png
+expect-screen save-before-loading 2 rows=34-40 cols=22-106
+tap NO
+wait 0.8
+shot f2e-proceed.png
+expect-screen proceed-with-loading 2 rows=21-44 cols=8-120
+tap YES
+wait 3
+wait 0.1
+expect-screen f2e-cn-done 12 settle rows=0-54
+wait 1
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2e-cn-no-1 3 settle rows=8-54
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2e-cn-no-2 3 settle rows=8-54
+shot f2e-new-home.png
+
+[LOAD FROM 121 (B)]
+say proves setup: the second saved ~T SCF is loaded again (the OS asks SAVE ... BEFORE LOADING? because the new project is not 121; answered NO)
+keys TRK(BD)
+wait 0.4
+tap TRIG
+wait 0.8
+tap LFO
+wait 1.5
+turn A 24 1
+wait 1.0
+keys GLOBAL,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,UP,YES,UP,UP,UP,DOWN,DOWN,YES
+wait 0.8
+keys FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),FUNC(DOWN),UP,UP,UP,UP,UP,UP,UP
+wait 0.6
+shot f2d-manage-121.png
+tap RIGHT
+wait 0.6
+keys UP,UP,UP,UP,UP,UP,DOWN,DOWN,DOWN
+wait 0.4
+shot f2d-load-from-121.png
+tap YES
+wait 0.8
+shot f2d-save-before.png
+expect-screen save-before-loading 2 rows=34-40 cols=22-106
+tap NO
+wait 0.8
+shot f2d-proceed.png
+expect-screen proceed-with-loading 2 rows=21-44 cols=8-120
+tap YES
+wait 3
+wait 0.1
+expect-screen f2d-ld-done 12 settle rows=8-54
+wait 1
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2d-ld-no-1 3 settle rows=8-54
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2d-ld-no-2 3 settle rows=8-54
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2d-ld-no-3 3 settle rows=8-54
+tap NO
+wait 0.6
+wait 0.1
+expect-screen f2d-ld-no-4 3 settle rows=8-54
+shot f2d-loaded.png
+
+[B1 kept: SD BYCOUNT4]
+say proves set-and-kept: after the second save, CREATE NEW and LOAD FROM 121, SD shows the SD BYCOUNT4 page
+keys TRK(SD)
+wait 2.5
+tap SRC
+wait 1.0
+shot b1k-sd-src.png
+expect-screen b1-sd-page 2 rows=8-52
+
+[S1 kept: SC FREE on SD, HRM 127]
+say proves set-and-kept: after the save, CREATE NEW and LOAD FROM 121 the SMPL page of SD is still SC FREE with HRM 127 (the value S6 left)
+tap SMPL
+wait 1.0
+shot s1k-smpl.png
+expect-screen s6-hrm127 2 rows=8-52
+
+[K6 kept: BD SMPLREQ with CCC]
+say proves set-and-kept: after the save, CREATE NEW and LOAD FROM 121 BD is still BD SMPLREQ and its SC REQ page shows the CCC value K5 left
+keys TRK(BD)
+wait 2.5
+tap SRC
+wait 1.0
+shot k6-src.png
+expect-screen k2-smplreq-page 2 rows=8-52
+tap SMPL
+wait 1.0
+shot k6-screq.png
+expect-screen k5-ccc-turned 2 rows=8-52
+
+[K7 knob C by hand]
+say proves evidence: the owner checks by hand what the plan cannot: a p-lock on knob C, the LFO destination name, and how knob C turns
+expect-screen k5-ccc-turned 2 rows=8-52
+listen 1. TRK + BD, then the SMPL page (SC REQ). 2. Hold trig key 1 and turn knob C (CCC): the trig shows a lock and CCC shows the locked value while held; let go. 3. Turn knob C slowly by hand and compare with knob A: say whether CCC feels slow (about 16 detents a step in the emulator). 4. LFO page, DEST: scroll to the end of the list and say what is visible of SMPL Machine C. allowed: those steps on the ~T SCF project only; nothing is saved. needs: BD on BD SMPLREQ (checked on screen in K6). Say finished when done, with what you saw at steps 2, 3 and 4.
+
+[S7 back to STOCK writes stock defaults]
+say proves works: TRK + SMPL on SD, UP to STOCK and YES; the stock SMPL page then shows the stock defaults (TUN 0, FIN 0, BR 0, STA 0, END 120, LOP 0, LEV 100), with SMP left as it was; SD sound block dumped before and after
+keys TRK(SD)
+wait 2.5
+tap SRC
+wait 1.0
+tap SMPL
+wait 1.0
+expect-screen s6-hrm127 2 rows=8-52
+dump 0x412559a5 152 s7-before.bin
+hold TRK 2000
+wait 0.4
+tap SMPL
+wait 0.6
+release TRK
+wait 0.8
+shot s7-list.png
+keys UP
+wait 0.5
+shot s7-confirm.png
+expect-screen s7-list-confirm 2 rows=0-52 cols=56-127
+tap YES
+wait 1.0
+shot s7-confirmed.png
+tap SRC
+wait 1.0
+tap SMPL
+wait 1.0
+shot s7-stock-page.png
+expect-screen s7-stock-defaults 2 rows=8-52
+dump 0x412559a5 152 s7-after.bin
+
+[S3 silent stock layer]
+say proves evidence: with STOCK on SD the loaded sample plays; with SC FREE it goes quiet
+expect-screen s7-stock-defaults 2 rows=8-52
+listen 1. GLOBAL > SAMPLES > LOAD TO PROJ: load one factory sample into this ~T SCF project. 2. On the SMPL page of SD (STOCK, checked on screen above) set SMP to that sample. 3. Put one trig on SD step 1 and press PLAY: the SD synth and the sample are heard. 4. TRK + SMPL on SD, pick SC FREE, YES: the sample goes quiet while the SD synth keeps playing. 5. STOP. allowed: those steps on the ~T SCF project only; nothing is saved. needs: SD on STOCK with the stock defaults (checked on screen above). Say finished when done, and what you heard at steps 3 and 4.
