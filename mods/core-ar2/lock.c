@@ -514,6 +514,22 @@ int core_reload(void *view, int track, int **ids, int d)
 unsigned core_param_lock_label(int id);         /* rows.c (0.11) */
 unsigned core_param_lock_name(int id);
 
+/* (sidecar-smpl-machines) a stock id's face for the set's sound (looks.c) */
+struct core_knob_face {
+    const char *label, *name;
+};
+const struct core_knob_face *core_knob_face(int id, void *sound);
+
+static const struct core_knob_face *set_face(void *set, int id)
+{
+    int fx;
+    unsigned char *s;
+    if (id <= 0 || id >= 469)
+        return 0;
+    s = core_lock_item(set, &fx);
+    return core_knob_face(id, fx ? 0 : s);
+}
+
 /* (0.11) a mod's own id (core_param_locks, from 555) shows the label and
  * name its entry gives, for any set: stock would read record 0 (ERR) */
 unsigned core_knob_label(void *set, int id)
@@ -525,6 +541,11 @@ unsigned core_knob_label(void *set, int id)
         return (unsigned)shorts[code - FIRST_CODE];
     if ((l = core_param_lock_label(id)) != 0)
         return l;
+    {
+        const struct core_knob_face *f = set_face(set, id);
+        if (f && f->label)
+            return (unsigned)f->label;
+    }
     return KNOB_LABEL(set, id);
 }
 
@@ -579,5 +600,10 @@ unsigned core_knob_name(void *set, int id)
         return (unsigned)names[code - FIRST_CODE];
     if ((l = core_param_lock_name(id)) != 0)
         return l;
+    {
+        const struct core_knob_face *f = set_face(set, id);
+        if (f && f->name)
+            return (unsigned)f->name;
+    }
     return KNOB_NAME(set, id);
 }

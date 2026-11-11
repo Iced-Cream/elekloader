@@ -884,7 +884,7 @@ def _(B):
 def knobs(B):
     c = B.core()
     c['collections'].update({'core_params': {'entry': 4}, 'core_param_locks': {'entry': 4},
-                             'core_knob_looks': {'entry': 4}})
+                             'core_knob_looks': {'entry': 4}, 'core_knob_faces': {'entry': 4}})
     return c
 
 
@@ -901,8 +901,11 @@ def answering(B, first, last, table='core_params', ident='m'):
      device='analog-rytm-mk2')
 def _(B):
     return [("m 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable "
-             "parameters' ids; a mod's own ids start at 555", [knobs(B), answering(B, 470, 483)])], \
-        [knobs(B), answering(B, 560, 573)]
+             "parameters' ids; a mod's own ids start at 555", [knobs(B), answering(B, 470, 483)]),
+            ("m 1: its core_knob_faces entry takes ids 46..470, and 469..554 are core's lockable "
+             "parameters' ids; a mod's own ids start at 555",
+             [knobs(B), answering(B, 46, 470, 'core_knob_faces')])], \
+        [knobs(B), answering(B, 560, 573), answering(B, 39, 46, 'core_knob_faces', 'n')]
 
 
 @row('id_problems', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
@@ -1023,6 +1026,81 @@ def _(B):
                   lambda d: d[1].update(pages=2), lambda d: d[1].update(pages=0))
 
 
+def pooled(B, ident='c', n=2, pool='smpl', add=None):
+    """A mod with "pool_ids": {pool: n} whose .run holds __pool_<pool>+0..n-1 (abs32)."""
+    d = B.other(ident)
+    d['pool_ids'] = {pool: n}
+    d['sections']['.run'] = {'align': 4, 'len': 4 * n, 'parts': [['hex', '00' * 4 * n]]}
+    d['symbols'] = {'v_' + ident: ['.run', 0]}
+    d['imports'] = ['core_fn', '__pool_' + pool]
+    d['relocs'] = [['.run', 4 * i, 'abs32', 'sym:__pool_' + pool, i if add is None else add] for i in range(n)]
+    return d
+
+
+def pool_owner(B, ident='f', pools=None):
+    d = B.other(ident)
+    d['id_pools'] = pools if pools is not None else {'smpl': [1, 30]}
+    return d
+
+
+@row('Mod2.__init__', "<>: <> is the linker's (an id pool's ids), not a symbol of a mod")
+def _(B):
+    bad = pooled(B)
+    bad['symbols']['__pool_x'] = ['.run', 0]
+    return [("c: __pool_x is the linker's (an id pool's ids), not a symbol of a mod",
+             [B.core(), pool_owner(B), bad])], [B.core(), pool_owner(B), pooled(B)]
+
+
+@row('Mod2.__init__', '<>: "id_pools" maps a pool\'s name (letters, digits, _) to [first, last], ids 0..65535, at most <>')
+def _(B):
+    msg = 'f: "id_pools" maps a pool\'s name (letters, digits, _) to [first, last], ids 0..65535, at most 4096'
+    return [(msg, [B.core(), pool_owner(B, pools={'smpl': [5, 4]})]),
+            (msg, [B.core(), pool_owner(B, pools={'s-p': [1, 4]})]),
+            (msg, [B.core(), pool_owner(B, pools={'smpl': [0, 4096]})]),
+            (msg, [B.core(), pool_owner(B, pools={'smpl': ['1', 4]})])], \
+        [B.core(), pool_owner(B, pools={'smpl': [0, 4095]})]
+
+
+@row('Mod2.__init__', '<>: "pool_ids" maps a pool\'s name to the ids the mod asks for, 1..<>')
+def _(B):
+    def asks(v):
+        d = pooled(B)
+        d['pool_ids'] = v
+        return [B.core(), pool_owner(B), d]
+    msg = 'c: "pool_ids" maps a pool\'s name to the ids the mod asks for, 1..4096'
+    return [(msg, asks({'smpl': 0})), (msg, asks({'smpl': '2'})), (msg, asks(['smpl']))], asks({'smpl': 2})
+
+
+@row('check', '<> and <> both declare the id pool <>')
+def _(B):
+    return [('f 1 and g 1 both declare the id pool smpl',
+             [B.core(), pool_owner(B), pool_owner(B, 'g'), pooled(B)])], \
+        [B.core(), pool_owner(B), pool_owner(B, 'g', {'other': [1, 3]}), pooled(B)]
+
+
+@row('check', '<> asks for ids from the pool <> ("pool_ids"), which no given mod declares')
+def _(B):
+    return [('c 1 asks for ids from the pool smpl ("pool_ids"), which no given mod declares',
+             [B.core(), pooled(B)])], [B.core(), pool_owner(B), pooled(B)]
+
+
+@row('check', '<> refers to <><> and asks for no ids from that pool ("pool_ids")')
+def _(B):
+    bad = pooled(B)
+    bad['relocs'][1][3] = 'sym:__pool_other'
+    bad['imports'].append('__pool_other')
+    return [('c 1 refers to __pool_other and asks for no ids from that pool ("pool_ids")',
+             [B.core(), pool_owner(B, pools={'smpl': [1, 3], 'other': [1, 3]}), bad])], \
+        [B.core(), pool_owner(B), pooled(B)]
+
+
+@row('check', 'the mods ask for <> ids from the pool <>, which has <> (<> declares <>..<>)')
+def _(B):
+    return [('the mods ask for 4 ids from the pool smpl, which has 3 (f 1 declares 1..3)',
+             [B.core(), pool_owner(B, pools={'smpl': [1, 3]}), pooled(B), pooled(B, 'd')])], \
+        [B.core(), pool_owner(B, pools={'smpl': [1, 4]}), pooled(B), pooled(B, 'd')]
+
+
 @row('check', '<> asks for knob ids ("knobs"), which the <> does not give mods')
 def _(B):
     return B.pair('m 1 asks for knob ids ("knobs"), which the Octatrack does not give mods',
@@ -1034,7 +1112,9 @@ def _(B):
 def _(B):
     over = machined(B, wants=(4, 4))
     over['relocs'][1][4] = 2
-    return [('p 1: .run+0x4 is a abs32 reference to __machines+2; one takes abs32 or abs16 with an addend below '
+    return [('c 1: .run+0x0 is a abs32 reference to __pool_smpl+2; one takes abs32 or abs16 with an addend '
+             'below its "pool_ids" (2)', [B.core(), pool_owner(B), pooled(B, add=2)]),
+            ('p 1: .run+0x4 is a abs32 reference to __machines+2; one takes abs32 or abs16 with an addend below '
              'its "machine_knobs" (2)', [machine_core(B), over]),
             ('k 1: .run+0x0 is a abs32 reference to __knobs+4; one takes abs32 or abs16 with an addend below '
              'its "knobs" (4)', [knobs(B), knobbed(B, 4, add=(4, 3))]),
@@ -1533,6 +1613,28 @@ def test_page_ids_by_count_start_past_stocks_and_the_fixed_ones():
         run = out.layout['sections']['p .run'] - out.layout['ddr'][0]
         at = out.layout['run_load'] - B.dev.main_load + run
         assert struct.unpack('>II', out.image[at:at + 8]) == (15, 16)
+
+
+def test_id_pools_hand_out_stable_ids_kept_in_the_lockfile():
+    """A mod's "pool_ids" get the lowest unused ids of the pool another mod declares, written as
+    the i-th id, and a lockfile keeps them: a mod that leaves keeps its ids until they run out."""
+    import struct
+    with Bench('analog-rytm-mk2') as B:
+        def build(lock, *mods):
+            return link.link([link.Mod2(copy.deepcopy(d), d['id']) for d in (keeper(B), pool_owner(B, pools={'smpl': [1, 4]})) + mods],
+                             B.img, lock)
+        one = build(None, pooled(B, 'p', 2), pooled(B, 'd', 1))
+        assert one.pool_ids == {'smpl': {'d': [1], 'p': [2, 3]}}
+        assert one.map['p:__pool_smpl+1'] == 3
+        run = one.layout['sections']['p .run'] - one.layout['ddr'][0]
+        at = one.layout['run_load'] - B.dev.main_load + run
+        assert struct.unpack('>II', one.image[at:at + 8]) == (2, 3)
+        two = build(one.store, pooled(B, 'p', 2), pooled(B, 'a', 1))          # d out: 1 is kept for it
+        assert two.pool_ids == {'smpl': {'a': [4], 'p': [2, 3]}} and two.store['id'] == one.store['id']
+        three = build(two.store, pooled(B, 'p', 2), pooled(B, 'a', 1), pooled(B, 'd', 1))
+        assert three.pool_ids['smpl']['d'] == [1] and 'd: id 1 of pool smpl back' in three.pool_notes
+        four = build(three.store, pooled(B, 'p', 2), pooled(B, 'a', 1), pooled(B, 'e', 1))    # d out, then full
+        assert four.pool_ids['smpl']['e'] == [1] and 'pool smpl: ids freed by d given out again' in four.pool_notes
 
 
 def test_every_refusal_has_a_fixture():

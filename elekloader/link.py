@@ -41,6 +41,12 @@ the i-th machine's slot, not as a sum. On a device with page ids for mods (the p
 `page_ids`), a mod may declare `"pages": n`: the linker gives it a run of n page ids from the
 profile's first up, past the ids mods' entries name themselves, and `__pages` is the run's first
 id (as `__knobs`). Page ids are not saved, so they are not kept in the lockfile.
+
+Id pools: a mod may declare `"id_pools": {"name": [first, last]}`, a run of ids it hands out to
+other mods (a framework mod's machines, say, whose id a sound saves), and a mod in the same build
+may ask for n of them with `"pool_ids": {"name": n}`: the linker gives each a stable id
+(store.pool_ids, kept in the lockfile), and a relocation to `__pool_<name>` with addend i (abs32 or
+abs16) is written as the i-th id, not as a sum.
 """
 import struct
 
@@ -57,6 +63,7 @@ RSIZE = {'abs32': 4, 'abs16': 2, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
 KNOBS = '__knobs'                 # a mod's first knob id (its "knobs")
 MACHINES = '__machines'           # + i: a mod's i-th machine slot (its "machine_knobs")
 PAGES = '__pages'                 # a mod's first page id (its "pages")
+POOL = '__pool_'                  # + name, + i: a mod's i-th id from that pool (its "pool_ids")
 DSP = '.dsp.'                     # a DSP section: '.dsp.' + its payload's tag
 
 
@@ -72,6 +79,7 @@ MAX_KNOBS = 1024                  # a mod's "knobs": at most this many ids
 MAX_MACHINES = 64                 # a mod's "machine_knobs": at most this many
 MAX_MACHINE_KNOBS = 16            # a machine's knobs, in "machine_knobs"
 MAX_PAGES = 256                   # a mod's "pages": at most this many ids
+MAX_POOL_IDS = 4096               # an id pool's size, and a mod's "pool_ids" from one
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words', '__run_hash'}
@@ -101,6 +109,10 @@ def run_hash(ddr):
     return h
 
 
+def _pool_name(k):
+    return isinstance(k, str) and 0 < len(k) <= 32 and all(c.isascii() and (c.isalnum() or c == '_') for c in k)
+
+
 class Mod2:
     """A loaded, validated format-2 mod."""
 
@@ -111,7 +123,7 @@ class Mod2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
                                      'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
-                                     'sharc_raw', 'knobs', 'machine_knobs', 'pages'}
+                                     'sharc_raw', 'knobs', 'machine_knobs', 'pages', 'id_pools', 'pool_ids'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -164,6 +176,9 @@ class Mod2:
                           (PAGES, 'its first page id')):
             if sym in self.symbols:
                 raise ModError('%s: %s is the linker\'s (%s), not a symbol of a mod' % (name, sym, what))
+        for nm in self.symbols:
+            if nm.startswith(POOL):
+                raise ModError('%s: %s is the linker\'s (an id pool\'s ids), not a symbol of a mod' % (name, nm))
         self.knobs = doc.get('knobs', 0)
         if type(self.knobs) is not int or not 0 <= self.knobs <= MAX_KNOBS:
             raise ModError('%s: "knobs" is a count of knob ids, 0..%d' % (name, MAX_KNOBS))
@@ -175,6 +190,19 @@ class Mod2:
         self.pages = doc.get('pages', 0)
         if type(self.pages) is not int or not 0 <= self.pages <= MAX_PAGES:
             raise ModError('%s: "pages" is a count of page ids, 0..%d' % (name, MAX_PAGES))
+        self.id_pools = doc.get('id_pools', {})
+        if type(self.id_pools) is not dict or any(
+                not _pool_name(k) or type(v) is not list or len(v) != 2 or any(type(x) is not int for x in v)
+                or not 0 <= v[0] <= v[1] < 1 << 16 or v[1] - v[0] >= MAX_POOL_IDS
+                for k, v in self.id_pools.items()):
+            raise ModError('%s: "id_pools" maps a pool\'s name (letters, digits, _) to [first, last], ids 0..65535, '
+                           'at most %d' % (name, MAX_POOL_IDS))
+        self.pool_ids = doc.get('pool_ids', {})
+        if type(self.pool_ids) is not dict or any(
+                not _pool_name(k) or type(v) is not int or not 1 <= v <= MAX_POOL_IDS
+                for k, v in self.pool_ids.items()):
+            raise ModError('%s: "pool_ids" maps a pool\'s name to the ids the mod asks for, 1..%d'
+                           % (name, MAX_POOL_IDS))
         self.exports = [str(x) for x in doc.get('exports', [])]
         for x in self.exports:
             if x not in self.symbols:
@@ -479,6 +507,14 @@ def kernel_registrations(m, image):
     return out
 
 
+def pool_refs(m):
+    """The id pools m's relocations name (__pool_<name>). -> {name}."""
+    out = {g[4 + len(POOL):] for _s, _o, _t, g, _a in m.relocs if g.startswith('sym:' + POOL)}
+    out |= {g[4 + len(POOL):] for s in m.sites for _o, _t, g, _a in s['relocs'] if g.startswith('sym:' + POOL)}
+    out |= {g[4 + len(POOL):] for c in m.contribute for _o, _t, g, _a in c['relocs'] if g.startswith('sym:' + POOL)}
+    return out
+
+
 def check(mods, image):
     """Static checks that need no layout. -> [problems]."""
     spans = []
@@ -595,11 +631,33 @@ def check(mods, image):
             bad.append('%s asks for page ids ("pages"), which the %s does not give mods'
                        % (m.label(), dev.name))
         for sym, key, n in ((KNOBS, 'knobs', m.knobs), (MACHINES, 'machine_knobs', len(m.machines)),
-                            (PAGES, 'pages', m.pages)):
+                            (PAGES, 'pages', m.pages)) + tuple(
+                (POOL + p, 'pool_ids', m.pool_ids.get(p, 0)) for p in sorted(pool_refs(m))):
             for where, t, a in m.knob_refs(sym):
                 if t not in ('abs32', 'abs16') or not 0 <= a < n:
                     bad.append('%s: %s is a %s reference to %s+%d; one takes abs32 or abs16 with an addend '
                                'below its "%s" (%d)' % (m.label(), where, t, sym, a, key, n))
+    pools = {}                                  # id pools: the mod that declares each
+    for m in mods:
+        for p in m.id_pools:
+            if p in pools:
+                bad.append('%s and %s both declare the id pool %s' % (pools[p].label(), m.label(), p))
+            else:
+                pools[p] = m
+    for m in mods:
+        for p in m.pool_ids:
+            if p not in pools:
+                bad.append('%s asks for ids from the pool %s ("pool_ids"), which no given mod declares'
+                           % (m.label(), p))
+        for p in pool_refs(m):
+            if p not in m.pool_ids:
+                bad.append('%s refers to %s%s and asks for no ids from that pool ("pool_ids")' % (m.label(), POOL, p))
+    for p, owner_m in pools.items():
+        first, last = owner_m.id_pools[p]
+        asked = sum(m.pool_ids.get(p, 0) for m in mods)
+        if asked > last - first + 1:
+            bad.append('the mods ask for %d ids from the pool %s, which has %d (%s declares %d..%d)'
+                       % (asked, p, last - first + 1, owner_m.label(), first, last))
     sized = reserve_names(dev, owner)
     fields = {}                                 # mod storage: the linker defines these
     for m in mods:
@@ -617,7 +675,8 @@ def check(mods, image):
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
                     or (x.endswith('_n') and x[:-2] in tables) or x in fields or (x == KNOBS and m.knobs) \
-                    or (x == MACHINES and m.machines) or (x == PAGES and m.pages):
+                    or (x == MACHINES and m.machines) or (x == PAGES and m.pages) \
+                    or (x.startswith(POOL) and x[len(POOL):] in m.pool_ids):
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
@@ -779,7 +838,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
     with mod storage .store (the new lockfile) and .store_notes; .knobs ({mod id:
     [first id, count]}) and .knob_notes for the mods' "knobs"; .machines ({mod id: [slot,
-    ...]}) and .machine_notes for their "machine_knobs"; .pages ({mod id: [first id, count]}). lock: the
+    ...]}) and .machine_notes for their "machine_knobs"; .pool_ids ({pool: {mod id: [id, ...]}})
+    and .pool_notes for their "pool_ids"; .pages ({mod id: [first id, count]}). lock: the
     build's lockfile, or None for a new one (elekloader/store.py). Raises
     ModError."""
     if not mods:
@@ -953,6 +1013,16 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         held = new_lock if new_lock is not None else {}
         machine_slots, machine_notes = store.machines(held, {m.id: m.machines for m in order if m.machines},
                                                       dev.machine_slots_for(core.version), direct)
+    # id pools: each "pool_ids" mod's ids from the pool another mod declares
+    pool_map, pool_notes = {}, []
+    pools = {p: m.id_pools[p] for m in order for p in m.id_pools}
+    if pools:
+        held = new_lock if new_lock is not None else {}
+        for p in sorted(pools):
+            want = {m.id: m.pool_ids[p] for m in order if m.pool_ids.get(p)}
+            got, notes = store.pool_ids(held, p, want, pools[p])
+            pool_map[p] = got
+            pool_notes += notes
     # page ids: each "pages" mod's run, past the ids mods' entries name themselves
     page_base = {}
     if dev.page_ids and any(m.pages for m in order):
@@ -1148,6 +1218,9 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         if tgt == 'sym:' + MACHINES and m.id in machine_slots:    # the add-th machine's slot, not a sum
             put(buf, off, typ, machine_slots[m.id][add], p, where)
             return
+        if tgt.startswith('sym:' + POOL) and m.id in pool_map.get(tgt[4 + len(POOL):], {}):
+            put(buf, off, typ, pool_map[tgt[4 + len(POOL):]][m.id][add], p, where)   # the add-th id
+            return
         put(buf, off, typ, resolve(m, tgt, where) + add, p, where)
 
     def put(buf, off, typ, value, p, where):
@@ -1319,6 +1392,11 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     for mid, b in knob_base.items():
         out.map['%s:%s' % (mid, KNOBS)] = b
     out.machines, out.machine_notes = machine_slots, machine_notes
+    out.pool_ids, out.pool_notes = pool_map, pool_notes
+    for p, got in pool_map.items():
+        for mid, ids in got.items():
+            for i, v in enumerate(ids):
+                out.map['%s:%s%s+%d' % (mid, POOL, p, i)] = v
     for mid, slots in machine_slots.items():
         for i, v in enumerate(slots):
             out.map['%s:%s+%d' % (mid, MACHINES, i)] = v

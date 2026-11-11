@@ -76,6 +76,9 @@ test('knob id ranges on the Analog Rytm MKII (core_params, core_param_locks)', (
     'a 1 and e 1 both take ids 570..573 (core_params, core_param_locks)',
     'a 1 and e 1 both take ids 570..573 (core_param_locks, core_param_locks)'])
   assert.deepEqual(mod('f', ['core_params', 9, 3]).idRanges(image), [])
+  assert.deepEqual(ids(check([mod('g', ['core_knob_faces', 39, 46])], image)), [])
+  assert.deepEqual(ids(check([mod('h', ['core_knob_faces', 46, 470])], image)), [
+    "h 1: its core_knob_faces entry takes ids 46..470, and 469..554 are core's lockable parameters' ids; a mod's own ids start at 555"])
 })
 
 test('mk1 machines claim their ids (machine:<id>, dnmachine:<id>)', () => {
@@ -341,6 +344,53 @@ test('machines by count and page ids by count, as tests/test_link_refusals.py', 
     const pg = link(mods(core(false), fixed, paged('p', 2), paged('q', 1)), image)
     assert.deepEqual([...pg.pages], [['p', [15, 2]], ['q', [17, 1]]])
     assert.equal(pg.map.get('p:__pages'), 15)
+  } finally {
+    ar.releases.splice(ar.releases.indexOf(rel), 1)
+  }
+})
+
+test('id pools: stable ids from a pool another mod declares, kept by the lockfile, as tests/test_link_refusals.py', () => {
+  const ar = ANALOG_RYTM_MK2, real = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(real.mainLen)
+  for (let i = 0; i < image.length; i += 2) image.set([0x4e, 0x71], i)
+  const rel = { version: 'SYN', syxSha256: sha(new TextEncoder().encode('synthetic pools')), mainSha256: sha(image), mainLen: image.length, binSha256: '' }
+  ar.releases.push(rel)
+  try {
+    const target = targetOf(ar, rel)
+    const core = { elemod: 2, id: 'core', version: '1', target,
+      sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+      collections: { ev_x: { entry: 4 }, core_store_ids: { entry: 4 } }, imports: ['__store_gen', '__store_gen2'] }
+    const owner = (id = 'f', pools: Record<string, unknown> = { smpl: [1, 4] }) => ({ elemod: 2, id, version: '1', target, requires: ['core'],
+      imports: ['core_fn'], id_pools: pools, sections: { '.run': { align: 4, len: 4, parts: [['hex', '4e714e75']] } } })
+    const pooled = (id: string, n: number, add: number | null = null) => ({ elemod: 2, id, version: '1', target, requires: ['core'],
+      pool_ids: { smpl: n }, imports: ['core_fn', '__pool_smpl'],
+      sections: { '.run': { align: 4, len: 4 * n, parts: [['hex', '00'.repeat(4 * n)]] } },
+      relocs: [...Array(n).keys()].map(i => ['.run', 4 * i, 'abs32', 'sym:__pool_smpl', add ?? i]) })
+    const mods = (...docs: Record<string, any>[]) => docs.map(d => new Mod2(structuredClone(d), d.id))
+    const one = link(mods(core, owner(), pooled('p', 2), pooled('d', 1)), image)
+    assert.deepEqual(Object.fromEntries([...one.poolIds.get('smpl')!]), { d: [1], p: [2, 3] })
+    assert.equal(one.map.get('p:__pool_smpl+1'), 3)
+    const at = one.layout.run_load - ar.mainLoad + one.layout.sections['p .run'] - one.layout.ddr[0]
+    const v = new DataView(one.image.buffer, one.image.byteOffset + at, 8)
+    assert.deepEqual([v.getUint32(0), v.getUint32(4)], [2, 3])
+    const two = link(mods(core, owner(), pooled('p', 2), pooled('a', 1)), image, one.store)
+    assert.deepEqual(Object.fromEntries([...two.poolIds.get('smpl')!]), { a: [4], p: [2, 3] })
+    const three = link(mods(core, owner(), pooled('p', 2), pooled('a', 1), pooled('d', 1)), image, two.store)
+    assert.ok(three.poolNotes.includes('d: id 1 of pool smpl back'))
+    assert.deepEqual(check(mods(core, pooled('p', 1)), image),
+      ['p 1 asks for ids from the pool smpl ("pool_ids"), which no given mod declares'])
+    assert.deepEqual(check(mods(core, owner(), owner('g'), pooled('p', 1)), image), ['f 1 and g 1 both declare the id pool smpl'])
+    assert.deepEqual(check(mods(core, owner('f', { smpl: [1, 2] }), pooled('p', 2), pooled('d', 1)), image),
+      ['the mods ask for 3 ids from the pool smpl, which has 2 (f 1 declares 1..2)'])
+    assert.deepEqual(check(mods(core, owner(), pooled('p', 2, 2)), image), [
+      'p 1: .run+0x0 is a abs32 reference to __pool_smpl+2; one takes abs32 or abs16 with an addend below its "pool_ids" (2)',
+      'p 1: .run+0x4 is a abs32 reference to __pool_smpl+2; one takes abs32 or abs16 with an addend below its "pool_ids" (2)'])
+    assert.throws(() => new Mod2({ ...owner(), id_pools: { smpl: [5, 4] } }, 'f'),
+      { message: 'f: "id_pools" maps a pool\'s name (letters, digits, _) to [first, last], ids 0..65535, at most 4096' })
+    assert.throws(() => new Mod2({ ...pooled('p', 1), pool_ids: { smpl: 0 } }, 'p'),
+      { message: 'p: "pool_ids" maps a pool\'s name to the ids the mod asks for, 1..4096' })
+    assert.throws(() => new Mod2({ ...pooled('p', 1), symbols: { __pool_x: ['.run', 0] } }, 'p'),
+      { message: "p: __pool_x is the linker's (an id pool's ids), not a symbol of a mod" })
   } finally {
     ar.releases.splice(ar.releases.indexOf(rel), 1)
   }

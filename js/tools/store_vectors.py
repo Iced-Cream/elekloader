@@ -380,11 +380,29 @@ MACHINE_LOCKS = {
              'freed_machines': [{'mod': 'b', 'index': 1, 'slot': 36, 'knobs': 2}]},
 }
 
+# id pools (store.pool_ids): each run is steps of [pool, want ({mod: n}), [first, last]]
+POOL_RUNS = {
+    'lowest ids, kept, freed, back and given again': [
+        ['smpl', {'a': 2, 'b': 1}, [1, 4]], ['other', {'a': 1}, [10, 10]], ['smpl', {'b': 1, 'c': 1}, [1, 4]],
+        ['smpl', {'b': 1, 'c': 1, 'a': 2}, [1, 4]], ['smpl', {'b': 1, 'c': 1, 'd': 1}, [1, 4]],
+        ['smpl', {'e': 5}, [1, 4]]],
+}
+POOL_LOCKS = {
+    'one id twice': {'pool_ids': [{'pool': 's', 'mod': 'a', 'index': 0, 'id': 1},
+                                  {'pool': 's', 'mod': 'b', 'index': 0, 'id': 1}], 'freed_pool_ids': []},
+    'one index twice': {'pool_ids': [{'pool': 's', 'mod': 'a', 'index': 0, 'id': 1},
+                                     {'pool': 's', 'mod': 'a', 'index': 0, 'id': 2}], 'freed_pool_ids': []},
+    'freed not a list': {'pool_ids': [], 'freed_pool_ids': {}},
+    'no pool': {'pool_ids': [{'mod': 'a', 'index': 0, 'id': 1}], 'freed_pool_ids': []},
+    'good': {'pool_ids': [{'pool': 's', 'mod': 'a', 'index': 0, 'id': 1}, {'pool': 't', 'mod': 'a', 'index': 0, 'id': 1}],
+             'freed_pool_ids': [{'pool': 's', 'mod': 'b', 'index': 1, 'id': 2}]},
+}
+
 
 def main():
     out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'handle_runs': {}, 'kind_runs': {},
            'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}, 'knob_runs': {}, 'knob_locks': {},
-           'machine_runs': {}, 'machine_locks': {}}
+           'machine_runs': {}, 'machine_locks': {}, 'pool_runs': {}, 'pool_locks': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -535,6 +553,24 @@ def main():
             out['machine_locks'][name] = {'lock': lock, 'error': None}
         except ModError as e:
             out['machine_locks'][name] = {'lock': lock, 'error': str(e)}
+    for name, steps in POOL_RUNS.items():
+        for start in ('none', 'fresh'):
+            lock, res = ({} if start == 'none' else store.fresh(DEV)), []
+            for pool, want, span in steps:
+                try:
+                    got, notes = store.pool_ids(lock, pool, want, span)
+                    res.append({'lock': json.loads(json.dumps(lock)), 'ids': got, 'notes': notes,
+                                'layout_id': store.layout_id(lock) if start == 'fresh' else None})
+                except ModError as e:
+                    res.append({'error': str(e)})
+            out['pool_runs']['%s (%s)' % (name, start)] = {'start': start, 'steps': steps, 'results': res}
+    for name, extra in POOL_LOCKS.items():
+        lock = dict(store.fresh(DEV), **extra)
+        try:
+            store.check_lock(lock, DEV)
+            out['pool_locks'][name] = {'lock': lock, 'error': None}
+        except ModError as e:
+            out['pool_locks'][name] = {'lock': lock, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')
     with open(path, 'w') as fh:
         json.dump(out, fh, indent=1)

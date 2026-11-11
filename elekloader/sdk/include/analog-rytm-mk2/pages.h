@@ -184,6 +184,45 @@ struct core_knob_look {
 /* the stock UI record of id (0..468; record 0 for any other id), to copy */
 const void *core_knob_stock_ui(int32_t id);
 
+/* Stock knob faces (sidecar-smpl-machines). A mod whose own machine takes
+ * over stock parameter records (smpl-machines' SMPL machines on the SMPL
+ * page's records 39..46) keeps the records, so the sound's slots, its
+ * p-locks, slides, LFO, MIDI and storage stay stock's, and changes how the
+ * knob shows for the sound that runs it. An entry in core_knob_faces answers
+ * for stock ids (1..468):
+ *
+ *     {"to": "core_knob_faces", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_faces", 0]]}
+ *
+ *     static const struct core_knob_face *my_face(int32_t id, void *sound);
+ *     const struct core_knob_faces my_faces = {39, 46, my_face};
+ *
+ * face(id, sound) is asked whenever stock reads the knob's label (+0x30) or
+ * name (+0x28), its UI record or its range: sound is the live sound item the
+ * page's knob set edits (core_current_sound_item's kind), or 0 where stock
+ * passes only the id (the UI record, the range, the graphic), meaning the
+ * current track's. It answers a face, or 0 for stock's. A face's label and
+ * name replace the record's (0: the record's); look, when not 0, is the
+ * stock id whose UI record draws the knob, and ui, when not 0, an 84-byte UI
+ * record of the mod's own (core_knob_looks' rules); min < max replace the
+ * range and the default (8.8), which stock's setter (0x400a906c) clamps a
+ * turn, a lock and MIDI to, and the graphic spans them as core_knob_looks'
+ * do. The value's text stays core_params' (a core_params entry may answer
+ * stock ids). Called in the UI task, often: answer from RAM. The linker
+ * refuses an entry whose ids take 469..554. */
+struct core_knob_face {
+    const char *label;      /* up to 4 characters; 0: the record's */
+    const char *name;       /* up to 32; 0: the record's */
+    int32_t look;           /* a stock id (1..468) whose knob it looks like; 0: its own */
+    const void *ui;         /* an 84-byte UI record of the mod's own; 0: look's */
+    int32_t min, max, def;  /* min < max: the range and default (8.8); else the record's */
+};
+
+struct core_knob_faces {
+    int32_t first, last;    /* the stock ids this entry answers for */
+    const struct core_knob_face *(*face)(int32_t id, void *sound);
+};
+
 struct core_param_lock {
     int32_t first, last;    /* the ids this entry answers for */
     /* step's lock of id on track, 8.8, or -1 for none (what the knob shows) */
