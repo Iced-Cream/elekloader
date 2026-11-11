@@ -200,8 +200,10 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic)
-    assert len(mod['sites']) == 125
+    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and
+    # the pads' three (ev_pad: strike, release, pressure) and the LEDs' two (led_set's and
+    # led_colour's slot colour sends)
+    assert len(mod['sites']) == 130
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
@@ -532,6 +534,43 @@ def test_core_ar2_screen_check_needs_0_12():
         else:
             raise AssertionError('the screen check linked with core 0.11')
         patch.build(SYX, [new, app], version='1.74', log=lambda *a: None)
+
+
+def test_core_ar2_pads_and_leds():
+    """ev_pad takes the UI loop's three calls into the views (strike, release, pressure) and
+    ev_leds the two slot colour sends; the sites are stock's calls, and pad-check links
+    (the build needs the cross toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    sites = {(x['addr'], x.get('target')): x for x in j['sites']}
+    for addr, target, stock_bytes in (('0x400a47ce', 'core_pad', '4eb9400a0398'),
+                                      ('0x400a4804', 'core_pad', '4eb9400a0398'),
+                                      ('0x400a4784', 'core_pad_touch', '4eb9400a03b4'),
+                                      ('0x40095e68', 'core_led_send', '4eb9400019e4'),
+                                      ('0x40096088', 'core_led_send', '4eb9400019e4')):
+        x = sites[(addr, target)]
+        assert x['op'] == 'jsr' and x['stock'] == stock_bytes, x
+    assert j['collections']['ev_pad'] == {'entry': 4, 'spare': 256}
+    assert j['collections']['ev_leds'] == {'entry': 4, 'spare': 256}
+    assert ('ev_tick', 'core_leds_tick', 1000000) in [(x['event'], x['fn'], x['order']) for x in j['subscribe']]
+    assert 'pads.c' in j['sources']
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 pads are for 1.74')
+    for x in j['sites']:
+        if x.get('target') in ('core_pad', 'core_pad_touch', 'core_led_send'):
+            o = int(x['addr'], 16) - DEV.main_load
+            assert img[o:o + 6].hex() == x['stock'], x
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'pad-check-ar2'), SYX, tmp)[0]
+        patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
 
 
 if __name__ == '__main__':

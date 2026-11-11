@@ -59,6 +59,16 @@
  *     core_voice_trigged(voice)   1 when the track trigged this block, else 0
  *     core_voice_velocity(voice)  the track's velocity word (0x800067c4 + 2t),
  *                                 before accent
+ *     core_voice_released(voice)  1 when the track's note was released this
+ *                                 block (pad, key or MIDI note-off, the
+ *                                 note's length, the sequencer), 2 when
+ *                                 stock cut every track at once (the kit
+ *                                 and project loads do), else 0. Stock's
+ *                                 stop and the loads send a note-off to
+ *                                 every track, so an end can come for a
+ *                                 note that already ended: a mod that
+ *                                 needs one end per note keeps its own
+ *                                 flag.
  *
  * Call them from the engine, for its own voice: they read the latch of the
  * voice's last call, so outside it they hold that call's values. Plain
@@ -125,5 +135,8 @@ struct core_machine {
 /* core 0.13 */
 int core_voice_trigged(int32_t voice);
 int core_voice_velocity(int32_t voice);
+
+/* core 0.15 or later */
+int core_voice_released(int32_t voice);
 
 #endif
