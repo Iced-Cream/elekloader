@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { ANALOG_RYTM_MK2 } from '../src/devices.ts'
 import { sha, toHex } from '../src/bytes.ts'
 import { Mod2, link } from '../src/link.ts'
-import { decode, encode, F_LOADER, PRE_CODE, PRE_DATA, SITE_COPIED, SITE_SITE } from '../src/desc.ts'
+import { ABI, decode, encode, F_LOADER, F_STAGE_TOP, PRE_CODE, PRE_DATA, SITE_COPIED, SITE_SITE } from '../src/desc.ts'
 import { crc32 } from '../src/zip.ts'
 import { ModError } from '../src/elemod.ts'
 
@@ -50,7 +50,7 @@ test('the build descriptor keeps whole orders (ABI 1.1), and reads a 1.0 block\'
   const c = V.cases.find((x: { name: string }) => x.name === 'whole orders, -1000000 and 1000000')
   const blk = Uint8Array.from(c.desc.match(/../g).map((h: string) => parseInt(h, 16)))
   const d = decode(blk)
-  assert.deepEqual(d.abi, [1, 2])
+  assert.deepEqual(d.abi, ABI)
   const x = d.tables.find(t => t.name === 'ev_x')!, r = d.tables.find(t => t.name === 'ev_render_x')!
   assert.deepEqual(x.entries, [[-1000000, 2], [-1000000, 2], [50, 1]])
   assert.deepEqual(r.entries, [[1000000, 2]])
@@ -65,6 +65,19 @@ test('the build descriptor keeps whole orders (ABI 1.1), and reads a 1.0 block\'
   assert.deepEqual(old.tables.find(t => t.name === 'ev_x')!.entries, [[0, 2], [0, 2], [50, 1]])
   assert.deepEqual(old.tables.find(t => t.name === 'ev_render_x')!.entries, [[65534, 2]])
   assert.deepEqual(old.tables.find(t => t.name === 'core_store_ids')!.entries, [[0x7fffffff, 0]])
+})
+
+test('ABI 1.3: the flags say whether the loader stages files at the area\'s top, and a 1.2 block has none', () => {
+  const c = V.cases.find((x: { name: string }) => x.name === 'whole orders, -1000000 and 1000000')
+  const d = decode(Uint8Array.from(c.desc.match(/../g).map((h: string) => parseInt(h, 16))))
+  assert.deepEqual([d.abi, d.flags], [[1, 3], 0])
+  const top = encode({ ...d, flags: F_STAGE_TOP })
+  assert.equal(decode(top).flags, F_STAGE_TOP)
+  const v = new DataView(top.buffer)              // as ABI 1.2 wrote it: the word is not read
+  v.setUint16(6, 2)
+  v.setUint32(0x0c, 0)
+  v.setUint32(0x0c, crc32(top))
+  assert.equal(decode(top).flags, 0)
 })
 
 test('ABI 1.2: the lock tables open to the loader alone, the site map, and pre-link ranges read back', () => {

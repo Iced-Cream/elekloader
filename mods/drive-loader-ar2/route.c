@@ -2,8 +2,8 @@
 /* drive-loader (Analog Rytm MKII, OS 1.74): the /mods route of stock's Data
  * router (README, "The /mods route"). A RouteTypeHandler added to the
  * router's resolver (route.s) lists DL_DIR's files plus .build, .status and .store,
- * and resolves /mods/<name> to a RAM entry over the staging buffer. Stock
- * streams every transfer through that buffer inside Elektron's data
+ * and resolves /mods/<name> to a RAM entry over the live stage (fs.h,
+ * dl_stage_at). Stock streams every transfer through it inside Elektron's data
  * container; the entry's functions fill it from the file before a read and
  * commit it to the file after a successful upload (stock calls the entry's
  * +0x4c function from WriteClose), or delete the file after a Clear.
@@ -15,7 +15,9 @@
 #include "fs.h"
 
 /* std::string: copy-on-write, one pointer to the chars */
+#ifndef STR_NEW                                /* tests/drive_move_host.c: its own */
 #define STR_NEW ((void (*)(void *, const char *, void *))0x401bcff0)
+#endif
 #define STR_EMPTY 0x419f2a0cu                  /* the empty string, never freed */
 #ifndef DL_HOST_FS                             /* tests/drive_move_host.c: its own heap and ekFS */
 #define NEW ((void *(*)(unsigned))0x40082a40)  /* operator new */
@@ -94,12 +96,25 @@ extern char dl_check_dir[] __attribute__((weak));       /* ... that folder, belo
 extern unsigned char dl_store_io __attribute__((weak)); /* /mods/.store: 0 none, 1 kept, 2 written, 3 failed */
 extern unsigned dl_store_info[] __attribute__((weak));  /* ... the live layout ID, fields, parked fields */
 
+/* the live stage (fs.h): the floor until the boot gives it the area's free tail */
+unsigned char *volatile dl_stage_at = drive_staging;
+volatile unsigned dl_stage_len = DL_STAGING_SIZE;
+
+void dl_stage_tail(unsigned lo, unsigned hi)
+{
+    lo = (lo + 15) & ~15u;
+    if (hi <= lo || hi - lo <= DL_STAGING_SIZE)
+        return;                            /* the floor is the larger: keep it */
+    dl_stage_at = (unsigned char *)lo;     /* the start first: a reader that sees it with the */
+    dl_stage_len = hi - lo;                /* old size still stays inside the new stage */
+}
+
 static char dl_note[64];
 static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
 int dl_last_io[4];                             /* the last commit's raw results, for .status */                       /* the route's last commit or delete */
 static char *dl_status_text;                  /* from the heap, sized to the boot's records */
 static unsigned dl_status_cap;
-#define STATUS_HEAD 512                        /* the lines before the records */
+#define STATUS_HEAD 640                        /* the lines before the records */
 #define STATUS_LINE 84                         /* id 28, state, code, arg, detail 32, at most */
 #define STATUS_SITE 56                         /* "site ", id 28, " 0x", 8 digits, " ", len */
 static unsigned dl_dir_obj[0x130 / 4];         /* under dl_lock */
@@ -222,6 +237,7 @@ struct clo {
     int what;
     int reading;                          /* set by the fill: counted in dl_reads */
     char name[DL_NAME_MAX + 1];           /* a path below DL_DIR */
+    unsigned size;                        /* a file's size when its entry was made */
 };
 
 /* A read's reader copies the entry, closures and all, after the fill, and destroys the
@@ -298,13 +314,23 @@ static void set_fn(unsigned char *slot, const struct clo *proto, void *inv)
 }
 
 /* +0x1c, before a read stream and before an upload's first chunk:
- * {u8 ok, string msg} */
+ * {u8 ok, string msg}. For an upload, the entry stock hands over already holds the
+ * header's payload size at +0x10, and stock 1.74 writes the first chunk's body to the
+ * entry's address before the +0x6c check (FUN_4008c1c6) and puts no limit of its own on
+ * a RAM entry's size (traced 2026-11-11): so this is the check that keeps an upload inside
+ * the stage, and dl_hdr's is the second line. A read's size is the file's, which
+ * big_perm already keeps within the stage. */
 unsigned dl_pre(unsigned char *res, void **f, const unsigned char *entry)
 {
-    (void)f, (void)entry;
+    const struct clo *c = *f;
+    unsigned size = *(const unsigned *)(entry + E_SIZE);
     zero(res, 8);
     if (dl_staging_owner) {
         set_str(res + 4, "Busy: the loader is using /mods");
+        return (unsigned)res;
+    }
+    if (size > (c->what == C_MOVE ? MOVE_MAX : c->what == C_FILE ? dl_stage_len : DL_STAGING_SIZE)) {
+        set_str(res + 4, "Too large for the free room (see /mods/.status, stage)");
         return (unsigned)res;
     }
     res[0] = 1;
@@ -320,6 +346,8 @@ void dl_fill(void **f)
     struct clo *c = *f;
     char path[DL_PATH_MAX];
     dl_file fl;
+    unsigned char *stage = dl_stage_at;
+    unsigned cap = c->size < dl_stage_len ? c->size : dl_stage_len;   /* what the router serves */
     int n = 0, want;
     if (c->what != C_FILE)
         return;
@@ -336,15 +364,16 @@ void dl_fill(void **f)
     }
     want = dl_fs_file_size(path);         /* its own open: a small file's size is read */
     if (dl_fs_open(&fl, path, 0) == 0) {
-        if (want > DL_STAGING_SIZE)
-            want = DL_STAGING_SIZE;
+        if (want > (int)cap)
+            want = (int)cap;
         if (want > 0)
-            n = dl_fs_read(&fl, drive_staging, want);
+            n = dl_fs_read(&fl, stage, want);
         if (n < 0)
             n = 0;
     }
     dl_fs_close(&fl);
-    zero(drive_staging + n, DL_STAGING_SIZE - n);
+    if ((unsigned)n < cap)                /* the entry's size, not the whole stage */
+        zero(stage + n, cap - n);
     if (n == 0)
         note("read failed:", c->name);
     dl_unlock();
@@ -352,8 +381,8 @@ void dl_fill(void **f)
 
 /* +0x6c, the container's header has arrived: {u8 ok, string msg +4, u8 value +8}.
  * The router has already checked the family and replaced the entry's size
- * with the header's payload size, so this check alone keeps an upload
- * inside the staging buffer. */
+ * with the header's payload size. dl_pre has refused an upload over the stage
+ * before its first chunk; this is the second line. */
 unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
 {
     const char *why = 0;
@@ -363,7 +392,8 @@ unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
         why = "Invalid file type";
     else if (h[H_COMPRESSED])
         why = "Compressed uploads are not supported";
-    else if (be32(h + H_PAYLOAD) > (c->what == C_MOVE ? MOVE_MAX : DL_STAGING_SIZE))
+    else if (be32(h + H_PAYLOAD) > (c->what == C_MOVE ? MOVE_MAX : c->what == C_FILE ? dl_stage_len
+                                                                       : DL_STAGING_SIZE))
         why = "Invalid payload size";
     else if (dl_staging_owner)
         why = "Busy: the loader is using /mods";
@@ -436,14 +466,14 @@ void dl_change(void **f, const unsigned char *h)
         return;
     }
     n = be32(h + H_PAYLOAD);
-    if (dl_staging_owner || n > DL_STAGING_SIZE || dl_upload_epoch != dl_staging_epoch) {
+    if (dl_staging_owner || n > dl_stage_len || dl_upload_epoch != dl_staging_epoch) {
         note("upload dropped:", c->name);
         dl_unlock();
         return;
     }
     path_of(tmp, c->name, ".tmp");
     r = dl_fs_open(&fl, tmp, 1) ? 1 : 0;      /* 1 open, 2 write, 3 size, 4 rename */
-    if (!r && dl_fs_write(&fl, drive_staging, n))
+    if (!r && dl_fs_write(&fl, dl_stage_at, n))
         r = 2;
     dl_fs_close(&fl);
     if (!r && dl_fs_file_size(tmp) != (int)n)
@@ -519,6 +549,11 @@ static int status_text(void)
         }
         at = cat(at, end, ")\n");
     }
+    at = cat(at, end, "stage: ");      /* the live stage: the most a read or an upload takes */
+    at = num(at, end, dl_stage_len);
+    at = cat(at, end, " bytes at ");
+    at = hex8(at, end, (unsigned)dl_stage_at);
+    at = cat(at, end, dl_stage_at == drive_staging ? ", floor\n" : ", free tail\n");
     if (&dl_store_io && dl_store_io) {   /* +Drive storage (boot.c, dstore.h) */
         static const char *const io[] = {"-", "kept", "written", "write failed"};
         at = cat(at, end, "store: id ");
@@ -857,13 +892,13 @@ static const char *move(unsigned n)
     return keep_active(from, to) ? "moved, but active not rewritten" : 0;
 }
 
-/* A file larger than the staging buffer resolves too, so that a Clear and a listing work
- * whatever its size, but without P_READ: the router serves a read from the buffer
- * (dl_fill), which can't hold it. An upload over it stays allowed, since dl_hdr checks the
- * new payload against the buffer. */
+/* A file larger than the stage resolves too, so that a Clear and a listing work
+ * whatever its size, but without P_READ: the router serves a read from the stage
+ * (dl_fill), which can't hold it. An upload over it stays allowed, since dl_pre and dl_hdr
+ * check the new payload against the stage. */
 static int big_perm(int size, int perm)
 {
-    return size > DL_STAGING_SIZE ? perm & ~P_READ : perm;
+    return (unsigned)size > dl_stage_len ? perm & ~P_READ : perm;
 }
 
 /* a file's entry, at any size: -> the refusal, or 0 with *size (0 for a new file) and *perm
@@ -923,7 +958,7 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
             why = "No .store yet";
         else {                            /* resolves at any size: a read only when it fits (big_perm) */
             put32(e + E_TYPE, EMOD);
-            put32(e + E_ADDR, (unsigned)drive_staging);
+            put32(e + E_ADDR, (unsigned)dl_stage_at);
             perm = big_perm(size, P_READ);
             c.what = C_FILE;
             copy(c.name, name, len(name) + 1);
@@ -980,7 +1015,7 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         why = file_perm(name, &size, &perm);
         if (!why) {
             put32(e + E_TYPE, EMOD);
-            put32(e + E_ADDR, (unsigned)drive_staging);
+            put32(e + E_ADDR, (unsigned)dl_stage_at);
             c.what = C_FILE;
             copy(c.name, name, len(name) + 1);
         }
@@ -992,6 +1027,7 @@ refused:
         return (unsigned)res;
     }
 made:
+    c.size = (unsigned)size;
     put32(e + E_KIND, 1);
     *(unsigned short *)(e + E_PERM) = perm;
     put32(e + E_SIZE, size);

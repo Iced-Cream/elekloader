@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -302,6 +303,37 @@ class CheckTick(unittest.TestCase):
             self.assertEqual((got['STAGING'], got['READING']), ('0', '0'), close)
             self.assertNotEqual(got['CHECKED'], '257/257')
 
+
+
+class Reader(unittest.TestCase):
+    """boot.c's dl_read_more over a made-up file (tests/drive_reader_host.c): a file larger than the
+    live stage reads to its end for its size and CRC alone, never past the stage, so the MODS page
+    can leave its check to the boot (page.c inspect, "big"; STAGE.md)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work = tempfile.TemporaryDirectory()
+        cls.exe = os.path.join(cls.work.name, 'drive_reader_host')
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_reader_host.c'),
+                        '-Wl,--unresolved-symbols=ignore-all'], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.work.cleanup()
+
+    def read(self, size, max_):
+        out = subprocess.run([self.exe, str(size), str(max_)], capture_output=True, text=True,
+                             check=True).stdout.split()
+        crc = zlib.crc32(bytes((i * 7 + 3) & 0xff for i in range(size)))
+        return int(out[1]), int(out[3]), int(out[5], 16) == crc, out[7]
+
+    def test_a_file_that_fits_reads_whole(self):
+        self.assertEqual(self.read(1000, 0x10000), (1, 1000, True, 'ok'))
+        self.assertEqual(self.read(0x10000, 0x10000), (1, 0x10000, True, 'ok'))
+
+    def test_a_file_over_the_stage_is_measured_not_kept(self):
+        self.assertEqual(self.read(0x10001, 0x10000), (-2, 0x10001, True, 'ok'))
+        self.assertEqual(self.read(1060000, 0x10000), (-2, 1060000, True, 'ok'))
 
 if __name__ == '__main__':
     unittest.main()

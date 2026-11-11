@@ -14,8 +14,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 
 - **The file list.** One row a file: its id (its file name until one is known) and, on the
   right where SAMPLES puts sizes, its size in whole KB once the check has read it (blank
-  before), or `!` for a file pass 1 refuses (a bad file, another device, a newer core, over
-  512 KB). The ticks start as the saved build on entering MODS and after each change; coming
+  before), or `!` for a file pass 1 refuses (a bad file, another device, a newer core, larger
+  than the +Drive area). A file over the stage but within the area (STAGE.md) shows
+  its size, and a save leaves its check to the next boot. The ticks start as the saved build on entering MODS and after each change; coming
   back from the build list keeps the ticks as they were.
 - **Why a `!`.** Ticking a `!` row also shows its whole refusal in stock's message box: in the
   file list the file's own (`OTHER DEVICE/OS`, `NEEDS CORE 0.12`, `NOT FORMAT 2`...), in the
@@ -148,9 +149,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   3.2 s.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
-- **Reading files.** The page reads each file into the staging buffer, which it takes only
-  while it reads that one file. The route answers `busy` then, and only then. A separate
-  buffer for the UI task would cost another 512 KB, or limit what the page can check. Every
+- **Reading files.** The page reads each file into the stage (STAGE.md), which it
+  takes only while it reads that one file. The route answers `busy` then, and only then. A
+  separate buffer for the UI task would cost area, or limit what the page can check. Every
   ekFS call is made under `dl_lock`.
 - **Keeping off reads.** Stock streams a read out of the buffer after the route fills it, so
   a page check during a read would hand the client the page's bytes under a good CRC.

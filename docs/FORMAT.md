@@ -356,7 +356,7 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 0 | `ok` | |
 | 1 | `missing` | the file is not in `/mods` |
 | 2 | `changed` | its CRC-32 is not the one `/mods/active` has |
-| 3 | `too-big` | larger than the staging buffer |
+| 3 | `too-big` | too large for the boot to read in |
 | 4 | `json` | not a JSON object |
 | 5 | `format` | not a format-2 mod the loader reads (the id, version, a relocation, an order, an export) |
 | 6 | `target` | made for another device or OS |

@@ -11,7 +11,9 @@ the loader's firmware side is in its
 
 The link runs in this order:
 1. *Pass 1*, each line in order: a missing file or a different CRC is
-   dropped; a file larger than the staging buffer is refused; then the
+   dropped; a file larger than the room it is read into (the +Drive area
+   on a build whose descriptor has `F_STAGE_TOP`, else the staging buffer)
+   is refused; then the
    file's own rules, first failure wins: JSON, format (`elemod` 2, the id,
    the version), target (`target.device` and `target.os` against the
    descriptor's), the fields above, sections, regions, relocations,
@@ -32,23 +34,25 @@ The link runs in this order:
    capacity, the last living mod in id order with an entry there is
    refused. Then the storage room ("+Drive storage", `fit`), one refusal
    at a time (`store`), and the rounds again, until neither refuses.
-3. *Layout* from the area's start: every `.run` in id order at its
+3. *Layout* from the area's start: every `.run` in placement order at its
    alignment (at least 4), then every `.bss` likewise, each block ending
-   4-aligned. Past the area's end, the last living mod is refused and the
-   check runs again. Then the living mods' storage fields are placed from
-   `/mods/.store` ("+Drive storage"), which gives each field's symbol its
-   descriptor. With top-staging (a prototype, off in every build:
-   `dl_stage_top`, `Build.stage_top`), the link reads each file into the
-   area itself, and the layout places the mods by file length, the longest
-   first (ties in id order), and also refuses when a mod's file, read just
-   under the area's end, would reach below the end of its own `.run`; the
-   refusal's KB is the worse of the two overruns. Pass 2 then runs in that
-   order, and every `.bss` and the bytes above it are zeroed after it.
-4. *Pass 2*, in id order: `.run` decoded into place (a `stock` part is
+   4-aligned. Past the area's end, the last living mod in id order is
+   refused and the check runs again. Then the living mods' storage fields
+   are placed from `/mods/.store` ("+Drive storage"), which gives each
+   field's symbol its descriptor. The Drive Loader stages files at the
+   area's top (decided 2026-11-11; `dl_stage_top`, the descriptor's
+   `F_STAGE_TOP`, `Build.stage_top`): pass 1 reads each file at the area's
+   start and pass 2 just under its end, so the placement order is by file
+   length, the longest first (ties in id order), and the layout also
+   refuses when a mod's file, read there, would reach below the end of its
+   own `.run`; the refusal's KB is the worse of the two overruns. Without
+   the flag, the placement order is the id order.
+4. *Pass 2*, in placement order: `.run` decoded into place (a `stock` part is
    copied from the running OS), `.bss` zeroed, relocations applied (a
    symbol is the mod's own first, then a global name, then `core_zero` for
    a weak import). A `pc16` out of range refuses the mod and the check
-   runs again.
+   runs again. With the stage at the top, every `.bss` and the bytes above
+   it, to the highest a read reached, are zeroed after pass 2.
 5. *Merge*: each table that gets an entry is rewritten with the flashed
    entries and the new ones sorted by (order, id, then the flashed position
    or the contribution's index and entry), the entries' relocations applied
@@ -146,7 +150,12 @@ nothing is uploaded if one is refused; the folders are made as needed), `rm NAME
 folder; the route refuses a folder with anything in it, `Folder not empty`) and `active NAMES...` (writes `/mods/active` when the set loads). A NAME is a path below
 `/mods`, in up to 3 folders (`fx/delays/x.elemod`); the route lists a folder as an item whose
 children byte is 1, as stock's `/soundbanks` lists its banks, and `Mods.walk` lists every folder. `--folder` names the route's
-folder (`/mods`). The TypeScript engine has `check` (`js/src/drive.ts`),
+folder (`/mods`). `room` prints the most bytes one upload or read takes on
+the unit now: the `stage:` line of `/mods/.status`, the Drive Loader's live
+stage ([STAGE.md](../mods/drive-loader-ar2/STAGE.md)), which changes with each boot's set; `put`
+refuses a file over it before sending anything. Reads count the bytes they
+get and never use the router's per-mille progress, which wraps past
+4,294,967 bytes. The TypeScript engine has `check` (`js/src/drive.ts`),
 the container and the same requests (`container.ts`, `datarpc.ts`, over any
 port: Web MIDI on a page), with the same results and bytes
 (`js/test/drive.test.ts`).
@@ -304,11 +313,11 @@ image>` prints it.
   order must be -2,147,483,648 to 2,147,483,646; the linker's own entries
   (storage, payloads, `.fast` copies) have 2,147,483,647.
 
-Its bytes (ABI 1.2) are below, "The descriptor's bytes".
+Its bytes (ABI 1.3) are below, "The descriptor's bytes".
 
 ## The descriptor's bytes
 
-The build descriptor ("The build descriptor" above), ABI 1.2, is big-endian, its records 4-byte aligned, and its
+The build descriptor ("The build descriptor" above), ABI 1.3, is big-endian, its records 4-byte aligned, and its
 names offsets into its string pool (UTF-8, NUL-terminated):
 
 | offset | field |
@@ -319,7 +328,8 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x20 | u16 counts: modules, exports, tables, claims |
 | +0x28 | u32 offsets: modules, exports, tables, claims, key arrays, area record, storage record |
 | +0x44 | u32 the device key, u32 the OS version (names) |
-| +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges; zero to +0x60 |
+| +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
+| +0x58 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); zero to +0x60 |
 
 | record | bytes | fields |
 |---|---|---|

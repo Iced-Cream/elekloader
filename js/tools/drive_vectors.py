@@ -31,6 +31,32 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
+    return out + _top(B)
+
+
+def _top(B):
+    """Sets on a build whose loader stages files at the area's top (ABI 1.3, F_STAGE_TOP): the
+    placement by file length, the room each file needs above the code before it, and too-big at the
+    area's size (drive._layout, placement)."""
+    from test_drive_top_stage import code_mod
+    area = ('top', 0x8000)
+    n = T.built(B, area)[1]
+    room = n.hi - n.lo
+    # z-big: the longest file (about 22 KB) with 4 KB of code; a-small: 8 KB of code in a 17 KB file.
+    # In id order a-small's code would sit under z-big's file; longest first, both fit.
+    big, small = code_mod(B, 'z-big', 4 * 1024, pad=13000), code_mod(B, 'a-small', 8 * 1024)
+    bare = len(T.files(T.hello(B, description=''))[0][1])
+    out = [('top: a file over the staging buffer loads', T.files(T.hello(B, description='x' * (T.STAGING + 1))), 'top'),
+           ('top: the longest file first', T.files(small, big), area),
+           ('top: the longest file first, the other order', T.files(big, small), area),
+           ('top: one more mod is out of room', T.files(small, big, code_mod(B, 'm-more', 8 * 1024)), area),
+           ('top: a file that leaves no room for its own code',
+            T.files(T.hello(B, description='x' * (room - 8 - bare))), area),
+           ('top: a file over the area', T.files(T.hello(B, description='x' * (room + 1 - bare))), area)]
+    b = T.built(B, area)[1]
+    got = [[c.code for c in drive.check(b, f).choices] for _n, f, _a in out[1:]]
+    room_, big_ = drive.CODE['room'], drive.CODE['too-big']
+    assert got[:2] == [[0, 0], [0, 0]] and room_ in got[2] and got[3:] == [[room_], [big_]], got
     return out
 
 
@@ -101,7 +127,7 @@ def main():
             r = drive.check(drive.load_build(block(area)), files)
             row = {'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
                    'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)}
-            if area is not None:            # its own build: a smaller area, smaller pools
+            if area is not None:            # its own build: a smaller area, smaller pools, or the stage at the top
                 row['build'] = block(area).hex()
             rows.append(row)
         release = {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,

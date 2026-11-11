@@ -1038,6 +1038,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       claims: order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
+      flags: w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0,
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]) }
   }
   // the flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each site and copied block

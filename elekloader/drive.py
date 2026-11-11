@@ -48,7 +48,7 @@ CODES = {
     0: ('ok', 'loaded'),
     1: ('missing', 'the file is not in /mods'),
     2: ('changed', 'the file is not the one chosen (its CRC-32 differs)'),
-    3: ('too-big', 'the file is larger than the staging buffer'),
+    3: ('too-big', 'the file is larger than the room the boot reads it into'),
     4: ('json', 'not a JSON object'),
     5: ('format', 'not a format-2 mod the loader can read'),
     6: ('target', 'made for another device or OS'),
@@ -129,10 +129,10 @@ class Build:
         self.table = {t['name']: i for i, t in enumerate(self.tables)}
         self.claims = [nm for kind, _mi, nm in d['claims'] if kind == desc.CLAIM_NAME]
         self.ram_end, self.lo, self.hi, self.staging, self.staging_size = d['area']
-        # top-staging (prototype; dlink.c dl_stage_top): the boot reads each file into the area
-        # itself, so a file may be as large as the area, and the layout places the mods by file
-        # length with room for each file above the code before it. No descriptor says so yet.
-        self.stage_top = False
+        # top-staging (dlink.c dl_stage_top; the descriptor's F_STAGE_TOP, ABI 1.3): the boot reads
+        # each file into the area itself, so a file may be as large as the area, and the layout
+        # places the mods by file length with room for each file above the code before it
+        self.stage_top = bool(d.get('flags', 0) & desc.F_STAGE_TOP)
         # the global names, in the boot linker's order: flashed exports, tables, NAME_n, core_desc
         self.globals = {}
         for m in self.modules:
@@ -1164,6 +1164,24 @@ def active_text(entries):
                 or any(ch in n for ch in '\n\r'):
             raise ModError('%r cannot be a line of /mods/active' % n)
     return ''.join('%s %08x\n' % (n, file_crc(raw)) for n, raw in entries)
+
+
+def stage_of(status):
+    """`/mods/.status`'s text -> the live stage's size in bytes (its `stage:` line: the most a read
+    or an upload takes on that boot), or None for a loader without the line."""
+    for ln in status.split('\n'):
+        w = ln.split()
+        if len(w) >= 3 and w[0] == 'stage:' and w[1].isdigit() and w[2] == 'bytes':
+            return int(w[1])
+    return None
+
+
+def upload_room(build, status):
+    """The most bytes one upload or read takes on the unit now: the `stage:` line of its .status,
+    else what the build says (the staging buffer, which with the stage at the area's top is only
+    the floor, so it never allows more than the unit takes)."""
+    n = stage_of(status) if status is not None else None
+    return n if n is not None else build.staging_size or None
 
 
 def parse_active(text):
