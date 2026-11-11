@@ -79,6 +79,44 @@ static int utf8_ok(const u8 *p, u32 n)
 
 static u32 pad4(u32 n) { return (n + 3) & ~3u; }
 
+/* ---- the core's LFO destination fields (drive_store.Base.lfo_dst, dst_fields) ------------ */
+static const char *const DST_SYM[2] = {"core_lfo_dst", "core_fx_lfo_dst"};
+
+/* Does the flashed build place the core's LFO destination field for this scope (1 sound, 2 kit)? It
+ * does when one of its own fields of the scope is an LFO destination. */
+static int lfo_dst(const struct ds_base *b, u32 scope)
+{
+    u32 i;
+    for (i = 0; i < b->ncodes; i++)
+        if ((dl_rd32(b->codes + 8 * i + 4) & DS_LFO_FLAG) && dl_rd32(b->codes + 8 * i) >> 28 == scope)
+            return 1;
+    return 0;
+}
+
+/* The core's LFO destination fields the +Drive places for w: for each scope with an "lfo" field, where
+ * the core keeps the field live and the flashed build does not place it. -> how many, into x[0..1]. */
+static u32 dst_fields(const struct ds_base *b, const struct ds_want *w, u32 n, struct ds_want *x)
+{
+    u32 s, i, k = 0;
+    if (!b->live_dst || !b->core)
+        return 0;
+    for (s = 1; s <= 2; s++) {
+        if (lfo_dst(b, s))
+            continue;
+        for (i = 0; i < n && !(w[i].scope == s && (w[i].flags & DS_LFO)); i++)
+            ;
+        if (i == n)
+            continue;
+        dl_memset(&x[k], 0, sizeof x[k]);
+        x[k].mod = b->core;
+        x[k].sym = DST_SYM[s - 1];
+        x[k].scope = (u8)s;
+        x[k].bits = DS_LFO_DST_BITS;
+        k++;
+    }
+    return k;
+}
+
 /* ---- fit (drive_store.fit, _needs) ------------------------------------------------------ */
 static int uses(const struct ds_want *e, u32 what)
 {
@@ -93,7 +131,19 @@ static int uses(const struct ds_want *e, u32 what)
 
 int ds_fit_one(const struct ds_base *b, const struct ds_want *w, u32 n, const u8 *off, struct ds_short *s)
 {
-    u32 what, i;
+    u32 what, i, nx = 0;
+    struct ds_want x[2];
+    if (b->live_dst) {                   /* the core's LFO fields, for the living set's "lfo" fields */
+        struct ds_want *a = dl_alloc((n + 1) * sizeof *a);
+        u32 m = 0;
+        if (a) {
+            for (i = 0; i < n; i++)
+                if (!(off && off[i]))
+                    a[m++] = w[i];
+            nx = dst_fields(b, a, m, x);
+            dl_free(a);
+        }
+    }
     for (what = 0; what < DS_W_N; what++) {
         s32 need = 0, have, sp;
         int victim = -1;
@@ -103,6 +153,9 @@ int ds_fit_one(const struct ds_base *b, const struct ds_want *w, u32 n, const u8
             need += what < DS_SCOPES ? w[i].bits : 1;
             victim = (int)i;
         }
+        for (i = 0; i < nx; i++)
+            if (uses(&x[i], what))
+                need += x[i].bits;
         if (what < DS_SCOPES) {
             have = (s32)b->room[what] - (s32)b->used[what];
         } else if (what == DS_W_CODES) {
@@ -779,11 +832,14 @@ static int ccs(struct ds_state *st, const struct ds_base *b, struct work *W, con
     return 1;
 }
 
-static int lfo_dst(const struct ds_base *b, u32 scope)
+/* Is the core's LFO destination field of this scope (1 sound, 2 kit) among the placed fields? */
+static int placed_dst(const struct ds_state *st, const struct ds_base *b, u32 scope)
 {
     u32 i;
-    for (i = 0; i < b->ncodes; i++)
-        if ((dl_rd32(b->codes + 8 * i + 4) & DS_LFO_FLAG) && dl_rd32(b->codes + 8 * i) >> 28 == scope)
+    if (!b->core || scope < 1 || scope > 2)
+        return 0;
+    for (i = 0; i < st->nf; i++)
+        if (keyeq(st->f[i].mod, st->f[i].sym, b->core, DST_SYM[scope - 1]))
             return 1;
     return 0;
 }
@@ -810,8 +866,37 @@ static void add_id(u32 *list, u32 *n, u32 max, u32 id, u32 self)
     list[(*n)++] = id;
 }
 
+static int allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const struct ds_want *w, u32 n,
+                    u32 nw, struct ds_out *out);
+
+/* The chosen set and the core's LFO destination fields it needs, placed together (drive_store.allocate's
+ * want_f); out->desc covers the set's n entries, out->lfo_dst the core's. */
 int ds_allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const struct ds_want *w, u32 n,
                 struct ds_out *out)
+{
+    struct ds_want *a;
+    u32 nx, i;
+    int rc;
+    dl_memset(out, 0, sizeof *out);
+    if (n > DS_MAX_FIELDS)
+        return -2;
+    a = dl_alloc((n + 2) * sizeof *a);
+    if (!a)
+        return -1;
+    for (i = 0; i < n; i++)
+        a[i] = w[i];
+    nx = dst_fields(b, w, n, a + n);
+    rc = allocate(b, prev, nprev, a, n + nx, n, out);
+    if (!rc)
+        for (i = 0; i < nx; i++)
+            out->lfo_dst[a[n + i].scope - 1] = out->desc[n + i];
+    dl_free(a);
+    return rc;
+}
+
+/* n entries of w, the first nw the chosen set's (ds_fit_one's input), the rest the core's */
+static int allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const struct ds_want *w, u32 n,
+                    u32 nw, struct ds_out *out)
 {
     struct ds_state *st = 0;
     struct work *W = 0;
@@ -820,8 +905,7 @@ int ds_allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const struct
     u32 i, k, s, nf = 0, nkept, ngone = 0, old_id, slot;
     int err, rc = -2;
 
-    dl_memset(out, 0, sizeof *out);
-    if (n > DS_MAX_FIELDS || ds_fit_one(b, w, n, 0, &sh))
+    if (n > DS_MAX_FIELDS || ds_fit_one(b, w, nw, 0, &sh))
         return -2;
     for (i = 0; i < n; i++)              /* a symbol declared twice (the link refuses it first) */
         for (k = 0; k < i; k++)
@@ -1010,7 +1094,7 @@ int ds_allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const struct
             const struct ds_tag *c = &st->cd[i];
             const struct ds_want *x = want_of(w, n, c->mod, c->sym);
             u32 flags = 0, d = x ? out->desc[x - w] : 0;
-            if (x && (x->flags & DS_LFO) && lfo_dst(b, x->scope))
+            if (x && (x->flags & DS_LFO) && (lfo_dst(b, x->scope) || placed_dst(st, b, x->scope)))
                 flags |= DS_LFO_FLAG;
             if (x && (x->flags & DS_ROUGH))
                 flags |= DS_SMOOTH_OFF;

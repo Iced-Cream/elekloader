@@ -3,7 +3,8 @@
 dstore.c) built for the computer and run on a made-up Analog Rytm MKII build whose core keeps +Drive
 storage, step by step with /mods/.store carried from one boot to the next, against the twin
 (elekloader/drive.py, `elekloader link --device-layout --store`): the same refusals, area bytes (each
-storage import relocated to its field's descriptor), tables, core_store_gens and .store bytes.
+storage import relocated to its field's descriptor), tables, core_store_gens, core_lfo_dsts and .store
+bytes.
 
     python tests/test_drive_link_store.py
 
@@ -109,6 +110,11 @@ def compare(F, sm, ram, st, r):
         bad.append('.store')
     if r.gens is None or at(F.build.gens_at, 6) != r.gens:
         bad.append('core_store_gens')
+    if r.placed is not None:                    # the core's LFO fields the +Drive placed; else the .bss's 0
+        for i, s in enumerate(('sound', 'kit')):
+            d = r.placed.lfo_dsts.get(s, 0)
+            if at(F.build.dsts_at + 4 * i, 4) != d.to_bytes(4, 'big'):
+                bad.append('core_lfo_dsts %s' % s)
     return bad
 
 
@@ -144,8 +150,14 @@ def main():
             if name.startswith('all four'):
                 why = {c.id: (drive.CODES[c.code][0], c.detail) for c in r.choices}
                 check('all four: voice-dac then fx-sends refused for room',
-                      why == {'duck': ('ok', ''), 'lfo-rnd': ('ok', ''), 'voice-dac': ('store', 'sound 62 56'),
+                      why == {'duck': ('ok', ''), 'lfo-rnd': ('ok', ''), 'voice-dac': ('store', 'sound 69 56'),
                               'fx-sends': ('store', 'kit 81 64')}, why)
+                d = r.placed.lfo_dsts.get('sound', 0)
+                check('all four: core_lfo_dst placed for lfo-rnd, and its code an LFO destination',
+                      set(r.placed.lfo_dsts) == {'sound'} and d >> 22 & 63 == 7
+                      and all(int.from_bytes(e[4:], 'big') & mstore.LFO_FLAG for e in r.placed.code_entries
+                              if e[:4] == r.placed.descriptors[('lfo-rnd', 'lr_a')].to_bytes(4, 'big')),
+                      r.placed.lfo_dsts)
                 check('all four: the host message', drive.message(21, 'sound 62 56')
                       == 'storage: sound needs 62 of 56', drive.message(21, 'sound 62 56'))
                 at = F.build.tables[F.build.table['core_store_ids']]['address'] - F.ram_base
@@ -157,6 +169,9 @@ def main():
                       ram[lo:lo + 4] == d.to_bytes(4, 'big') and d >> 28 == 2 and (d >> 22) & 63 == 4, hex(d))
             if name.startswith('duck out'):
                 check('duck out: two parked fields', len(r.placed.state['parked']) == 2, r.placed.state['parked'])
+            if name.startswith('nothing chosen'):
+                check('nothing chosen: core_lfo_dst parks with lfo-rnd, and the core keeps none',
+                      r.placed.lfo_dsts == {} and any(f['sym'] == mstore.LOCK_DST for f in r.placed.state['parked']))
             prev = st
         # a refusal in pass 1: a field the Rytm can't keep
         bad = storage_mod(B, {'id': 'cv', 'storage': [{'sym': 'cv1', 'scope': 'kit', 'bits': 4, 'lock': True,

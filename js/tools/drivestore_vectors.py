@@ -20,16 +20,19 @@ from elekloader.elemod import ModError                     # noqa: E402
 import test_drive_store as T                               # noqa: E402
 
 
-def base_json(used=None, gen=None, codes=(), ccs=(), inits=0, spare=32, fid=T.FID):
+def base_json(used=None, gen=None, codes=(), ccs=(), inits=0, spare=32, fid=T.FID, live=False):
     used, gen = used or {}, gen or {}
-    return {'device': T.DEV, 'scopes': {s: [T.ROOM[s], used.get(s, 0), gen.get(s, 1)] for s in store.SCOPES},
-            'flashed_id': fid, 'ancestors': [0x1234], 'codes': [list(c) for c in codes],
-            'ccs': [list(c) for c in ccs], 'inits': inits, 'room': {t: spare for t in ds.TABLES}}
+    out = {'device': T.DEV, 'scopes': {s: [T.ROOM[s], used.get(s, 0), gen.get(s, 1)] for s in store.SCOPES},
+           'flashed_id': fid, 'ancestors': [0x1234], 'codes': [list(c) for c in codes],
+           'ccs': [list(c) for c in ccs], 'inits': inits, 'room': {t: spare for t in ds.TABLES}}
+    if live:                                    # a core with its LFO destinations' fields live (core_lfo_dsts)
+        out['live_dst'] = True
+    return out
 
 
 def make_base(j):
     return ds.Base(j['device'], j['scopes'], j['flashed_id'], j['ancestors'], j['codes'], j['ccs'], j['inits'],
-                   j['room'])
+                   j['room'], live_dst=j.get('live_dst', False))
 
 
 M = {'duck': T.DUCK, 'lfo': T.LFO, 'fx': T.FX, 'vdac': T.VDAC, 'a': T.A4, 'b': T.B4,
@@ -42,6 +45,7 @@ M = {'duck': T.DUCK, 'lfo': T.LFO, 'fx': T.FX, 'vdac': T.VDAC, 'a': T.A4, 'b': T
      'rough': T.mod('rough', T.f('rg', 'sound', 3, lock=True, smooth=False, mod=True, init=2)),
      'duck2': T.mod('duck', T.f('duck_src', 'kit', 5, lock=True, cc=True), T.f('duck_amt', 'kit', 28, lock=True, init=5)),
      'utf': T.mod('écho', T.f('ec', 'global', 3)),
+     'klfo': T.KLFO,
      'zed': T.mod('zed', T.f('zz', 'global', 2))}
 LFO_CODES = [(1 << 28 | 3 << 22, 42 | store.LFO_FLAG)]
 MANY = [(1 << 28, c) for c in range(42, 126)]
@@ -72,6 +76,13 @@ RUNS = [
              (base_json(spare=0, ccs=[]), ['fit', ['vdac']])]),
     ('fit', [(base_json(), ['fit', ['duck', 'fx']]), (base_json(), ['fit', ['fx', 'lfo', 'vdac']]),
              (base_json(spare=0), ['fit', ['lfo']]), (base_json(), ['place', ['duck', 'fx']])]),
+    ('LFO fields on demand', [(base_json(live=True), ['place', ['duck', 'lfo']]),
+                              (base_json(live=True), ['place', ['duck']]),
+                              (base_json(live=True), ['place', ['duck', 'lfo']]),
+                              (base_json(live=True, codes=LFO_CODES), ['place', ['lfo']]),
+                              (base_json(live=True), ['place', ['klfo', 'lfo']]),
+                              (base_json(live=True), ['fit', ['lfo', 'vdac']]),
+                              (base_json(), ['fit', ['lfo', 'vdac']])]),
     ('names and handles', [(base_json(), ['place', ['utf', 'zed', 'sidecar', 'vdac']]),
                            (base_json(), ['place', ['zed', 'sidecar']])]),
 ]

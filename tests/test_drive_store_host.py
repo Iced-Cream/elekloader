@@ -49,6 +49,7 @@ def step_input(bj, mods, prev, op, arg):
     words += [str(len(bj['codes']))] + [str(x) for c in bj['codes'] for x in c]
     words += [str(len(bj['ccs']))] + [str(x) for c in bj['ccs'] for x in c]
     words += [str(bj['inits'])] + [str(-1 if bj['room'].get(t) is None else bj['room'][t]) for t in TABLES]
+    words += [str(int(bj.get('live_dst', False)))]
     w = want_words(mods)
     words += [str(len(w))] + w
     words += [prev.hex() if prev else '-', op]
@@ -98,6 +99,7 @@ def random_runs(exe, runs, steps, seed=5):
             codes[0] = (1 << 28 | 3 << 22, codes[0][1] | 0x100)
         ccs = [(0, c) for c in rnd.sample([8, 9, 48, 84, 85, 119, 116], rnd.choice([0, 1, 3]))]
         vers = [0] * len(names)
+        live = run % 2 == 1                     # odd runs: a core with its LFO fields live (core_lfo_dsts)
         for k in range(steps):
             if rnd.random() < 0.15:
                 s = rnd.choice(list(room))
@@ -109,10 +111,11 @@ def random_runs(exe, runs, steps, seed=5):
             spare = rnd.choice([32, 32, 32, 2])
             bj = {'device': 'analog-rytm-mk2', 'scopes': {s: [room[s], used[s], gen[s]] for s in room},
                   'flashed_id': 0x5a17c0de + run, 'ancestors': [0x1234], 'codes': [list(c) for c in codes],
-                  'ccs': [list(c) for c in ccs], 'inits': rnd.choice([0, 3]), 'room': {t: spare for t in TABLES}}
+                  'ccs': [list(c) for c in ccs], 'inits': rnd.choice([0, 3]), 'room': {t: spare for t in TABLES},
+                  'live_dst': live}
             mods = [mod(i, vers[i]) for i in sorted(rnd.sample(range(len(names)), rnd.randint(0, 5)))]
             b = ds.Base(bj['device'], bj['scopes'], bj['flashed_id'], bj['ancestors'], bj['codes'], bj['ccs'],
-                        bj['inits'], bj['room'])
+                        bj['inits'], bj['room'], live_dst=live)
             name = 'random run %d step %d' % (run + 1, k + 1)
             if rnd.random() < 0.1 and st is not None and st['parked']:
                 who = rnd.choice(st['parked'])['mod']
@@ -140,7 +143,7 @@ def random_runs(exe, runs, steps, seed=5):
             sm = p.summary()
             exp = {'id': sm['id'], 'ancestors': sm['ancestors'], 'gens': [sm['generations'][s] for s in SCOPES],
                    'fields': sm['fields'], 'parked': sm['parked'], 'codes': sm['codes'], 'ccs': sm['ccs'],
-                   'inits': sm['inits'], 'handles': sm['handles'], 'store': sm['store']}
+                   'inits': sm['inits'], 'handles': sm['handles'], 'lfo_dsts': sm['lfo_dsts'], 'store': sm['store']}
             got.pop('nparked', None)
             if got != exp:
                 fails.append(name)
@@ -180,7 +183,8 @@ def main():
                 exp = {'id': want['id'], 'ancestors': want['ancestors'],
                        'gens': [want['generations'][s] for s in SCOPES], 'fields': want['fields'],
                        'parked': want['parked'], 'codes': want['codes'], 'ccs': want['ccs'],
-                       'inits': want['inits'], 'handles': want['handles'], 'store': want['store']}
+                       'inits': want['inits'], 'handles': want['handles'], 'lfo_dsts': want.get('lfo_dsts', {}),
+                       'store': want['store']}
                 got.pop('nparked', None)
                 ok = got == exp
                 if not ok:

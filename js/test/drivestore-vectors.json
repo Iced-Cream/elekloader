@@ -92,6 +92,18 @@
     }
    ]
   },
+  "klfo": {
+   "id": "kit-lfo",
+   "storage": [
+    {
+     "bits": 8,
+     "lfo": true,
+     "lock": true,
+     "scope": "kit",
+     "sym": "kl_a"
+    }
+   ]
+  },
   "lfo": {
    "id": "lfo-rnd",
    "storage": [
@@ -242,6 +254,7 @@
      "handles": [],
      "id": "0x5a17c0de",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [],
      "parked": [],
      "store": "444c53540001000000000058f92685925a17c0de5a17c0de7f000000000000000000000000000000010100000000003801010000000000400101000000000028010100000000001001010000000000200101000000000ec0"
@@ -338,6 +351,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -447,6 +461,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -484,6 +499,7 @@
      "handles": [],
      "id": "0x2a23bfbe",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
       "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
@@ -523,6 +539,7 @@
      "handles": [],
      "id": "0x684bc9a3",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "small sm: 8 bits of kit storage at bit 24",
       "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
@@ -567,6 +584,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: back at bit 36 of kit storage, with the values it had",
       "duck duck_src: back at bit 32 of kit storage, with the values it had",
@@ -842,6 +860,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -872,6 +891,7 @@
      "handles": [],
      "id": "0x0b3296d1",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
       "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
@@ -913,6 +933,7 @@
      "handles": [],
      "id": "0xf456455b",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "+Drive kit storage repacked (generation 2), as its never-used bits ran out: projects and sounds saved before load it at defaults",
       "fx-sends fx_k: 25 bits of kit storage at bit 39",
@@ -1190,6 +1211,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -1227,6 +1249,7 @@
      "handles": [],
      "id": "0x2a23bfbe",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
       "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
@@ -1277,6 +1300,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 4",
       "duck duck_src: 4 bits of kit storage at bit 0",
@@ -1542,6 +1566,7 @@
      "handles": [],
      "id": "0xee20d2ed",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "a a1: 4 bits of sound storage at bit 52",
       "b b1: 4 bits of sound storage at bit 48",
@@ -1571,6 +1596,7 @@
      "handles": [],
      "id": "0xee20d2ed",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "b b1 (sound): parked; its bits and values are kept for when it comes back"
      ],
@@ -1601,6 +1627,7 @@
      "handles": [],
      "id": "0x9b8ed875",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "+Drive sound storage repacked (generation 2), as the flashed build took its bits: projects and sounds saved before load it at defaults",
       "layout ID 0x9b8ed875 (from 0xee20d2ed, whose projects it still reads)"
@@ -1631,6 +1658,7 @@
      "handles": [],
      "id": "0x51b89769",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "+Drive sound storage repacked (generation 3), as the flashed build repacked it: projects and sounds saved before load it at defaults",
       "layout ID 0x51b89769 (from 0x9b8ed875, whose projects it still reads)"
@@ -1901,6 +1929,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -1947,6 +1976,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "+Drive kit storage repacked (generation 2), as the flashed build repacked it: projects and sounds saved before load it at defaults",
       "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
@@ -1987,6 +2017,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "lfo-rnd lr_a (sound): parked; its bits and values are kept for when it comes back",
       "lfo-rnd lr_a: lock code 125 kept for it while it is out",
@@ -2208,6 +2239,7 @@
       "00000002",
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -2259,6 +2291,7 @@
       "00000002",
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_src: lock code 126 is the flashed build's now",
       "duck duck_src: lock code 123",
@@ -2292,6 +2325,7 @@
      "handles": [],
      "id": "0x99f28aa2",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "rough rg (sound): parked; its bits and values are kept for when it comes back",
       "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
@@ -2539,6 +2573,7 @@
      "handles": [],
      "id": "0x93c908e4",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "two t1: 1 bits of sound storage at bit 55",
       "two t2: 1 bits of sound storage at bit 54",
@@ -2573,6 +2608,7 @@
      "handles": [],
      "id": "0xc52929b7",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "two t2 (sound): parked; its bits and values are kept for when it comes back",
       "two t1 (sound): parked; its bits and values are kept for when it comes back",
@@ -3816,6 +3852,7 @@
      "inits": [
       "00000005"
      ],
+     "lfo_dsts": {},
      "notes": [
       "duck duck_amt: 28 bits of kit storage at bit 36",
       "duck duck_src: 4 bits of kit storage at bit 32",
@@ -3854,6 +3891,7 @@
      "handles": [],
      "id": "0x5109f6d2",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "s s1 (sound): parked; its bits and values are kept for when it comes back",
       "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
@@ -4447,6 +4485,646 @@
    ]
   },
   {
+   "name": "LFO fields on demand",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000210000017d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000021"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x61a4f838",
+     "inits": [
+      "00000005"
+     ],
+     "lfo_dsts": {
+      "sound": "0x11c00031"
+     },
+     "notes": [
+      "core core_lfo_dst: 7 bits of sound storage at bit 49",
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "lfo-rnd lr_a: 16 bits of sound storage at bit 33",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "lfo-rnd lr_a: lock code 125",
+      "duck duck_src: CC 119",
+      "layout ID 0x61a4f838 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c53540001000000000100f0ea98985a17c0de61a4f8387c010004000000030000000100000000010100000000002101010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002100000000070400006c666f2d726e646c725f61000107003100000000040c0000636f7265636f72655f6c666f5f6473740204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x61a4f838",
+     "inits": [
+      "00000005"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "lfo-rnd lr_a (sound): parked; its bits and values are kept for when it comes back",
+      "core core_lfo_dst (sound): parked; its bits and values are kept for when it comes back",
+      "lfo-rnd lr_a: lock code 125 kept for it while it is out"
+     ],
+     "parked": [
+      "lfo-rnd/lr_a 0x14000021",
+      "core/core_lfo_dst 0x11c00031"
+     ],
+     "store": "444c53540001000000000100511f6aaa5a17c0de61a4f8387c010002000200020001000100000000010100000000002101010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d740110002100000000070400006c666f2d726e646c725f61000107003100000000040c0000636f7265636f72655f6c666f5f6473747e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d747d0704006c666f2d726e646c725f6100770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000210000017d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000021"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x61a4f838",
+     "inits": [
+      "00000005"
+     ],
+     "lfo_dsts": {
+      "sound": "0x11c00031"
+     },
+     "notes": [
+      "core core_lfo_dst: back at bit 49 of sound storage, with the values it had",
+      "lfo-rnd lr_a: back at bit 33 of sound storage, with the values it had",
+      "lfo-rnd lr_a: back with lock code 125"
+     ],
+     "parked": [],
+     "store": "444c53540001000000000100f0ea98985a17c0de61a4f8387c010004000000030000000100000000010100000000002101010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002100000000070400006c666f2d726e646c725f61000107003100000000040c0000636f7265636f72655f6c666f5f6473740204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "140000210000017d"
+     ],
+     "fields": {
+      "lfo-rnd/lr_a": "0x14000021"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x61a4f838",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "core core_lfo_dst (sound): parked; its bits and values are kept for when it comes back",
+      "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_src: lock code 126 kept for it while it is out",
+      "duck duck_amt: lock code 127 kept for it while it is out",
+      "duck duck_src: CC 119 kept for it until the unused CCs run out"
+     ],
+     "parked": [
+      "core/core_lfo_dst 0x11c00031",
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c5354000100000000010060195b9e5a17c0de61a4f8387c010001000300010002000000010000010100000000002101010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002100000000070400006c666f2d726e646c725f61000107003100000000040c0000636f7265636f72655f6c666f5f6473740204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x61a4f838",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "220000110000017c",
+      "140000210000017d"
+     ],
+     "fields": {
+      "kit-lfo/kl_a": "0x22000011",
+      "lfo-rnd/lr_a": "0x14000021"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x68950d39",
+     "inits": [],
+     "lfo_dsts": {
+      "kit": "0x21c00019",
+      "sound": "0x11c00031"
+     },
+     "notes": [
+      "core core_fx_lfo_dst: 7 bits of kit storage at bit 25",
+      "core core_lfo_dst: back at bit 49 of sound storage, with the values it had",
+      "kit-lfo kl_a: 8 bits of kit storage at bit 17",
+      "kit-lfo kl_a: lock code 124",
+      "layout ID 0x68950d39 (from 0x61a4f838, whose projects it still reads)"
+     ],
+     "parked": [
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c5354000100000000014cbd171c8a5a17c0de68950d397b020004000200020002000000010000010100000000002101010000000000110101000000000028010100000000001001010000000000200101000000000ec061a4f8385a17c0de0110002100000000070400006c666f2d726e646c725f61000107003100000000040c0000636f7265636f72655f6c666f5f6473740208001100000000070400006b69742d6c666f6b6c5f61000207001900000000040f0000636f7265636f72655f66785f6c666f5f647374000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747c0704006b69742d6c666f6b6c5f61007d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "fit": [
+      [
+       "voice-dac",
+       "sound",
+       6
+      ]
+     ]
+    },
+    {
+     "fit": []
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "live_dst": true,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "live_dst": true,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "live_dst": true,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        281018368,
+        298
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "live_dst": true,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "live_dst": true,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "klfo",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "live_dst": true,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "lfo",
+       "vdac"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "lfo",
+       "vdac"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
    "name": "names and handles",
    "results": [
     {
@@ -4477,6 +5155,7 @@
      ],
      "id": "0x80fbd8e7",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "sidecar sc_h: 16 bits of project storage at bit 3760",
       "voice-dac vd_g: 1 bits of global storage at bit 39",
@@ -4513,6 +5192,7 @@
      ],
      "id": "0x80fbd8e7",
      "inits": [],
+     "lfo_dsts": {},
      "notes": [
       "voice-dac vd_s2 (sound): parked; its bits and values are kept for when it comes back",
       "voice-dac vd_s (sound): parked; its bits and values are kept for when it comes back",

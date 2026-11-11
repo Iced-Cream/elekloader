@@ -126,6 +126,8 @@ int main(void)
     b.inits = num();
     for (i = 0; i < 4; i++)
         b.spare[i] = (s32)num();
+    b.live_dst = num();
+    b.core = "core";
     n = num();
     for (i = 0; i < n; i++) {
         w[i].mod = hexstr();
@@ -215,7 +217,12 @@ int main(void)
         printf("], \"handles\": [");
         for (i = 0; i < o.nhandles; i++)
             printf("%s\"%08x\"", i ? ", " : "", o.handles[i]);
-        printf("], \"nparked\": %u, \"store\": ", o.nparked);
+        printf("], \"lfo_dsts\": {");
+        if (o.lfo_dst[1])
+            printf("\"kit\": \"0x%08x\"", o.lfo_dst[1]);
+        if (o.lfo_dst[0])
+            printf("%s\"sound\": \"0x%08x\"", o.lfo_dst[1] ? ", " : "", o.lfo_dst[0]);
+        printf("}, \"nparked\": %u, \"store\": ", o.nparked);
         hexout(o.bytes, o.nbytes);
         printf("}\n");
         ds_out_free(&o);

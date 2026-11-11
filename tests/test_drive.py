@@ -43,9 +43,10 @@ def flashed(B, pad=0, store=False):
         core['imports'] = ['__store_gen', '__store_gen2']
         core['collections'].update({k: {'entry': e} for k, e in (('core_store_ids', 4), ('core_lock_codes', 8),
                                                                  ('core_lock_ccs', 8), ('core_field_inits', 4))})
-        core['sections']['.bss'] = {'align': 4, 'size': 8}
+        core['sections']['.bss'] = {'align': 4, 'size': 16}
         core['symbols']['core_store_gens'] = ['.bss', 0]
-        core['exports'].append('core_store_gens')
+        core['symbols']['core_lfo_dsts'] = ['.bss', 8]
+        core['exports'] += ['core_store_gens', 'core_lfo_dsts']
     loader = B.other('drive-loader', imports=['core_desc'],
                      relocs=[['.run', 4, 'abs32', 'sym:core_desc', 0]])
     loader['sections']['.bss'] = {'size': STAGING + pad}   # pad: a bigger build, a smaller area
