@@ -32,6 +32,11 @@
  *     47 BT TEST   9..13                 52 CB TEST   10..12, 16 (no LEV)
  *     48 LT TEST   9..12
  *
+ * From core 0.15 a filled TEST slot shows its knobs in the public order,
+ * knobs[1..7] on A..G and LEV on H (stock's TEST pages put LEV on A and the
+ * rest in each test's own order), and CORE_MACHINE_LOOKS (below) gives a
+ * knob a stock knob's look in place of the test machine's.
+ *
  * Mods that used these records as spare parameters (fx-sends, duck,
  * voice-dac) move off them for 0.13; one that still uses a slot's records
  * declares "machine:<n>" in its resources, so the linker refuses it next to
@@ -100,6 +105,32 @@ struct core_machine {
     const char *name;       /* "BD TX-9"; 0: the slot's stock name */
     const char *label;      /* four letters: "BDT9"; 0: the slot's stock label */
     struct core_machine_knob knobs[8];  /* sound indices 9..16: LEV, then A..H's order */
+    const struct core_machine_look *looks;  /* CORE_MACHINE_LOOKS: 8, knobs[]' order */
+};
+
+/* flags (core 0.15+) */
+#define CORE_MACHINE_LOOKS 0x0002   /* looks follows knobs[] */
+
+/* core 0.15+: a knob's look (docs/ADAPTING.md, "Machines (core-ar2 0.5,
+ * Analog Rytm MKII)"). A slot's records keep the UI record stock built for
+ * them at boot (a TEST record's is its test machine's: a dial where the
+ * machine wants a switch, a switch where it wants a dial). With
+ * CORE_MACHINE_LOOKS set, looks[k] gives knobs[k] the look of any stock knob,
+ * as core_knob_looks does for a mod's own ids (pages.h):
+ *
+ *     look  the stock id (1..468) whose knob it is drawn as; 0 keeps the
+ *           record's own
+ *     ui    an 84-byte UI record of the mod's own, or 0 for look's
+ *
+ * The look brings look's value text with its graphic (a FIN look shows
+ * -64..+63, a switch 0/1): pick one whose text fits the knob. The range
+ * stays the knob's (min..max), and the graphic spans it. The look
+ * belongs to the record while the mod fills the slot, so it shows wherever
+ * the machine is on a track and nowhere else. A knob whose name is 0 keeps
+ * the stock record and its look. */
+struct core_machine_look {
+    int32_t look;
+    const void *(*ui)(int32_t id);
 };
 
 /* flags (core 0.15+) */
