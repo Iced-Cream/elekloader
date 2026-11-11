@@ -43,9 +43,11 @@ Which machine a sound runs:
    knobs' values as they were. With a required machine, or no machines,
    TRK + SMPL is stock's.
 
-A choice that changes the machine the sound runs to a machine writes that
-machine's defaults into its knobs that have their own range (`min < max`),
-as a knob turn writes them (`core_param_set`).
+A choice that changes the machine the sound runs writes the new machine's
+defaults, as a knob turn writes them (`core_param_set`): a machine's into
+its knobs that have their own range (`min < max`), stock's from its own
+SMPL page records. SMP's word (index 19) is never written, so the sound
+keeps its sample.
 3. **Auto**: on AUTO, one whose `bind` is `SMPL_DEFAULT` for the SRC
    machine, else stock's.
 

@@ -320,19 +320,43 @@ static const char *choice_name(void)
 /* sets the current sound's choice to c on track t; when that changes the
  * machine the sound runs to machine m, m's knob defaults are written as a
  * knob turn writes them (a knob with its own range: min < max) */
+/* stock's SMPL page records, 39..46: +0x04 the sound index, +0x10 the
+ * default (8.8; on 1.74 TUN 64, FIN 64, SMP 0, BR 0, STA 0, END 120, LOP 0,
+ * LEV 100) */
+#define STOCK_RECORD(k) ((const int32_t *)(0x401bfbc8 + 0x34 * (FIRST_REC + (k))))
+#define SMP_INDEX 19                    /* the sample slot: a move keeps it */
+
+/* the default a move to m writes into knob k, or 0 for none: a machine's
+ * knob with its own range, or stock's record (m 0) */
+static int knob_default(const struct smpl_machine *m, int k, int32_t *def)
+{
+    if (FIRST_INDEX + k == SMP_INDEX)
+        return 0;
+    if (m) {
+        const struct smpl_knob *n = &m->knobs[k];
+        if (!n->label || n->min >= n->max)
+            return 0;
+        *def = n->def;
+        return 1;
+    }
+    if (STOCK_RECORD(k)[1] != FIRST_INDEX + k)
+        return 0;
+    *def = STOCK_RECORD(k)[4];
+    return 1;
+}
+
 static void choice_set(unsigned char *s, int t, unsigned c)
 {
     const struct smpl_machine *before = machine_of(s, t), *after;
+    int32_t def;
     int k;
     core_store_set(STORE(smpl_choice), s, 0, c);
     after = machine_of(s, t);
-    if (!after || after == before)
+    if (after == before)
         return;
-    for (k = 0; k < 8; k++) {
-        const struct smpl_knob *n = &after->knobs[k];
-        if (n->label && n->min < n->max)
-            core_param_set(t, FIRST_INDEX + k, n->def, 0);
-    }
+    for (k = 0; k < 8; k++)
+        if (knob_default(after, k, &def))
+            core_param_set(t, FIRST_INDEX + k, def, 0);
 }
 
 static void choice_turn(int delta)
