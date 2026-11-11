@@ -200,8 +200,14 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic)
-    assert len(mod['sites']) == 125
+    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic),
+    # and the engine push's sound (0.15+: core_trig_sound)
+    assert len(mod['sites']) == 126
+    # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
+    x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
+    assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x
+    o = 0x4011f5f6 - DEV.main_load
+    assert img[o:o + 12].hex() == '2f02486a00144ebae4d0508f', x
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
