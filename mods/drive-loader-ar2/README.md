@@ -8,8 +8,8 @@ The 512 KB is the loader's own choice, not a limit of the unit, so a later versi
 loader can change it: it is `DL_STAGING_SIZE` in `fs.h` and the `.space` and
 `drive_staging_size` in `route.s`, which would change together.
 The route, the boot link and the MODS page use `DL_STAGING_SIZE`, and `elekloader mods` and the
-web view read the size from the descriptor, so a build with another size refuses only files
-larger than its own buffer. The buffer is in the loader's
+web view read the size from the descriptor. A file over the buffer still lists
+and clears, unreadable (`file_perm`). The buffer is in the loader's
 `.bss`, which the +Drive area starts after, so every KB added to it is a KB less of area
 (below, "The area"), and a smaller buffer gives area back but takes smaller mod files.
 

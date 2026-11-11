@@ -10,6 +10,8 @@
  * "--", then requests:
  *   mv FROM|TO     an upload of "FROM\nTO" to .mv     -> "ok" or the refusal
  *   mkdir FOLDER   an upload to FOLDER/.dir           -> "ok" or "failed"
+ *   entry NAME     a file's entry (file_perm)          -> "ok SIZE read write clear" or the refusal
+ * A tree line "NAME=@N" is a file of N bytes.
  * After each, the tree: "TREE p1 ; p2 ; ..." sorted, and "ACTIVE text" with "|" for newlines. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -255,7 +257,10 @@ int main(void)
         }
         i = find(path) >= 0 ? find(path) : fs_add(path, 0);
         fsn[i].dir = 0;
-        if (eq) {
+        if (eq && eq[0] == '@') {           /* "=@N": N bytes of zeros */
+            fsn[i].n = (unsigned)strtoul(eq + 1, 0, 0);
+            fsn[i].data = calloc(1, fsn[i].n + 1);
+        } else if (eq) {
             for (c = eq; *c; c++)
                 if (*c == '|')
                     *c = '\n';
@@ -276,6 +281,17 @@ int main(void)
             why = move((unsigned)n);
             dl_move_seen = 1;            /* the page took it */
             printf("%s\n", why ? why : "ok");
+        } else if (!strncmp(line, "entry ", 6)) {
+            int size, perm = 0;
+            const char *why;
+            path_of(path, line + 6, "");
+            size = dl_fs_file_size(path);
+            why = file_perm(line + 6, &size, &perm);
+            if (why)
+                printf("%s\n", why);
+            else
+                printf("ok %d%s%s%s\n", size, perm & P_READ ? " read" : "", perm & P_WRITE ? " write" : "",
+                       perm & P_CLEAR ? " clear" : "");
         } else if (!strncmp(line, "mkdir ", 6)) {
             printf("%s\n", make_folder(line + 6) ? "failed" : "ok");
         }
