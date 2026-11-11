@@ -130,7 +130,9 @@ uint8_t core_voice_due;                     /* slots skipped since their last SY
 /* per slot: the frame bytes its quiet call sets, as offset << 8 | value */
 static uint32_t replay[8][REPLAY], replay_new[REPLAY];
 static uint8_t replays[8];
-static uint32_t frame_before[FRAME_LONGS];
+/* on a 16-byte line: the copy and compare touch 62 lines, not 63, and no
+ * long of it straddles two lines */
+static uint32_t frame_before[FRAME_LONGS] __attribute__((aligned(16)));
 /* idle.s: the frame copied by movem, and a bit per 8-long chunk (31 chunks)
  * that differs from the copy (C's two loops were most of the checked call's
  * cost, about 5 and 14 instructions a long) */
