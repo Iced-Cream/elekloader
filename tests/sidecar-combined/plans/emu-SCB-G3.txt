@@ -1,0 +1,35 @@
+# sidecar combined emulator gate (2026-11-10): SCB3 (core sidecar combined + analoghealth 1.3 + test-looks-check) flashed over SCB2.
+format = 1
+name = SCB G3 SCB3 over SCB2
+unit = rytm
+out = ../runs
+refs = refs/scb-G3
+flash = ../os/SCB3.syx
+os = ../os/SCB2.syx
+note = SCB3 (core sidecar combined + analoghealth 1.3 + test-looks-check) flashed over SCB2
+
+[after the flash]
+say proves evidence: elkflash commit ack and reboot on 1.74, then the stop square on the home screen, and the unit answers a ping (the rest of the home screen shows the owner active project, so it is not compared)
+wait 2
+expect-screen home-stop 10 rows=0-9 cols=112-127
+ping
+shot after-flash.png
+
+[no freeze]
+say proves works: 30 s later, with MIDI notes played on the auto channel 14 (notes 0-3, tracks 1-4), the OS still draws the stop square and answers a ping (no freeze, fault or reboot)
+note 14 0 100 200
+note 14 1 100 200
+note 14 2 100 200
+note 14 3 100 200
+wait 30
+note 14 0 100 200
+expect-screen home-stop 5 rows=0-9 cols=112-127
+ping
+shot after-30s.png
+
+[load]
+say proves evidence: CPU, DSP and free heap twice, 30 s apart, with no keys (judged by the session: CPU under 98 % and the heap flat)
+stats
+wait 30
+stats
+expect-screen home-stop 5 rows=0-9 cols=112-127
