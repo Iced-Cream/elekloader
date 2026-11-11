@@ -37,7 +37,7 @@
 #define WORDS(t) ((const int16_t *)(0x8000f7a8 + 0x54 * (t)))   /* a track's engine words, by sound index */
 #define STOCK_PAGE_SAMPLE 4             /* the SAMPLE view's pages: 4, and 5 (the same ids) */
 #define STOCK_PAGE_SAMPLE2 5
-#define PLAIN_DIAL 41                   /* BR's record: a plain 0..127 dial, the look of a knob
+#define PLAIN_DIAL 42                   /* BR's record: a plain 0..127 dial, the look of a knob
                                          * with its own range and no look (the record under it
                                          * may draw on another range: TUN's is +-24) */
 

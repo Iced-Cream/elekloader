@@ -79,7 +79,7 @@ none of these bits, and knob C stays SMP's word.
   give them the machine's label, name, look, range and default; core's
   `core_params` entries on the stock ids give their text; and a page
   function on stock pages 4 and 5 gives the title. A ranged knob with no
-  look gets BR's plain dial (41): the record under it may draw on another
+  look gets BR's plain dial (42): the record under it may draw on another
   range (TUN's +-24 stops short of the end). From 0.3 page 5, stock's
   waveform, is shown only for stock's layer and machines with
   `SMPL_WAVEFORM` (a `core_view_pages` entry with a shown on the stock
