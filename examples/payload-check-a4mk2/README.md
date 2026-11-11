@@ -16,6 +16,11 @@ the bottom edge: a dot at x 120 once the payload read back right, a 3x3
 square at the right end once the whole array also read back right with
 everything in the area, and a bar at the left when a word read back wrong.
 
+In rytm-emu's A4 build (11 Nov 2026) [emu], PK60 passed its plan's gate
+from every start: the payload at 0x4565ad20 (512 KB) and the 8 MB array
+from 0x456ddce0 read back right after boot, CREATE NEW, a save and a load,
+with everything inside the area.
+
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx

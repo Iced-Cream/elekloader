@@ -24,6 +24,12 @@ against what its entry gives (`ok`, and `bad` the count of those not
 ok). On the bottom edge a 3x3 square at the right end says every own knob
 was ok; a bar at the left counts those that weren't. It is a test, not for a project you keep.
 
+In rytm-emu's A4 build (11 Nov 2026) [emu], LA60 passed its plan's gate
+from every start: 83 groups (85 own knobs, 22 pages), `bad` 0, and on
+every page the two cells of each pair the same pixel for pixel. A remote
+turn of J moves 0 to 3 pages, so a plan proves the end pages and shoots
+the rest.
+
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
