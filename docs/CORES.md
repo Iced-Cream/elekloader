@@ -203,6 +203,11 @@ the one a mod that uses it names in `resources.core`.
   (0.11; ADAPTING.md, "Locks a mod keeps itself (core-ar2 0.11, Analog Rytm
   MKII)"). Spare entries in its tables for +Drive mods, which the Drive
   Loader fills at boot (0.12; the core's README, "Room for +Drive mods").
+  A silent voice's machine call skipped, its next note starting
+  from the slot's power-on state, which changes the sound slightly: off at
+  boot, on while a mod asks for it and none holds it off (0.14;
+  `analog-rytm-mk2/voice.h`; mods/core-ar2/README.md, "The silent-voice skip
+  (0.14)").
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose

@@ -200,8 +200,13 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic)
-    assert len(mod['sites']) == 125
+    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and the silent-voice skip's (0.14)
+    assert len(mod['sites']) == 126
+    # 0.14: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
+    # returns to stock's beq, which takes the skip when the site leaves %a1 at 0
+    x = [x for x in mod['sites'] if x.get('target') == 'core_voice_site'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x40121208', 'jsr', '227548004a89'), x
+    assert img[0x40121208 - DEV.main_load:0x40121210 - DEV.main_load].hex() == '227548004a896738'
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
@@ -309,7 +314,9 @@ def test_core_ar2_sites():
         assert img[a - DEV.main_load:a - DEV.main_load + 8] == bytes.fromhex(b), hex(a)
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
-    assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
+    ins = sorted((x['order'], x['fn']) for x in mod['subscribe'] if x['event'] == 'ev_render_in')
+    # and (0.14) the voice skip's boot snapshot just after it
+    assert ins == [(0, 'core_load_in'), (1, 'core_voice_boot')], ins
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
     # mod storage's own sites, with the FX and sound edits' writes into the stored kit (0.9)
     # and the project save (0.10)
