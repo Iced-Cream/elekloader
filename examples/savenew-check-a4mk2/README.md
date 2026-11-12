@@ -35,11 +35,15 @@ before, and a dot at x 126 always. The counts are in RAM after the magic
 whole-screen stock menu is up (GLOBAL, MANAGE PROJECTS), so a plan can read
 slots 127 and 128 in stock's list.
 
-In rytm-emu's A4 build (11 Nov 2026) [emu], 0.1 (SN60): J asked SAVE ...
-BEFORE LOADING (NO) and PROCEED (YES), then stock made a new project,
-saved it into 128 (named NEW PROJECT) and core reported `CORE_SAVE_NEW`
-for slot 127, with `sn_saves` 1; I asked nothing and saved nothing. Not
-yet gated or run on a unit.
+In rytm-emu's A4 build (12 Nov 2026) [emu], 0.2 (SN62) passed its plan's
+gate from every start: J asked SAVE ... BEFORE LOADING (NO) and PROCEED
+(YES), then stock made a new project, saved it into 128 (named NEW
+PROJECT, then the active slot) and core reported `CORE_SAVE_NEW` for slot
+127, with `sn_saves` 1 and the new-project dot; I asked nothing and saved
+nothing, and 128 stayed empty. A fault build for each check (J passing 0,
+NEW drawn as OTHER, `sn_saves` not counted, the empty-slot guard inverted)
+stopped in that check. The before and after bars count since boot, so a
+plan compares rows 50..55. Not yet run on a unit.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
