@@ -1,11 +1,11 @@
 {
  "id": "savenew-check",
- "version": "0.2",
+ "version": "0.3",
  "title": "Save-new check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "A test for core-a4mk2 0.6's CORE_SAVE_NEW on the Analog Four MKII, which no panel action reaches on OS 1.56. A SAVE NEW CHECK page behind the AMP key: encoder J asks stock's project load for the empty slot 128 with create-if-empty set (the stock request every LOAD passes 0 to), so the load job makes a new project and saves it there; encoder I asks the same with the flag clear, as stock does (no save). save-check's bars show the save calls, the kind and the slot; the counts are in RAM after the magic SNC1.",
+ "description": "A test for core-a4mk2 0.6's CORE_SAVE_NEW on the Analog Four MKII, which no panel action reaches on OS 1.56. A SAVE NEW CHECK page behind the AMP key: encoder J asks stock's project load for the empty slot 128 with create-if-empty set (the stock request every LOAD passes 0 to), from the page's knob handler inside stock's view dispatch as LOAD FROM does, so the load job makes a new project and saves it there. save-check's bars show the save calls, the kind and the slot; the counts and the request's breadcrumbs are in RAM after the magic SNC1.",
  "device": "analog-four-mk2",
  "os": "1.56",
  "sources": ["check.c"],
