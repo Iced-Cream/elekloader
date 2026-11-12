@@ -56,8 +56,9 @@ slot 127, with `sn_saves` 1. A fault build for each check stopped in that
 check, and one that blocks the UI task at stage 3 timed the turn out as
 the unit did, with SNC1 and the mutexes still readable over analoghealth. With
 the job queue forced busy the request pushed the WAIT box and still
-completed. 0.2 (SN62) froze a unit on its first I turn. Not yet run
-on a unit.
+completed. 0.2 (SN62) froze a unit on its first I turn. On a unit (12 Nov
+2026), 0.3 (SN63) passed the same plan: the request ran inside the view
+dispatch with its mutex held, and core reported `CORE_SAVE_NEW` for slot 127.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
