@@ -18,7 +18,7 @@
  *      the last replay's return plus 1 (- before any),
  *      P the progress box's handle (- for none) and its fill.
  *      - K_HOLD (FLTR): its press and release are taken and kept (K
- *        counts them), then handed to stock through core_stock_key 20 and
+ *        counts them), then handed to stock through core_key_native 20 and
  *        22 ticks later: stock's FILTERS page comes a second late. R shows
  *        what the last replay returned (0 on the A4 once stock had it).
  *      - K_BOX (taken) opens a progress box "~T PROGRESS" that fills over
@@ -148,7 +148,7 @@ void ck_tick(void *ctrl)
     ticks++;
     while (nreplayed < nheld && (int)(ticks - held_at[nreplayed]) >= 0) {
         i = nreplayed++;
-        replay_ret[i] = core_stock_key(held[i]);
+        replay_ret[i] = core_key_native(held[i]);
         sc.replays++;
         sc.last_ret = replay_ret[i];
     }

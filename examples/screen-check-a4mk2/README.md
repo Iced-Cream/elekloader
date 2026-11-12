@@ -4,10 +4,10 @@
 [core-a4mk2](../../mods/core-a4mk2) 0.6's screen calls (README, "Screen
 calls (0.6)"), on screen. The keys are mod.json's cflags: FILL (taken)
 steps through the four modes (off, FONTS, CALLS, COVER), RIGHT steps the
-font, FLTR is the key held back and replayed through `core_stock_key`, QPER
+font, FLTR is the key held back and replayed through `core_key_native`, QPER
 opens the progress box and NO closes it.
 `check.c`'s header says what each mode draws. The CALLS bar adds `R`, the
-last replay's return plus 1 (the A4's `core_stock_key` returns 0 once
+last replay's return plus 1 (the A4's `core_key_native` returns 0 once
 stock had the key). The same values are in RAM after the magic `SCC1`.
 It is a test, not for a project you keep.
 
