@@ -18,7 +18,7 @@ Since 0.3 the request is made from the page's knob handler (`p_delta`),
 which stock's view dispatch (0x40062cca) calls with the view manager's
 mutex held, the context stock's LOAD FROM makes the same request in. 0.1 and
 0.2 made it from `ev_tick`, without that lock, and had an encoder I control
-(create-if-empty 0); I froze the UI on a unit (T277) and is gone.
+(create-if-empty 0); I froze the UI on a unit and is gone.
 
 J makes one request a visit to the page (the first event of a turn; the
 page must be left before it makes another), only while slot 128 is empty: a
@@ -54,9 +54,9 @@ task owning vm+4; stock asked SAVE ... BEFORE LOADING (NO) and PROCEED (YES),
 made a new project, saved it into 128 and core reported `CORE_SAVE_NEW` for
 slot 127, with `sn_saves` 1. A fault build for each check stopped in that
 check, and one that blocks the UI task at stage 3 timed the turn out as
-T277 did, with SNC1 and the mutexes still readable over analoghealth. With
+the unit did, with SNC1 and the mutexes still readable over analoghealth. With
 the job queue forced busy the request pushed the WAIT box and still
-completed. 0.2 (SN62) froze a unit on its first I turn (T277). Not yet run
+completed. 0.2 (SN62) froze a unit on its first I turn. Not yet run
 on a unit.
 
 ```bash
