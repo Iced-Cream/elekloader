@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import re
 import struct
 import sys
 import tempfile
@@ -2216,7 +2217,7 @@ def test_core_a4mk2_0_7_std_midi_sites():
     events = ('ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi',
               'ev_seq_tick')
     for e in events:
-        assert doc['std'][e] == 'std_' + e[3:] and doc['collections']['std_' + e[3:]] == 4, e
+        assert doc['std'][e] == 'std_' + e[3:] and _entry(doc['collections']['std_' + e[3:]]) == 4, e
     assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
     with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
         asm = fh.read()
@@ -2256,7 +2257,7 @@ def test_core_a4mk2_0_7_voice_events():
         doc = json.load(fh)
     assert doc['std']['ev_voice_start'] == 'std_voice_start'
     assert doc['std']['ev_voice_end'] == 'std_voice_end'
-    assert doc['collections']['std_voice_start'] == doc['collections']['std_voice_end'] == 4
+    assert _entry(doc['collections']['std_voice_start']) == _entry(doc['collections']['std_voice_end']) == 4
     assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
     sites = {s['addr']: s for s in doc['sites']}
     assert sites['0x401025ac']['target'] == 'core_voice_apply'
@@ -2355,10 +2356,10 @@ def test_core_a4mk2_0_7_ui_sites():
     for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
               'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
         assert re.search(r'\b%s\[' % t, src), t
-    assert doc['collections']['ev_knob_turn'] == 4 and 'ev_knob_turn[0]' in src
-    assert doc['collections']['std_view'] == 4 and doc['std']['ev_view'] == 'std_view'
-    assert doc['collections']['ev_analog_frame'] == 4 and 'tst.l   ev_analog_frame' in asm
-    assert doc['collections']['ev_mod_set'] == 4 and 'ev_mod_set[0]' in src
+    assert _entry(doc['collections']['ev_knob_turn']) == 4 and 'ev_knob_turn[0]' in src
+    assert _entry(doc['collections']['std_view']) == 4 and doc['std']['ev_view'] == 'std_view'
+    assert _entry(doc['collections']['ev_analog_frame']) == 4 and 'tst.l   ev_analog_frame' in asm
+    assert _entry(doc['collections']['ev_mod_set']) == 4 and 'ev_mod_set[0]' in src
     assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_tick', 'core_ui_tick')] == -999999
@@ -2367,6 +2368,38 @@ def test_core_a4mk2_0_7_ui_sites():
         assert os.path.isfile(os.path.join(inc, h)), h
     with open(os.path.join(inc, 'keys.h'), encoding='utf-8') as fh:
         assert '#define CORE_TICK_HZ 20' in fh.read()
+
+def _entry(v):
+    """A collection's entry size: a plain number, or a dict's "entry" (a core's spare entries)."""
+    return v['entry'] if isinstance(v, dict) else v
+
+
+def test_core_a4mk2_room_for_drive_mods():
+    """core-a4mk2 0.8's tables have room for +Drive mods (mods/core-a4mk2/README.md, "Room for +Drive
+    mods (0.8)"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
+    the Drive Loader links (256), the audio interrupt's marked render; the page tables by the views'
+    room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
+    core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes)."""
+    with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    cols = doc['collections']
+    assert doc['version'] == '0.8'
+    render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
+              'std_seq_midi'}
+    events = [n for n in cols if n.startswith(('ev_', 'std_'))]
+    assert set(doc['std'].values()) <= set(events)
+    for name in events:
+        want = {'entry': 4, 'render': True, 'spare': 256} if name in render else {'entry': 4, 'spare': 256}
+        assert cols[name] == want, (name, cols[name])
+    with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'pages.s'), encoding='utf-8') as fh:
+        view_max = int(re.search(r'\.equ\s+VIEW_MAX,\s*(\d+)', fh.read()).group(1))
+    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
+        assert cols[name] == {'entry': 4, 'spare': view_max}, name
+    assert cols['core_params'] == {'entry': 4, 'spare': 256}
+    assert cols['core_lock_params'] == 4 and cols['core_knob_looks'] == 4
+    for name in ('core_store_ids', 'core_lock_codes', 'core_lock_ccs', 'core_field_inits', 'core_payloads'):
+        assert not isinstance(cols[name], dict), name     # the linker fills these (link.NO_SPARE)
+
 
 if __name__ == '__main__':
     import traceback
