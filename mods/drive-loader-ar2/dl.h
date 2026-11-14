@@ -52,7 +52,10 @@ enum {
     DL_R_RANGE = 18,                     /* a pc16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
     DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
+    DL_R_STORE = 21,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
+    DL_R_SITE = 22,                      /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
 };
+enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_SITE's kind */
 
 /* Why nothing was linked (dl_skip_reason). */
 enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT,
@@ -106,6 +109,7 @@ u32 dl_strlen(const char *s);
 u32 dl_crc32(const u8 *p, u32 n);
 u32 dl_crc32_add(u32 c, const u8 *p, u32 n);   /* the register carried on: ~0 to start, ~ at the end */
 u32 dl_hash(const char *s, u32 n);       /* FNV-1a, 32 bits */
+void dl_sha256(const u8 *p, u32 n, u8 out[32]);   /* FIPS 180-4 (sha256.c) */
 
 /* ---- what the linker asks of its host ------------------------------------------------ */
 /* Read /mods/<name> into buf (at most max bytes). -> its length, -1 missing, -2 larger
@@ -129,6 +133,40 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max);
 extern u32 *dl_inits;                    /* dl_status_n of them, from the heap */
 extern u32 dl_inits_n;
 extern u32 dl_used_lo, dl_used_hi;
+
+/* Top-staging (decided 2026-11-11; dl_boot sets it, the host tests choose): with it set,
+ * dl_link given no buffer reads each file into the +Drive area itself, pass 1 from its
+ * start and pass 2 at its top, and the layout places the mods by file length, the longest
+ * first, so that each file fits above the code placed before it (docs/DRIVE.md, "The boot
+ * link"). dl_check keeps its own buffer (the live stage) for pass 1 but lays out the same
+ * way, so the MODS page's verdict stays the boot's. The build descriptor's flags bit 0 (ABI
+ * 1.3) tells host tools, whose twin is elekloader/drive.py's Build.stage_top. */
+extern u8 dl_stage_top;
+/* The +Drive area [*lo, *hi) the descriptor names. -> 0, or -1 for a descriptor the loader
+ * doesn't read. The boot gives the live stage its free tail, from dl_used_hi (fs.h,
+ * dl_stage_tail), and the MODS page takes a file over the stage that fits the area as one
+ * the next boot checks. */
+int dl_area(u32 desc, u32 *lo, u32 *hi);
+
+/* ---- +Drive sites (docs/DRIVE.md, "Sites") -------------------------------------------- */
+/* The main OS a site may change runs from DL_MAIN_LO (the Rytm's main_load) to the build's boot
+ * copier, the first byte the flashed build appends (its site map's kind 4). */
+#define DL_MAIN_LO 0x40000400u
+/* The sites the boot applied, in id order and each mod's own order: dl_sites_n of them, with
+ * their stock bytes from dl_site_orig + orig, kept from the boot on (the heap). A later check
+ * reads a site's stock bytes through them, and /mods/.status lists them. */
+struct dl_site {
+    u32 addr;
+    u16 len;
+    u16 line;                            /* its mod's line in /mods/active (dl_status[line]) */
+    u32 orig;                            /* offset of its stock bytes in dl_site_orig */
+};
+extern struct dl_site *dl_sites;
+extern u8 *dl_site_orig;
+extern u32 dl_sites_n;
+/* Write one site's bytes: interrupts masked (SR 0x2700), then the data cache's lines over it
+ * pushed (flush.s). dl_flush after the last one invalidates the instruction cache. */
+void dl_apply_site(u32 addr, const u8 *src, u32 len);
 
 /* The MODS page's check of a set (design steps 4 to 6: pass 1, the checks, the layout),
  * which writes nothing but its own records: st and det (n each, n <= DL_MAX_MODS) as
@@ -177,6 +215,8 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out);
 #define DL_POOL_CONTRIBS 256                 /* +Drive table contributions */
 #define DL_POOL_EDATA 2048                   /* their bytes */
 #define DL_POOL_ERELOCS 256                  /* their relocations */
+#define DL_POOL_SITES 256                    /* +Drive sites and copied blocks */
+#define DL_POOL_SDATA 4096                   /* the sites' bytes */
 #define DL_POOL_CAP 0xFFF0                   /* every pool's most */
 
 #endif

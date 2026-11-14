@@ -34,7 +34,7 @@ test('the build-checker: drive.py\'s results, set for set', () => {
 })
 
 test('every host refusal code has a case refused with it and one that loads', () => {
-  const host = drive.CODES.map(([n]) => n).filter(n => !['ok', 'missing', 'changed', 'range'].includes(n))
+  const host = Object.values(drive.CODES).map(([n]) => n).filter(n => !['ok', 'missing', 'changed', 'range'].includes(n))
   for (const code of host) {
     assert.ok(V.cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
     assert.ok(V.cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)
