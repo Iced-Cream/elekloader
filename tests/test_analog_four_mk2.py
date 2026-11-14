@@ -197,10 +197,12 @@ def test_core_a4mk2_sites():
     assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
         ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
-    # and 0.8's main() call at 0x401061e8 (ev_boot_drive)
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + 1
-    drive = [x for x in mod['sites'] if x.get('target') == 'core_boot_drive_site']
-    assert [(x['addr'], x['op'], x['stock']) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18')]
+    # and 0.8's two +Drive sites: main()'s call at 0x401061e8 (ev_boot_drive) and FORMAT +DRIVE's
+    # `move.l #0x24c18,%d0` at 0x40074af6 (ev_drive_format)
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + 2
+    drive = [x for x in mod['sites'] if x.get('target') in ('core_boot_drive_site', 'core_drive_format_site')]
+    assert [(x['addr'], x['op'], x['stock']) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18'),
+                                                                ('0x40074af6', 'jsr', '203c00024c18')]
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
