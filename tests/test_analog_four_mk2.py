@@ -199,8 +199,8 @@ def test_core_a4mk2_sites():
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
     # and 0.8's main() call at 0x401061e8 (ev_boot_drive)
     assert len(mod['sites']) == 117 + len(voice07) + 70 + 1
-    boot_drive = [x for x in mod['sites'] if x.get('target') == 'core_boot_drive_site']
-    assert [(x['addr'], x['op'], x['stock']) for x in boot_drive] == [('0x401061e8', 'jsr', '4eb9400f1b18')]
+    drive = [x for x in mod['sites'] if x.get('target') == 'core_boot_drive_site']
+    assert [(x['addr'], x['op'], x['stock']) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18')]
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
