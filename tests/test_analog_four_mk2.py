@@ -225,8 +225,9 @@ def test_core_a4mk2_sites():
         'core_view_sweep_site', 'core_view_remove_site', 'core_view_replace_', 'core_level_site', 'core_mixer_site',
         'core_analog_frame_site', 'core_modset_'))]
     assert len(ui) == 70                # 0.7's UI and system sites (ui.s, ui.c)
-    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
-             and x not in new06 and x not in std07 and x not in voice07 and x not in ui]
+    first = [y for y in j['sites'] if y.get('target') not in ('core_boot_drive_site', 'core_drive_format_site')][:48]
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in first} and x not in midi
+             and x not in new06 and x not in std07 and x not in voice07 and x not in ui and x not in drive]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
