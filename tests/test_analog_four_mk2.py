@@ -196,7 +196,16 @@ def test_core_a4mk2_sites():
     assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
         ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
-    assert len(mod['sites']) == 117 + len(voice07) + 70
+    # and 0.8's sequencer fired site (seq.s): a jsr over the tick loop's `tst.l 0x42872474`, after
+    # trig_fire's record was copied to the trig queue, whose flags the `beq.b` after it takes (the
+    # sequencer's exit is 0.7's std tick site, from which core_std_seq_tick calls core_seq_exit)
+    seq08 = [x for x in mod['sites'] if x.get('target') == 'core_seq_fired_site']
+    assert [(x['addr'], x['op'], x['stock']) for x in seq08] == [('0x4007b0e8', 'jsr', '4ab942872474')]
+    assert at(img, 0x4007b0ee, 2) == bytes.fromhex('670a')                          # beq.b 0x4007b0fa
+    assert mod['collections'].get('ev_seq_step') == 4 and mod['collections'].get('ev_transport') == 4
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'stdmidi.c')) as fh:
+        assert 'core_seq_exit();' in fh.read()
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(seq08)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -220,7 +229,7 @@ def test_core_a4mk2_sites():
         'core_analog_frame_site', 'core_modset_'))]
     assert len(ui) == 70                # 0.7's UI and system sites (ui.s, ui.c)
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
-             and x not in new06 and x not in std07 and x not in voice07 and x not in ui]
+             and x not in new06 and x not in std07 and x not in voice07 and x not in ui and x not in seq08]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
