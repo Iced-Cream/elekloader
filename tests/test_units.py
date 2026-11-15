@@ -2234,11 +2234,11 @@ def test_core_a4mk2_0_7_std_midi_sites():
         assert (s['op'], s['target']) == (op, target), addr
         stub = asm.split(target + ':', 1)[1].split('\n\n', 1)[0]
         if op == 'jsr':
-            assert len(s['stock']) == 12 and 'jmp     (%a0)' in stub, addr
+            assert s['len'] == 6 and 'jmp     (%a0)' in stub, addr
         elif target == 'core_std_seq_tick_site':
             assert stub.rstrip().endswith('rte')
         else:
-            resume = int(addr, 16) + len(s['stock']) // 2
+            resume = int(addr, 16) + s['len']
             assert ('0x%08x' % resume) in stub, (addr, hex(resume))
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ports.h'),
               encoding='utf-8') as fh:
@@ -2261,8 +2261,9 @@ def test_core_a4mk2_0_7_voice_events():
     assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
     sites = {s['addr']: s for s in doc['sites']}
     assert sites['0x401025ac']['target'] == 'core_voice_apply'
-    assert sites['0x40102174']['stock'] == '4eb940105410' and sites['0x40102174']['target'] == 'core_voice_free_cut'
-    assert sites['0x40102e10']['stock'] == '2f024e91588f' and sites['0x40102e10']['target'] == 'core_voice_free_len'
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['0x40102174']['target'] == 'core_voice_free_cut' and sites['0x40102174']['len'] == 6
+    assert sites['0x40102e10']['target'] == 'core_voice_free_len' and sites['0x40102e10']['len'] == 6
     with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
         src = fh.read()
     for fn in ('core_voice_end', 'core_voice_note'):
@@ -2346,13 +2347,11 @@ def test_core_a4mk2_0_7_ui_sites():
     assert len(ui_sites) == 70
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
     modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
-    assert len(modset) == 6 and all(s['op'] == 'jmp' and s['stock'].startswith('4e56') for s in modset)
+    assert len(modset) == 6 and all(s['op'] == 'jmp' for s in modset)
     assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
     assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
     for s in ui_sites:
-        assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
-        if s['op'] == 'keep2':
-            assert s['stock'].startswith('4eb9'), s
+        assert s['len'] >= (4 if s['op'] == 'ptr' else 6), s
     for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
               'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
         assert re.search(r'\b%s\[' % t, src), t
