@@ -322,13 +322,13 @@ Nothing is built unless all of these pass:
 A build with the Drive Loader (`mods/drive-loader-ar2/`, which imports
 `core_desc`) links more mods at boot from `/mods` on the unit's +Drive
 into the +Drive area. This section is what such a mod and `/mods/active`
-may hold; the boot link and the computer's tools are in
-[DRIVE.md](DRIVE.md).
+may hold; the link and the tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
 relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `collections`,
 `sharc`, `resources.regions` or `claims`; `storage`, `sites` and `copied`
-only where the build takes them (DRIVE.md). It adds entries only to tables whose descriptor
+only where the build takes them (DRIVE.md); a `.payload` only where the
+loader skips it (DRIVE.md). It adds entries only to tables whose descriptor
 flags say more may be added (not a DSP table), in whole entries, at an
 order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
 names and `NAME_n` (the count after the merge), `core_desc`, and the other
@@ -338,12 +338,11 @@ order; it is never a global name. Its id is under 28 bytes.
 
 **`/mods/active`** lists the chosen files, one line each: the file's path
 below `/mods` (`x.elemod`, or in up to 3 folders, `fx/delays/x.elemod`), a
-space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
+space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional) as the
+loader stages it (DRIVE.md). Blank lines,
 `#` lines and lines without a CRC are skipped; the path is everything
 before the last run of spaces, under 128 bytes. More than 256 lines and
 nothing loads.
-
-The link's order and its status records are in DRIVE.md, "The boot link".
 
 #### +Drive refusal codes
 
