@@ -28,17 +28,13 @@ dl_mods_label:
         rts
 
 | The MODS row's icon: the row's draw callback, as stock's SETTINGS > GLOBAL
-| rows have it (SYSTEM's is at 0x400cf0f4). The MenuItem keeps it as its
-| third std::function (+0x2c, invoker +0x38) and its draw (0x4005c588)
-| calls it with (functor, item, canvas, x, y) when one is set. This thunk
-| moves its arguments down and tail-calls stock's bitmap blit 0x4005aed4
-| (canvas, bitmap, x, y, centred = 0). The Bitmap is stock's object layout
-| (as its ctor 0x40059222 builds it: vptr 0x401973f4, +4 width, +8 height,
+| rows have it (SYSTEM's is at 0x400cf0f4), called with (functor, item,
+| canvas, x, y): a thunk that moves its arguments down and tail-calls
+| stock's bitmap blit 0x4005aed4 (canvas, bitmap, x, y, centred = 0). The
+| Bitmap is stock's object layout (vptr 0x401973f4, +4 width, +8 height,
 | +0xc words a column, +0x10 pixels, +0x14 mask, +0x18 owns = 0): 9 x 9,
-| one column a long; the blit puts a column's bit 31 at the row y and the
-| lower bits on the rows after it, so the field's lowest bit is the top
-| row, as on the Rytm. The same lightning bolt as drive-loader-ar2's MODS
-| row, the elekloader web icon's.
+| one column a long, the top row the lowest bit of the field; the same
+| lightning bolt as drive-loader-ar2's MODS row, the elekloader web icon's.
 dl_mods_icon:
         move.l  12(%sp), %d0
         move.l  %d0, 4(%sp)
