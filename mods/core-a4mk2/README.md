@@ -273,6 +273,17 @@ comment has the order and the limits; `analog-four-mk2/system.h`),
 core-dn1 5.0's calls: a reboot from a task once the +Drive's store and card
 are idle and those counts are 0, or at once.
 
+`core_project_keep()` (`restart.s`): the working project kept before such a
+reboot. The A4 keeps it as one image in RAM (0x4045c870, 0x1f73dc bytes,
+the project from +0x104) that the boot reads from one of two +Drive copies
+and a power-fail interrupt writes back. Stock repacks the image in a
+background job after each project change; a change no project event
+announces, as a mod's own field, never reaches it, and a reset before the job
+runs loses the last change. The call repacks the whole image (0x40096d90,
+stock's full repack job) and writes it to the next copy (0x40106f04, as
+stock's OS upgrade does before its reboot). [G; emulator-checked with the
+A4 Drive Loader's APPLY & RESTART]
+
 ## Lockable parameters (0.5)
 
 The lock service's first part (docs/ADAPTING.md, "Lockable parameters
