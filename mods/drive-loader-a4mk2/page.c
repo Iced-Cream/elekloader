@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* drive-loader-a4mk2 (Analog Four MKII, OS 1.56): the MODS page (PAGE.md).
  *
- * A MODS row at the bottom of SETTINGS > GLOBAL (ev_settings, core_additem: page.s draws its
- * lightning-bolt icon as stock's GLOBAL rows draw theirs) opens a page on
+ * A MODS (TELOS) row at the bottom of SETTINGS > GLOBAL (ev_settings, core_additem: page.s draws
+ * its gear icon, TELOS's, as stock's GLOBAL rows draw theirs) opens a page on
  * the folders and .elemod files in DL_DIR, one folder at a time to DL_DEPTH deep. The A4 has no
  * SAMPLES file view to build on, so the page draws itself with core's std1 helpers (core_fill,
  * core_text) over the whole frame in ev_draw, and takes every key and encoder turn while it shows
@@ -1903,7 +1903,7 @@ static int nothing(void)
 }
 
 /* core_additem's row: label, select, draw (the icon), change. Not core_setting_add, whose row
- * draws no icon: MODS gets a 9 x 9 icon like the other GLOBAL rows (page.s). */
+ * draws no icon: MODS (TELOS) gets a 9 x 9 icon like the other GLOBAL rows (page.s). */
 static const void *const mods_row[4] = {
     (const void *)dl_mods_label, (const void *)mods_open,
     (const void *)dl_mods_icon, (const void *)nothing,

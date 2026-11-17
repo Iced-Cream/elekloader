@@ -12,9 +12,10 @@ The A4 has no SAMPLES file view to build on, so the page draws itself with core-
 helpers (decided 2026-11-14: std1 where it reaches); only the row's label and icon use stock
 addresses (`page.s`):
 
-- **The row.** A MODS row after SYSTEM in the GLOBAL key's menu (`ev_settings`,
-  `core_additem`). Selecting it opens the page on `/mods` itself. It has a 9 x 9 lightning-bolt
-  icon like the other GLOBAL rows, the Rytm loader's: its draw callback (`dl_mods_icon`,
+- **The row.** A MODS (TELOS) row after SYSTEM in the GLOBAL key's menu (`ev_settings`,
+  `core_additem`), named and drawn as TELOS's SETTINGS row on the Digitone mk1 (decided
+  2026-11-17). Selecting it opens the page on `/mods` itself. It has TELOS's 9 x 9 gear icon,
+  like the other GLOBAL rows have theirs: its draw callback (`dl_mods_icon`,
   `page.s`) is stock's icon thunk, tail-calling the bitmap blit `0x4005aed4` with a Bitmap of
   stock's layout (vptr `0x401973f4`; one long a column, top row the lowest bit, a full mask).
   `core_setting_add` would draw the row without one. The label is a std::string built by
