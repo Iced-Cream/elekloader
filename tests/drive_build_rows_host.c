@@ -18,7 +18,8 @@
  *                 as the page's opening reads it (boot_record)
  *   info N        INFO's box on build row N (from 0) -> "INFO line1~line2~..."
  *   store HEX     /mods/.store's bytes, as the page's opening reads them (parks_from); the build
- *                 list then shows the parked mods after the build's rows
+ *                 list then shows the parked mods not on it after the build's rows
+ *   build         (above) a row with saved data ends "=* WORD" ("=*" a parked mod's own row)
  *   forget ID|ID  park.c's FORGET DATA of those mods on the last store -> "FORGET HEX" (or -1)
  *   setid N ID    the set's record N names ID (a site refusal's other mod)
  *   reason C A D  the "!" box of refusal code C, arg A, detail D (the rest of the line), against
@@ -257,13 +258,14 @@ int main(void)
             printf("\n");
         } else if (!strcmp(line, "build")) {
             mode = M_BUILD;
+            park_rows();                 /* as page_rows makes them with the list's rows */
             printf("BUILD");
             for (i = 0; i < list_n(); i++) {
                 char t[16];
-                row_column(i, t, t + sizeof t);
+                int star = row_column(i, t, t + sizeof t);
                 printf("%c%s", i ? '|' : ' ', (const char *)dl_page_text(i + 1));
-                if (park_k(i) >= 0)
-                    printf("=%s", t);
+                if (star)
+                    printf("=*%s%s", t[0] ? " " : "", t);
             }
             printf("\n");
             mode = M_DRIVE;

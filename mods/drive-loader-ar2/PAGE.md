@@ -80,13 +80,20 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   (`MOD NOT LOADED` for a ticked mod the build does not hold), and INFO, which shows the
   cursor's mod's folder (`/mods/drums/kicks`, clipped from the left behind a `<` past 30
   characters) and its file name below it (30 characters a line) in a box closed with NO, and
-  FORGET DATA (below, "Parked data").
-- **Parked data.** After the build's rows the build list shows each mod `/mods/.store` keeps
-  parked fields, lock codes or CCs of (docs/DRIVE.md, "+Drive storage"), by its id, with `PARK`
-  in the state column, in the order they were parked. Ticking one, or INFO on it, shows
-  `PARKED DATA` and its bits per scope (`sound: 12 bits, kit: 4 bits`, two a line), then the
-  lock codes and CCs kept for it. FORGET DATA asks `FORGET DATA? (n MODS)` for the ticked
-  parked rows (`NO PARKED MOD SELECTED` with none, `NO PARKED DATA` when there is none), then
+  FORGET DATA (below, "Saved data").
+- **Saved data.** `/mods/.store` is read when the page opens and after FORGET DATA. A build row
+  whose mod it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`,
+  docs/DRIVE.md "+Drive storage") gets a `*` (decided 2026-11-18, as the A4's, in place of the
+  `PARK` rows). The `*` has a column of its own, its right edge `STATE_GAP` left of the widest
+  state word, so every row's `*` lines up whatever word follows it: `* KEEP`, `* ADD`,
+  `* DROP`, `* !`. The parked mods (fields no chosen mod declares any more) that have no build
+  row follow the build's rows by id, in the order they were parked, with the `*` alone in that
+  column; a parked mod back in the build has no second row, its build row carries the `*`.
+  These rows are made with the list's rows (`page_rows`), so stock's row count never changes
+  under the list. Ticking a parked-only row, or INFO on it, shows `PARKED DATA` and its bits per
+  scope (`sound: 12 bits, kit: 4 bits`, two a line), then the lock codes and CCs kept for it.
+  FORGET DATA asks `FORGET DATA? (n MODS)` for the ticked rows with parked data, a build row's
+  or a parked-only one (`NO PARKED MOD SELECTED` with none, `NO PARKED DATA` when there is none), then
   rewrites `/mods/.store` without their parked fields, codes and CCs, one step a tick as a save
   does: the file read, `.store.tmp` written, the old file deleted and the tmp renamed, each under
   `dl_lock`; a box says `FORGETTING DATA`, then `DATA FORGOTTEN (n MODS)`. The rest of the file
