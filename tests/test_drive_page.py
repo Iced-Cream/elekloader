@@ -218,7 +218,7 @@ class Parked(unittest.TestCase):
             mods = self.parked_mods(st)
             rows = self.lines(['store ' + h, 'build'], 'BUILD')
             got = rows[0].split('|') if rows and rows[0] else []
-            self.assertEqual(got, ['%s=PARK' % m for m in mods], h)
+            self.assertEqual(got, ['%s=*' % m for m in mods], h)
             for i, m in enumerate(mods):
                 info = self.lines(['store ' + h, 'parkinfo %d' % i], 'PARKINFO')[0].split('~')
                 self.assertEqual(info[0], 'PARKED DATA')
@@ -243,7 +243,23 @@ class Parked(unittest.TestCase):
         h = next(h for h in self.stores if ds.decode(bytes.fromhex(h))['parked'])
         mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
         got = self.lines(['store ' + h, 'build'], 'BUILD', active=['x.elemod'])[0].split('|')
-        self.assertEqual(got, ['x'] + ['%s=PARK' % m for m in mods])
+        self.assertEqual(got, ['x'] + ['%s=*' % m for m in mods])
+
+    def test_a_parked_mod_back_in_the_build_has_one_row_with_a_star(self):
+        """decided 2026-11-18 (the A4's): no PARK row; a build row whose mod has saved data shows
+        "* " before its state word, and a parked mod back in the build has no second row."""
+        h = next(h for h in self.stores if ds.decode(bytes.fromhex(h))['parked'])
+        mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
+        got = self.lines(['id x.elemod|' + mods[0], 'store ' + h, 'build'], 'BUILD', active=['x.elemod'])
+        self.assertEqual(got[0].split('|'), [mods[0] + '=* ADD'] + ['%s=*' % m for m in mods[1:]])
+
+    def test_live_data_stars_a_build_row_and_none_without_data(self):
+        h, live = next((h, f['mod']) for h in self.stores for f in ds.decode(bytes.fromhex(h))['fields'])
+        mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
+        got = self.lines(['id x.elemod|' + live, 'store ' + h, 'build'], 'BUILD', active=['x.elemod'])
+        self.assertEqual(got[0].split('|')[0], live + '=* ADD')
+        got = self.lines(['id x.elemod|nobody', 'store ' + h, 'build'], 'BUILD', active=['x.elemod'])
+        self.assertEqual(got[0].split('|'), ['nobody'] + ['%s=*' % m for m in mods])
 
     def test_storage_room_refusals_in_full(self):
         got = self.lines(['reason 29 0 sound 62 56', 'reason 29 0 codes 3 1', 'reason 29 0 core_handles 3 2'],
