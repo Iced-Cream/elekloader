@@ -1126,16 +1126,19 @@ static int row_column(int i, char *t, char *end)
 
 void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
 {
-    int i = (int)*f - 1;
+    int i = (int)*f - 1, star;
     char t[16];
     (void)item;
     drawn_at = ticks;
     if (!view || i < 0 || i >= list_n())
         return;
-    if (row_column(i, t, t + sizeof t))
-        TEXT(canvas, FONT_LIST, x + star_x(), y, 2, 0, "XXXXXXX", "%s", "*");
+    star = row_column(i, t, t + sizeof t);
     if (t[0])
         TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
+    if (star)                            /* after the word: the word's "XXXXXXX" box clears what lies
+                                          * under it, the star with it (DMS1 emulator, 2026-11-18:
+                                          * "* KEEP" drew as "KEEP"); the star's own box is one "X" */
+        TEXT(canvas, FONT_LIST, x + star_x(), y, 2, 0, "X", "%s", "*");
 }
 
 static void show_box(const char *s)
