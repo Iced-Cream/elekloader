@@ -276,7 +276,7 @@ static int32_t smpl_page2_shown(void *view)
 
 const struct core_view_page smpl_view_page2 = {CORE_VIEW_SAMPLE, STOCK_PAGE_SAMPLE2, smpl_page2_shown};
 
-/* also smpl-knob-c's, for its knob id: the face of the machine's knob C */
+/* also knobc.c's, for its knob id: the face of the machine's knob C */
 const struct core_knob_face *smpl_face(int32_t id, void *sound)
 {
     const struct smpl_machine *m;
@@ -312,7 +312,7 @@ static int put_num(char *buf, int32_t v)
     return n;
 }
 
-/* also smpl-knob-c's, for its knob id */
+/* also knobc.c's, for its knob id */
 int smpl_text(struct core_text *t)
 {
     const struct smpl_machine *m;
@@ -332,7 +332,7 @@ int smpl_text(struct core_text *t)
 
 const struct core_param smpl_params = {FIRST_REC, LAST_REC, 0, 0, smpl_text};
 
-/* knob C's own value (smpl-knob-c's core_params entry): the current
+/* knob C's own value (knobc.c's core_params entry): the current
  * sound's field, in the machine's range */
 static int c_range(int32_t *lo, int32_t *hi)
 {
