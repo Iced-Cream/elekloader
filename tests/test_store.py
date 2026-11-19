@@ -161,7 +161,7 @@ def test_a_sounds_room_is_its_cores():
 
 
 def test_the_analog_four_mk2s_room():
-    """core-a4 (mods/core-a4/store.c): 32 bits a sound, 128 a kit, 64 a global
+    """core-a4mk2 (mods/core-a4mk2/store.c): 32 bits a sound, 128 a kit, 64 a global
     slot, and the 4,342 bytes of the tagged store for 129 x 6 pattern tracks,
     129 patterns and the project."""
     a4 = 'analog-four-mk2'
@@ -309,7 +309,7 @@ A4 = 'analog-four-mk2'
 
 
 def test_a4_codes_are_per_track_kind():
-    """core-a4 0.5: a sound field's code is the synth tracks', a kit field's the FX track's, or the CV
+    """core-a4mk2 0.5: a sound field's code is the synth tracks', a kit field's the FX track's, or the CV
     track's with "track": "cv", each kind from 0x70; a field that changes kind gets a new code, and a
     17th field of a kind is refused."""
     decls = [('a', 's', 'sound', 7), ('a', 'k', 'kit', 7), ('a', 'c', 'kit', 7)]
@@ -331,7 +331,7 @@ def test_a4_codes_are_per_track_kind():
 
 
 def test_a4_ccs():
-    """core-a4 0.5: a synth field's CC comes first from those the FX and CV tables map, a kit field's (FX or
+    """core-a4mk2 0.5: a synth field's CC comes first from those the FX and CV tables map, a kit field's (FX or
     CV) only from those every kind leaves free."""
     decls = [('m', 's', 'sound', 7), ('m', 'k', 'kit', 7), ('m', 'c', 'kit', 7)]
     locks = [('m', 's'), ('m', 'k'), ('m', 'c')]
@@ -342,7 +342,7 @@ def test_a4_ccs():
 
 def test_a4_flags():
     """On the A4 "lfo" is refused (every source is a destination of a "mod" field), "mod" is taken on
-    a kit field, and "cc" is taken (core-a4 0.5's CC pool); the Rytm has no CV track."""
+    a kit field, and "cc" is taken (core-a4mk2 0.5's CC pool); the Rytm has no CV track."""
     scopes = {('m', 'a'): 'sound', ('m', 'k'): 'kit'}
     store.check_flags(A4, scopes, (), [('m', 'a'), ('m', 'k')], [('m', 'k')])
     assert '"lfo" is the Analog Rytm MKII' in refused(store.check_flags, A4, scopes, [('m', 'a')])
@@ -392,6 +392,63 @@ def test_knob_lockfiles_it_refuses():
     store.knobs(lock, {'a': 2, 'b': 2}, 555)
     for edit in (lambda l: l.update(next_knob=556), lambda l: l['knobs'][1].update(first=556),
                  lambda l: l['knobs'].append(dict(l['knobs'][0])), lambda l: l.update(freed_knobs={})):
+        bad = json.loads(json.dumps(lock))
+        edit(bad)
+        assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
+
+
+SLOTS = {34: 3, 35: 8, 36: 8, 43: 5, 45: 4}
+
+
+def test_machine_slots_follow_their_mods_and_run_out_then_freed_ones_are_given_again():
+    lock = {}
+    got, notes = store.machines(lock, {'a': [8, 4], 'b': [5]}, SLOTS, {36})
+    assert got == {'a': [35, 45], 'b': [43]}
+    assert notes == ['a: machine 0 in slot 35', 'a: machine 1 in slot 45', 'b: machine 0 in slot 43']
+    got, notes = store.machines(lock, {'b': [5], 'c': [3]}, SLOTS, {36})      # a out: its slots kept for it
+    assert got == {'b': [43], 'c': [34]} and len(lock['freed_machines']) == 2
+    got, notes = store.machines(lock, {'b': [5], 'c': [3], 'd': [8]}, SLOTS, {36})  # 35 is all that is left
+    assert got == {'b': [43], 'c': [34], 'd': [35]}
+    assert notes == ['machine slots freed by a given out again', 'd: machine 0 in slot 35']
+    got, notes = store.machines(lock, {'b': [8]}, SLOTS, ())    # b needs more knobs: it moves, and says so
+    assert got == {'b': [36]} and any(n.startswith('b: machine 0 needs 8 knobs, which slot 43 has not') for n in notes)
+    assert refused(store.machines, {}, {'e': [9]}, SLOTS, ()) == \
+        'e asks for a machine with 9 knobs, and no machine slot with that many is free'
+
+
+def test_machine_lockfiles_it_refuses():
+    lock = store.fresh(DEV)
+    store.machines(lock, {'a': [8, 8]}, SLOTS)
+    store.check_lock(json.loads(json.dumps(lock)), DEV)
+    for edit in (lambda l: l['machines'][1].update(slot=35), lambda l: l['machines'][1].update(index=0),
+                 lambda l: l['machines'][0].pop('knobs'), lambda l: l.update(freed_machines={}),
+                 lambda l: l['machines'][0].update(slot='35')):
+        bad = json.loads(json.dumps(lock))
+        edit(bad)
+        assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
+
+
+def test_pool_ids_follow_their_mods_and_run_out_then_freed_ones_are_given_again():
+    lock = {}
+    got, notes = store.pool_ids(lock, 'smpl', {'a': 2, 'b': 1}, [1, 4])
+    assert got == {'a': [1, 2], 'b': [3]}
+    got, notes = store.pool_ids(lock, 'other', {'a': 1}, [10, 10])           # pools are apart
+    assert got == {'a': [10]}
+    got, notes = store.pool_ids(lock, 'smpl', {'b': 1, 'c': 1}, [1, 4])       # a out: 1, 2 kept for it
+    assert got == {'b': [3], 'c': [4]} and len(lock['freed_pool_ids']) == 2
+    got, notes = store.pool_ids(lock, 'smpl', {'b': 1, 'c': 1, 'd': 1}, [1, 4])
+    assert got == {'b': [3], 'c': [4], 'd': [1]} and notes[0] == 'pool smpl: ids freed by a given out again'
+    assert refused(store.pool_ids, {}, 'smpl', {'e': 5}, [1, 4]) == \
+        'e asks for more ids from the pool smpl than it has free (1..4)'
+
+
+def test_pool_lockfiles_it_refuses():
+    lock = store.fresh(DEV)
+    store.pool_ids(lock, 'smpl', {'a': 2}, [1, 4])
+    store.check_lock(json.loads(json.dumps(lock)), DEV)
+    for edit in (lambda l: l['pool_ids'][1].update(id=1), lambda l: l['pool_ids'][1].update(index=0),
+                 lambda l: l['pool_ids'][0].pop('pool'), lambda l: l.update(freed_pool_ids={}),
+                 lambda l: l['pool_ids'][0].update(id='1')):
         bad = json.loads(json.dumps(lock))
         edit(bad)
         assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')

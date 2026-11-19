@@ -2,7 +2,7 @@
 // The linker's checks that need no firmware: tests/test_units.py's counterparts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
+import { ANALOG_FOUR_MK2, ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
 import { Mod2, check, ddrFor, imageProblems, link, payloadId } from '../src/link.ts'
@@ -76,6 +76,9 @@ test('knob id ranges on the Analog Rytm MKII (core_params, core_param_locks)', (
     'a 1 and e 1 both take ids 570..573 (core_params, core_param_locks)',
     'a 1 and e 1 both take ids 570..573 (core_param_locks, core_param_locks)'])
   assert.deepEqual(mod('f', ['core_params', 9, 3]).idRanges(image), [])
+  assert.deepEqual(ids(check([mod('g', ['core_knob_faces', 39, 46])], image)), [])
+  assert.deepEqual(ids(check([mod('h', ['core_knob_faces', 46, 470])], image)), [
+    "h 1: its core_knob_faces entry takes ids 46..470, and 469..554 are core's lockable parameters' ids; a mod's own ids start at 555"])
 })
 
 test('mk1 machines claim their ids (machine:<id>, dnmachine:<id>)', () => {
@@ -231,6 +234,11 @@ test('a payload id is link.py payload_id, and core-ar2 0.11 moves the Rytm\'s mo
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.11'), [0x47b10000, 0x47fff000])
 })
 
+test('core-a4mk2 0.6 moves the A4\'s mods\' area into the canary-checked gap', () => {
+  assert.deepEqual(ddrFor(ANALOG_FOUR_MK2, '0.5'), [0x47be0000, 0x47c00000])
+  assert.deepEqual(ddrFor(ANALOG_FOUR_MK2, '0.6'), [0x45650000, 0x47c00000])
+})
+
 test('knob ids from 555 past fixed ids, abs32 and abs16, kept by the lockfile (tests/test_link_refusals.py)', () => {
   const ar = ANALOG_RYTM_MK2, real = ar.releases.find(x => x.version === '1.74')!
   const image = new Uint8Array(real.mainLen)
@@ -274,4 +282,157 @@ test('knob ids from 555 past fixed ids, abs32 and abs16, kept by the lockfile (t
   } finally {
     ar.releases.splice(ar.releases.indexOf(rel), 1)
   }
+})
+
+test('machines by count and page ids by count, as tests/test_link_refusals.py', () => {
+  const ar = ANALOG_RYTM_MK2, real = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(real.mainLen)
+  for (let i = 0; i < image.length; i += 2) image.set([0x4e, 0x71], i)
+  const rel = { version: 'SYN', syxSha256: sha(new TextEncoder().encode('synthetic machines')), mainSha256: sha(image), mainLen: image.length, binSha256: '' }
+  ar.releases.push(rel)
+  try {
+    const target = targetOf(ar, rel)
+    const hex8 = (n: number) => n.toString(16).padStart(8, '0')
+    const core = (keeps: boolean, version = '1') => ({ elemod: 2, id: 'core', version, target,
+      sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+      collections: { ev_x: { entry: 4 }, core_machines: { entry: 4 }, core_pages: { entry: 4 }, core_view_pages: { entry: 4 },
+        ...(keeps ? { core_store_ids: { entry: 4 } } : {}) },
+      ...(keeps ? { imports: ['__store_gen', '__store_gen2'] } : {}) })
+    const machined = (id: string, wants: number[], slotAt: number | null = null) => {
+      const n = slotAt === null ? wants.length : 1
+      return { elemod: 2, id, version: '1', target, requires: ['core'],
+        sections: { '.run': { align: 4, len: 4 * n, parts: [['hex', slotAt !== null ? hex8(slotAt) : '00'.repeat(4 * n)]] } },
+        symbols: Object.fromEntries([...Array(n).keys()].map(i => [`e_${id}_${i}`, ['.run', 4 * i]])),
+        ...(slotAt === null ? { machine_knobs: wants, imports: ['core_fn', '__machines'],
+          relocs: [...Array(n).keys()].map(i => ['.run', 4 * i, 'abs32', 'sym:__machines', i]) } : { imports: ['core_fn'] }),
+        contribute: [...Array(n).keys()].map(i => ({ to: 'core_machines', data: '00000000', relocs: [[0, 'abs32', `sym:e_${id}_${i}`, 0]] })) }
+    }
+    const mods = (...docs: Record<string, any>[]) => docs.map(d => new Mod2(structuredClone(d), d.id))
+    const spare = { elemod: 2, id: 's', version: '1', target, requires: ['core'], imports: ['core_fn'], resources: { names: ['machine:45'] },
+      sections: { '.run': { align: 4, len: 4, parts: [['hex', '4e714e75']] } } }
+    const p = machined('p', [8, 4, 0]) as Record<string, any>
+    p.relocs[1][2] = 'abs16'
+    const out = link(mods(core(false), machined('h', [], 35), spare, p), image)
+    assert.deepEqual([...out.machines], [['p', [36, 48, 52]]])
+    assert.deepEqual(out.machineNotes, ['p: machine 0 in slot 36', 'p: machine 1 in slot 48', 'p: machine 2 in slot 52'])
+    assert.equal(out.map.get('p:__machines+1'), 48)
+    const at = out.layout.run_load - ar.mainLoad + out.layout.sections['p .run'] - out.layout.ddr[0]
+    const v = new DataView(out.image.buffer, out.image.byteOffset + at, 12)
+    assert.deepEqual([v.getUint32(0), v.getUint16(4), v.getUint16(6), v.getUint32(8)], [36, 48, 0, 52])
+    assert.deepEqual([...link(mods(core(false, '0.12'), machined('q', [5, 3])), image).machines], [['q', [43, 34]]])
+    assert.throws(() => link(mods(core(false), machined('q', [9])), image),
+      { message: 'q asks for a machine with 9 knobs, and no machine slot with that many is free' })
+    const over = machined('p', [4, 4]) as Record<string, any>
+    over.relocs[1][4] = 2
+    assert.deepEqual(check(mods(core(false), over), image), [
+      'p 1: .run+0x4 is a abs32 reference to __machines+2; one takes abs32 or abs16 with an addend below its "machine_knobs" (2)'])
+    assert.throws(() => new Mod2({ ...machined('p', [8]), machine_knobs: [17] }, 'p'),
+      { message: 'p: "machine_knobs" is a list of up to 64 machines, each the knobs it needs (0..16)' })
+    // the lockfile keeps them
+    const one = link(mods(core(true), machined('p', [8]), machined('d', [8, 8])), image)
+    assert.deepEqual([...one.machines], [['d', [35, 36]], ['p', [37]]])
+    const two = link(mods(core(true), machined('p', [8]), machined('a', [8])), image, one.store)
+    assert.deepEqual([...two.machines], [['a', [38]], ['p', [37]]])
+    const three = link(mods(core(true), machined('p', [8]), machined('d', [8, 8]), machined('a', [8])), image, two.store)
+    assert.deepEqual(three.machineNotes, ['d: machine 0 back in slot 35', 'd: machine 1 back in slot 36'])
+    assert.throws(() => link(mods(core(true), machined('p', [8]), machined('h', [], 37)), image, three.store),
+      (e: Error) => e.message.startsWith("machine slot 37 is claimed by number, and the lockfile gives it to p's machine 0"))
+    // page ids
+    const fixed = { elemod: 2, id: 'f', version: '1', target, requires: ['core'], imports: ['core_fn'],
+      sections: { '.run': { align: 4, len: 16, parts: [['hex', hex8(12) + hex8(0) + hex8(8) + hex8(14)]] } },
+      symbols: { pg: ['.run', 0], vp: ['.run', 8] },
+      contribute: [{ to: 'core_pages', data: '00000000', relocs: [[0, 'abs32', 'sym:pg', 0]] },
+        { to: 'core_view_pages', data: '00000000', relocs: [[0, 'abs32', 'sym:vp', 0]] }] }
+    const paged = (id: string, n: number) => ({ elemod: 2, id, version: '1', target, requires: ['core'], pages: n,
+      imports: ['core_fn', '__pages'], sections: { '.run': { align: 4, len: 8, parts: [['hex', '00'.repeat(8)]] } },
+      relocs: [...Array(n).keys()].map(i => ['.run', 4 * i, 'abs32', 'sym:__pages', i]) })
+    const pg = link(mods(core(false), fixed, paged('p', 2), paged('q', 1)), image)
+    assert.deepEqual([...pg.pages], [['p', [15, 2]], ['q', [17, 1]]])
+    assert.equal(pg.map.get('p:__pages'), 15)
+  } finally {
+    ar.releases.splice(ar.releases.indexOf(rel), 1)
+  }
+})
+
+test('id pools: stable ids from a pool another mod declares, kept by the lockfile, as tests/test_link_refusals.py', () => {
+  const ar = ANALOG_RYTM_MK2, real = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(real.mainLen)
+  for (let i = 0; i < image.length; i += 2) image.set([0x4e, 0x71], i)
+  const rel = { version: 'SYN', syxSha256: sha(new TextEncoder().encode('synthetic pools')), mainSha256: sha(image), mainLen: image.length, binSha256: '' }
+  ar.releases.push(rel)
+  try {
+    const target = targetOf(ar, rel)
+    const core = { elemod: 2, id: 'core', version: '1', target,
+      sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+      collections: { ev_x: { entry: 4 }, core_store_ids: { entry: 4 } }, imports: ['__store_gen', '__store_gen2'] }
+    const owner = (id = 'f', pools: Record<string, unknown> = { smpl: [1, 4] }) => ({ elemod: 2, id, version: '1', target, requires: ['core'],
+      imports: ['core_fn'], id_pools: pools, sections: { '.run': { align: 4, len: 4, parts: [['hex', '4e714e75']] } } })
+    const pooled = (id: string, n: number, add: number | null = null) => ({ elemod: 2, id, version: '1', target, requires: ['core'],
+      pool_ids: { smpl: n }, imports: ['core_fn', '__pool_smpl'],
+      sections: { '.run': { align: 4, len: 4 * n, parts: [['hex', '00'.repeat(4 * n)]] } },
+      relocs: [...Array(n).keys()].map(i => ['.run', 4 * i, 'abs32', 'sym:__pool_smpl', add ?? i]) })
+    const mods = (...docs: Record<string, any>[]) => docs.map(d => new Mod2(structuredClone(d), d.id))
+    const one = link(mods(core, owner(), pooled('p', 2), pooled('d', 1)), image)
+    assert.deepEqual(Object.fromEntries([...one.poolIds.get('smpl')!]), { d: [1], p: [2, 3] })
+    assert.equal(one.map.get('p:__pool_smpl+1'), 3)
+    const at = one.layout.run_load - ar.mainLoad + one.layout.sections['p .run'] - one.layout.ddr[0]
+    const v = new DataView(one.image.buffer, one.image.byteOffset + at, 8)
+    assert.deepEqual([v.getUint32(0), v.getUint32(4)], [2, 3])
+    const two = link(mods(core, owner(), pooled('p', 2), pooled('a', 1)), image, one.store)
+    assert.deepEqual(Object.fromEntries([...two.poolIds.get('smpl')!]), { a: [4], p: [2, 3] })
+    const three = link(mods(core, owner(), pooled('p', 2), pooled('a', 1), pooled('d', 1)), image, two.store)
+    assert.ok(three.poolNotes.includes('d: id 1 of pool smpl back'))
+    assert.deepEqual(check(mods(core, pooled('p', 1)), image),
+      ['p 1 asks for ids from the pool smpl ("pool_ids"), which no given mod declares'])
+    assert.deepEqual(check(mods(core, owner(), owner('g'), pooled('p', 1)), image), ['f 1 and g 1 both declare the id pool smpl'])
+    assert.deepEqual(check(mods(core, owner('f', { smpl: [1, 2] }), pooled('p', 2), pooled('d', 1)), image),
+      ['the mods ask for 3 ids from the pool smpl, which has 2 (f 1 declares 1..2)'])
+    assert.deepEqual(check(mods(core, owner(), pooled('p', 2, 2)), image), [
+      'p 1: .run+0x0 is a abs32 reference to __pool_smpl+2; one takes abs32 or abs16 with an addend below its "pool_ids" (2)',
+      'p 1: .run+0x4 is a abs32 reference to __pool_smpl+2; one takes abs32 or abs16 with an addend below its "pool_ids" (2)'])
+    assert.throws(() => new Mod2({ ...owner(), id_pools: { smpl: [5, 4] } }, 'f'),
+      { message: 'f: "id_pools" maps a pool\'s name (letters, digits, _) to [first, last], ids 0..65535, at most 4096' })
+    assert.throws(() => new Mod2({ ...pooled('p', 1), pool_ids: { smpl: 0 } }, 'p'),
+      { message: 'p: "pool_ids" maps a pool\'s name to the ids the mod asks for, 1..4096' })
+    assert.throws(() => new Mod2({ ...pooled('p', 1), symbols: { __pool_x: ['.run', 0] } }, 'p'),
+      { message: "p: __pool_x is the linker's (an id pool's ids), not a symbol of a mod" })
+  } finally {
+    ar.releases.splice(ar.releases.indexOf(rel), 1)
+  }
+})
+
+test('a std1 mod subscribes through the core\'s std map (tests/test_link_refusals.py\'s std rows)', () => {
+  const a4 = ANALOG_FOUR_MK2, r = a4.releases[0]
+  const image = new Uint8Array(r.mainLen)
+  const target = targetOf(a4, r)
+  const core = (std: Record<string, unknown>, more: Record<string, unknown> = {}) => new Mod2({
+    elemod: 2, id: 'core', version: '1', target, std,
+    sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } },
+    symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+    collections: { ev_x: { entry: 4 }, ...more },
+  }, 'core')
+  const sub = (to: string, std: boolean) => ({ to, ...(std ? { std: true } : {}), data: '00000000', relocs: [[0, 'abs32', 'sym:fn', 0]] })
+  const mod = (id: string, events: string | null, ...contribute: Record<string, unknown>[]) => new Mod2({
+    elemod: 2, id, version: '1', target, requires: ['core'], ...(events === null ? {} : { events }),
+    sections: { '.run': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { fn: ['.run', 0] },
+    contribute,
+  }, id)
+  const stdOnly = (p: string[]) => p.filter(x => /std|map/.test(x))
+  // = or prefix: the native table, beside a native mod's entry; thunk: the core's own std table
+  const s = mod('s', 'std1', sub('ev_tick', true), sub('ev_key', true))
+  const ok = check([core({ ev_tick: 'ev_x', ev_key: 'std_key' }, { std_key: { entry: 4 } }), mod('n', null, sub('ev_x', false)), s], image)
+  assert.deepEqual(stdOnly(ok), [])
+  assert.deepEqual(s.contribute.map(c => [c.event, c.to]), [['ev_tick', 'ev_x'], ['ev_key', 'std_key']])
+  assert.deepEqual(stdOnly(check([core({ ev_tick: 'ev_x' }), mod('s', 'std1', sub('ev_key', true))], image)),
+    ['s 1 subscribes to ev_key, which core 1 does not map'])
+  assert.deepEqual(stdOnly(check([core({ ev_tick: 'ev_x' }), mod('s', 'std1', sub('ev_x', true))], image)),
+    ['s 1 subscribes to ev_x, which core 1 does not map'])
+  assert.deepEqual(stdOnly(check([core({}), mod('s', 'std1', sub('ev_key', true))], image)),
+    ['s 1 subscribes to std1 events, and core 1 maps none'])
+  assert.deepEqual(stdOnly(check([core({ ev_key: 'std_key' }), mod('n', null, sub('ev_x', false))], image)),
+    ['core 1: its std map sends ev_key to std_key, which no given mod declares'])
+  assert.throws(() => mod('m', 'std2'), /m: "events" is 'std2'; the standard event set is "std1"/)
+  assert.throws(() => core({ ev_key: 3 }), /core: "std" maps each standard event's name to a table of the core/)
+  assert.throws(() => mod('m', null, sub('ev_key', true)), /m contribution 0: a standard event's subscription \("std": true\) needs the mod's "events"/)
+  assert.throws(() => new Mod2({ ...mod('m', null).doc, std: { ev_key: 'ev_x' } }, 'm'), /m: a "std" map is a core's \(the mod with \.boot\)/)
 })

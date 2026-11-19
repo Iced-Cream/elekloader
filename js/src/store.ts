@@ -16,7 +16,7 @@
 // core smooths the others (core-ar2 0.9): its code has SMOOTH_OFF in core_lock_codes, not part of the layout ID either.
 // A lockable field declared with "mod": true is also a velocity and aftertouch destination (core-ar2 0.9): its code has
 // ROUTE_FLAG in core_lock_codes, and a route keeps the code in its own byte, so it needs no room. On the Analog Four
-// MKII (core-a4 0.5) codes are numbered per track kind, 0x70..0x7f each (synth: a sound field; FX: a kit field; CV: a
+// MKII (core-a4mk2 0.5) codes are numbered per track kind, 0x70..0x7f each (synth: a sound field; FX: a kit field; CV: a
 // kit field declared "track": "cv"): each code entry has its "kind", "next_code" is one per kind, the kind is part of
 // the layout ID, and a CV field's code has CV_FLAG in core_lock_codes.
 // A field declared with "init": N (core-ar2 0.10) reads N where its bits are zero: the core keeps value ^ init. The
@@ -40,7 +40,7 @@ export const FORMAT = 2                        // 2 only for a lockfile with a f
 export const SCOPES = ['sound', 'kit', 'global', 'track', 'pattern', 'project'] as const
 export type Scope = typeof SCOPES[number]
 const SCOPE_NUM: Record<string, number> = Object.fromEntries(SCOPES.map((s, i) => [s, i + 1]))
-const MAX_ANCESTORS = 15
+export const MAX_ANCESTORS = 15
 const MAX_BITS = 32
 export const GEN_SYMS = ['__store_gen', '__store_gen2']
 export const IDS_TABLE = 'core_store_ids'
@@ -51,12 +51,12 @@ export const FX_LOCK_DST = 'core_fx_lfo_dst'   // core-ar2 0.9: the FX LFO's cod
 export const LFO_FLAG = 0x100                  // in core_lock_codes: the field is an LFO destination
 export const SMOOTH_OFF = 0x200                // in core_lock_codes: the field's value jumps (core-ar2 0.9)
 export const ROUTE_FLAG = 0x400                // in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
-export const CV_FLAG = 0x800                   // in core_lock_codes: a kit field of the CV track (core-a4 0.5)
+export const CV_FLAG = 0x800                   // in core_lock_codes: a kit field of the CV track (core-a4mk2 0.5)
 const FIRST_CODE = 42, LAST_CODE = 127         // a device's codes unless its spec says others
 export const INITS_TABLE = 'core_field_inits'  // core-ar2 0.10: the fields' inits, by slot
 export const HANDLES_TABLE = 'core_handles'    // core-ar2 0.11: the handle fields' descriptors
 export const KNOB_TOP = 0xFFFF                 // the last knob id: page knob lists hold 16 bits (abs16)
-const MAX_INITS = 63                           // slots 1..63, in the descriptor's bits 16..21
+export const MAX_INITS = 63                           // slots 1..63, in the descriptor's bits 16..21
 const LOCK_SCOPES = ['sound', 'kit']
 const KIND_NAMES: Record<string, string> = { synth: 'the synth tracks', fx: 'the FX track', cv: 'the CV track' }
 
@@ -68,8 +68,17 @@ export type Lock = {
   codes?: Code[]; freed_codes?: Code[]; next_code?: number | Record<string, number>
   ccs?: Cc[]; freed_ccs?: Cc[]
   knobs?: Knob[]; freed_knobs?: Knob[]; next_knob?: number
+  machines?: Machine[]; freed_machines?: Machine[]
+  pool_ids?: PoolId[]; freed_pool_ids?: PoolId[]
+  drive?: Drive
 }
+export type PoolId = { pool: string; mod: string; index: number; id: number }
+/** What the unit's +Drive keeps (store.py, "drive"; drivestore.reserve): its live layout ID, each scope's low mark,
+ * and the codes and CCs its fields and parked fields hold. Not stored data: not part of the layout ID. */
+export type Drive = { id: string; low: Record<string, number>; codes: number[] | Record<string, number[]>; ccs: number[] }
+export const DRIVE_KEY = 'drive'
 export type Knob = { mod: string; first: number; count: number }
+export type Machine = { mod: string; index: number; slot: number; knobs: number }
 export type Code = { mod: string; sym: string; code: number; kind?: string }
 export type Cc = { mod: string; sym: string; cc: number }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
@@ -92,19 +101,19 @@ const DEVICES: Record<string, Spec> = {
     // of the pool, the CCs stock maps on the FX channel (0x413dcb14): a kit field (the FX track's) gets none of them
     fxCcsTaken: [84, 85],
   },
-  'analog-four-mk2': {                          // core-a4 (mods/core-a4/store.c)
+  'analog-four-mk2': {                          // core-a4mk2 (mods/core-a4mk2/store.c)
     fixed: { sound: 32, kit: 128, global: 64 },
     coreFixed: [],
     live: { track: 512, pattern: 512 },
     store: 4352 - 10,
     items: { track: 129 * 6, pattern: 129 },
     split: { track: 2, pattern: 4 },
-    // core-a4 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each; every source is
+    // core-a4mk2 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each; every source is
     // a destination of a "mod" field, so no "lfo"
     codes: [0x70, 0x7f],
     kinds: ['synth', 'fx', 'cv'],
     noLfo: true,
-    // core-a4 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller kinds'
+    // core-a4mk2 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller kinds'
     // MISC, TRACK and PERF, nor bank select 0 and 32, from the records at 0x40186af4), those the FX and CV kinds map
     // first, so the synth tracks' fields take them before the CCs every kind leaves free
     ccs: [12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 60, 61, 62, 63, 96, 97, 100, 101],
@@ -123,6 +132,12 @@ export function lockDstBits(devKey: string): number {
 /** The bits of core_fx_lfo_dst on the device, 0 where the core keeps none. store.fx_lock_dst_bits. */
 export function fxLockDstBits(devKey: string): number {
   return spec(devKey).fxLockDst ?? 0
+}
+
+/** -> [the device's CC pool in the order fields get them, the CCs of it a kit field gets none of]. store.cc_pool. */
+export function ccPool(devKey: string): [number[], number[]] {
+  const sp = spec(devKey)
+  return [[...(sp.ccs ?? [])], [...(sp.fxCcsTaken ?? [])]]
 }
 
 /** -> [first, last] lock code on the device. store.code_range. */
@@ -222,7 +237,7 @@ export function parseRoutes(m: Record<string, any>): string[] {
   return st.filter((f: unknown) => isDict(f) && f.mod === true).map((f: Record<string, any>) => f.sym)
 }
 
-/** A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4 0.5), in order. */
+/** A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4mk2 0.5), in order. */
 export function parseCvs(m: Record<string, any>): string[] {
   const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
   return st.filter((f: unknown) => isDict(f) && f.track === 'cv').map((f: Record<string, any>) => f.sym)
@@ -306,7 +321,7 @@ export function layoutId(lock: Lock): number {
     what.push([...lock[k]].sort(byField).map(f => [f.scope, f.offset, f.bits, f.mod, f.sym, ...(f.init ? [f.init] : [])]))
   if (lock.codes?.length || lock.freed_codes?.length) {   // a lockfile with no codes keeps its ID
     const nc = lock.next_code
-    if (isDict(nc)) {                                        // codes per track kind (core-a4 0.5): the kind counts
+    if (isDict(nc)) {                                        // codes per track kind (core-a4mk2 0.5): the kind counts
       const ks = kinds(lock.device)
       what.push([ks.map(k => nc[k]), ...(['codes', 'freed_codes'] as const).flatMap(k =>
         [...lock[k]!].sort((a, b) => ks.indexOf(a.kind!) - ks.indexOf(b.kind!) || a.code - b.code).map(c => [c.code, c.mod, c.sym, c.kind]))])
@@ -376,7 +391,7 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
     const [first, last] = codeRange(devKey)
     const ks = kinds(devKey)
     const nc = lock.next_code
-    if (ks.length) {                            // one range a track kind (core-a4 0.5)
+    if (ks.length) {                            // one range a track kind (core-a4mk2 0.5)
       if (!isDict(nc) || !sameKeys(nc, ks) || !ks.every(k => whole(nc[k]) && nc[k] >= first && nc[k] <= last + 1))
         throw new ModError(`lockfile: "next_code" ${repr(Object.hasOwn(lock, 'next_code') ? nc : null)}`)
     } else if (!whole(nc) || !(nc >= first && nc <= last + 1))
@@ -420,7 +435,190 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
     if ((lock.ccs as Cc[]).some(c => !coded.has(c.mod + '\0' + c.sym)))
       throw new ModError('lockfile: a CC for a field that has no lock code')
   }
+  if (Object.hasOwn(lock, DRIVE_KEY)) checkDrive(lock[DRIVE_KEY], devKey)
   checkKnobs(lock)
+  checkMachines(lock)
+  checkPoolIds(lock)
+}
+
+function checkPoolIds(lock: Record<string, any>): void {
+  if (!['pool_ids', 'freed_pool_ids'].some(k => Object.hasOwn(lock, k))) return
+  const seen = new Set<string>(), ids = new Set<string>()
+  for (const k of ['pool_ids', 'freed_pool_ids']) {
+    const rs = lock[k]
+    if (!Array.isArray(rs)) throw new ModError(`lockfile: "${k}" is a list`)
+    for (const r of rs) {
+      if (!isDict(r) || !sameKeys(r, ['pool', 'mod', 'index', 'id']) || typeof r.pool !== 'string' || typeof r.mod !== 'string'
+        || !['index', 'id'].every(x => whole(r[x]))
+        || (k === 'pool_ids' && (seen.has(r.pool + '\0' + r.mod + '\0' + r.index) || ids.has(r.pool + '\0' + r.id))))
+        throw new ModError(`lockfile: a bad entry in "${k}"`)
+      if (k === 'pool_ids') { seen.add(r.pool + '\0' + r.mod + '\0' + r.index); ids.add(r.pool + '\0' + r.id) }
+    }
+  }
+}
+
+/** Give each mod in want (mod id -> n) n ids of the pool named pool, span = [first, last], in lock (changed in place;
+ * {} for a build without a lockfile). -> [mod id -> [id, ...], notes]. Throws ModError. store.pool_ids. */
+export function poolIds(lock: Partial<Lock>, pool: string, want: Map<string, number>, span: [number, number]): [Map<string, number[]>, string[]] {
+  const [first, last] = span
+  const mine = (lock.pool_ids ?? []).filter(r => r.pool === pool)
+  const freed0 = (lock.freed_pool_ids ?? []).filter(r => r.pool === pool)
+  if (!want.size && !mine.length && !freed0.length) return [new Map(), []]
+  const notes: string[] = [], held: PoolId[] = []
+  let freed: PoolId[] = []
+  for (const r of mine) {
+    if (r.index < (want.get(r.mod) ?? 0) && first <= r.id && r.id <= last) held.push({ ...r })
+    else {
+      freed.push({ ...r })
+      notes.push(`${r.mod}: id ${r.id} of pool ${pool} freed, kept for it until the unused ids run out`)
+    }
+  }
+  freed.push(...freed0.filter(r => first <= r.id && r.id <= last).map(r => ({ ...r })))
+  const kept = new Set(held.map(r => r.mod + '\0' + r.index))
+  for (const mod of [...want.keys()].sort(cmpStr)) {
+    for (let i = 0; i < want.get(mod)!; i++) {
+      if (kept.has(mod + '\0' + i)) continue
+      const taken = new Set(held.map(r => r.id))
+      const back = freed.filter(r => r.mod === mod && r.index === i && !taken.has(r.id))
+      freed = freed.filter(r => !(r.mod === mod && r.index === i))
+      let at: number
+      if (back.length) {
+        at = back[back.length - 1].id
+        notes.push(`${mod}: id ${at} of pool ${pool} back`)
+      } else {
+        const busy = new Set([...taken, ...freed.map(r => r.id)])
+        let fit: number[] = []
+        for (let v = first; v <= last; v++) if (!busy.has(v)) fit.push(v)
+        if (!fit.length && freed.length) {
+          notes.push(`pool ${pool}: ids freed by ${[...new Set(freed.map(r => r.mod))].sort(cmpStr).join(', ')} given out again`)
+          freed = []
+          fit = []
+          for (let v = first; v <= last; v++) if (!taken.has(v)) fit.push(v)
+        }
+        if (!fit.length) throw new ModError(`${mod} asks for more ids from the pool ${pool} than it has free (${first}..${last})`)
+        at = fit[0]
+        notes.push(`${mod}: id ${at} of pool ${pool}`)
+      }
+      held.push({ pool, mod, index: i, id: at })
+    }
+  }
+  lock.pool_ids = [...(lock.pool_ids ?? []).filter(r => r.pool !== pool), ...held]
+    .sort((a, b) => cmpStr(a.pool, b.pool) || a.id - b.id)
+  lock.freed_pool_ids = [...(lock.freed_pool_ids ?? []).filter(r => r.pool !== pool), ...freed]
+  const out = new Map<string, number[]>()
+  for (const r of [...held].sort((a, b) => cmpStr(a.mod, b.mod) || a.index - b.index)) {
+    if (!out.has(r.mod)) out.set(r.mod, [])
+    out.get(r.mod)!.push(r.id)
+  }
+  return [out, notes]
+}
+
+function checkMachines(lock: Record<string, any>): void {
+  if (!['machines', 'freed_machines'].some(k => Object.hasOwn(lock, k))) return
+  const seen = new Set<string>(), slots = new Set<number>()
+  for (const k of ['machines', 'freed_machines']) {
+    const ms = lock[k]
+    if (!Array.isArray(ms)) throw new ModError(`lockfile: "${k}" is a list`)
+    for (const r of ms) {
+      if (!isDict(r) || !sameKeys(r, ['mod', 'index', 'slot', 'knobs']) || typeof r.mod !== 'string'
+        || !['index', 'slot', 'knobs'].every(x => whole(r[x]))
+        || (k === 'machines' && (seen.has(r.mod + '\0' + r.index) || slots.has(r.slot))))
+        throw new ModError(`lockfile: a bad entry in "${k}"`)
+      if (k === 'machines') { seen.add(r.mod + '\0' + r.index); slots.add(r.slot) }
+    }
+  }
+}
+
+/** Give each machine a mod asks for (want: mod id -> [knobs, ...]) a slot of slots (slot -> the knobs it has records
+ * for) in lock (changed in place; {} for a build without a lockfile), never one of direct (slots mods claim by
+ * number). -> [mod id -> [slot, ...], notes]. Throws ModError. store.machines. */
+export function machines(lock: Partial<Lock>, want: Map<string, number[]>, slots: Map<number, number>,
+  direct0: Iterable<number> = []): [Map<string, number[]>, string[]] {
+  const had = lock.machines ?? [], freed0 = lock.freed_machines ?? []
+  if (!want.size && !had.length && !freed0.length) return [new Map(), []]
+  const direct = new Set(direct0)
+  const notes: string[] = [], held: Machine[] = []
+  let freed: Machine[] = []
+  const asked = (r: Machine) => r.index < (want.get(r.mod) ?? []).length
+  for (const r of had) {
+    if (asked(r) && direct.has(r.slot))
+      throw new ModError(`machine slot ${r.slot} is claimed by number, and the lockfile gives it to ${r.mod}'s machine ${r.index} `
+        + '(saved sounds name the slot): give the claim another slot')
+    const k = asked(r) ? want.get(r.mod)![r.index] : null
+    if (k === null && direct.has(r.slot)) { notes.push(`slot ${r.slot}, freed by ${r.mod}, is claimed by number`); continue }
+    if (k !== null && slots.has(r.slot) && slots.get(r.slot)! >= k) { held.push({ ...r, knobs: k }); continue }
+    freed.push({ ...r })
+    if (k !== null)
+      notes.push(`${r.mod}: machine ${r.index} needs ${k} knobs, which slot ${r.slot} has not: it moves, and sounds saved `
+        + 'with it load another machine')
+    else notes.push(`${r.mod}: machine ${r.index} freed slot ${r.slot}, kept for it until the unused slots run out`)
+  }
+  for (const r of freed0) {
+    if (direct.has(r.slot)) notes.push(`slot ${r.slot}, freed by ${r.mod}, is claimed by number`)
+    else freed.push({ ...r })
+  }
+  const kept = new Set(held.map(r => r.mod + '\0' + r.index))
+  for (const mod of [...want.keys()].sort(cmpStr)) {
+    want.get(mod)!.forEach((k, i) => {
+      if (kept.has(mod + '\0' + i)) return
+      const taken = new Set([...direct, ...held.map(r => r.slot)])
+      const back = freed.filter(r => r.mod === mod && r.index === i && !taken.has(r.slot) && (slots.get(r.slot) ?? -1) >= k)
+      freed = freed.filter(r => !(r.mod === mod && r.index === i))
+      let at: number | null = null
+      if (back.length) {
+        at = back[back.length - 1].slot
+        notes.push(`${mod}: machine ${i} back in slot ${at}`)
+      } else {
+        for (const again of [false, true]) {
+          if (again) {
+            if (!freed.length) break
+            notes.push(`machine slots freed by ${[...new Set(freed.map(r => r.mod))].sort(cmpStr).join(', ')} given out again`)
+            freed = []
+          }
+          const busy = new Set([...taken, ...freed.map(r => r.slot)])
+          const fit = [...slots].filter(([s, n]) => !busy.has(s) && n >= k).sort((a, b) => a[1] - b[1] || a[0] - b[0])
+          if (fit.length) { at = fit[0][0]; break }
+        }
+        if (at === null) throw new ModError(`${mod} asks for a machine with ${k} knobs, and no machine slot with that many is free`)
+        notes.push(`${mod}: machine ${i} in slot ${at}`)
+      }
+      held.push({ mod, index: i, slot: at, knobs: k })
+    })
+  }
+  lock.machines = [...held].sort((a, b) => a.slot - b.slot)
+  lock.freed_machines = freed
+  const out = new Map<string, number[]>()
+  for (const r of [...held].sort((a, b) => cmpStr(a.mod, b.mod) || a.index - b.index)) {
+    if (!out.has(r.mod)) out.set(r.mod, [])
+    out.get(r.mod)!.push(r.slot)
+  }
+  return [out, notes]
+}
+
+/** Validate what the +Drive keeps (the lockfile's "drive"). Throws ModError. store.check_drive. */
+export function checkDrive(d: unknown, devKey: string): asserts d is Drive {
+  const [first, last] = supports(devKey) ? codeRange(devKey) : [0, -1]
+  const pool = spec(devKey).ccs ?? []
+  if (!isDict(d) || !sameKeys(d, ['id', 'low', 'codes', 'ccs'])) throw new ModError('lockfile: "drive" gives id, low, codes and ccs')
+  idVal(d.id, 'drive id')
+  const low = d.low
+  if (!isDict(low) || !sameKeys(low, SCOPES) || !SCOPES.every(s => whole(low[s]) && low[s] >= 0 && low[s] <= 0xFFFF))
+    throw new ModError('lockfile: "drive" "low" gives a bit per scope')
+  const ks = kinds(devKey)
+  const sortedIn = (v: unknown, ok: (c: number) => boolean) =>
+    Array.isArray(v) && v.every(c => whole(c) && ok(c)) && v.every((c, i) => i === 0 || c > v[i - 1])
+  const inRange = (c: number) => c >= first && c <= last
+  const codes = d.codes
+  if (ks.length) {
+    if (!isDict(codes) || !sameKeys(codes, ks) || !ks.every(k => sortedIn(codes[k], inRange)))
+      throw new ModError(`lockfile: "drive" "codes" gives a sorted list of the device's codes per track kind (${ks.join(', ')}): the ${devKey} numbers them per kind`)
+  } else if (!sortedIn(codes, inRange)) throw new ModError('lockfile: "drive" "codes" is a sorted list of the device\'s codes')
+  if (!sortedIn(d.ccs, c => pool.includes(c))) throw new ModError('lockfile: "drive" "ccs" is a sorted list of the device\'s ccs')
+}
+
+/** What the +Drive keeps (the lockfile's "drive") -> how many lock codes it holds, of every kind. store.drive_codes. */
+export function driveCodes(d: Drive): number {
+  return Array.isArray(d.codes) ? d.codes.length : Object.values(d.codes).reduce((n, v) => n + v.length, 0)
 }
 
 function checkKnobs(lock: Record<string, any>): void {
@@ -487,7 +685,11 @@ export function knobs(lock: Partial<Lock>, want: Map<string, number>, first: num
         if (a + n - 1 <= top) break
         at = null
       }
-      if (at === null) throw new ModError(`${mod} asks for ${n} knob ids, and ids ${first}..${top} have no run that long free`)
+      if (at === null) {
+        const e = new ModError(`${mod} asks for ${n} knob ids, and ids ${first}..${top} have no run that long free`)
+        ;(e as ModError & { mod?: string }).mod = mod     // the +Drive linker refuses that mod (drive.ts)
+        throw e
+      }
       notes.push(`${mod}: knob ids ${at}..${at + n - 1}`)
     }
     runs.push({ mod, first: at, count: n })
@@ -506,11 +708,12 @@ const ceilDiv = (a: number, b: number) => Math.floor((a + b - 1) / b)
 
 /** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]; locks: [mod id, sym] of the lockable
  * fields; ccs: those of them with a CC; inits: [mod id, sym, init] of the fields with an init other than 0 (core-ar2
- * 0.10); cvs: those declared "track": "cv" (core-a4 0.5). -> [the new lockfile, notes]. The lockfile given is not
- * changed. store.allocate. */
+ * 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5); drive: what the unit's +Drive keeps (drivestore.reserve),
+ * null to keep the lockfile's, false to drop it. -> [the new lockfile, notes]. The lockfile given is not changed.
+ * store.allocate. */
 export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core: string | null = null,
   locks: [string, string][] = [], ccs: [string, string][] = [], inits: [string, string, number][] = [],
-  cvs: [string, string][] = []): [Lock, string[]] {
+  cvs: [string, string][] = [], drive: Drive | false | null = null): [Lock, string[]] {
   const notes: string[] = []
   const initOf = new Map(inits.filter(([, , v]) => v).map(([m, sy, v]) => [m + '\0' + sy, v]))
   let lock: Lock
@@ -523,6 +726,13 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     lock = structuredClone(lock0)
     isNew = false
   }
+  if (drive === false) delete lock.drive
+  else if (drive !== null) {
+    checkDrive(drive, devKey)
+    lock.drive = structuredClone(drive)
+  }
+  const dr = lock.drive
+  const gen0 = { ...lock.generation }, next0 = { ...lock.next }
   const want = new Map<string, [string, number, number]>()
   const keyOf = (mid: string, sym: string) => mid + '\0' + sym
   for (const [mid, sym, scope, bits] of decls) {
@@ -626,15 +836,16 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     else notes.push(`${f.mod} ${f.sym}: ${f.bits} bits of ${f.scope} storage at bit ${f.offset}`)
   }
   lock.fields = fields.sort((a, b) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset)
+  if (dr) driveBits(lock, dr, gen0, next0, cap, notes)
   // format 2 from the first init: an older elekloader refuses it rather than reading the inits' fields as 0
   if (lock.fields.some(f => f.init) || lock.freed.some(f => f.init)) lock.elekloader_store = 2
   const scopeOf = new Map(fields.map(f => [keyOf(f.mod, f.sym), f.scope]))
   const cv = new Set(cvs.map(([m, sy]) => keyOf(m, sy)))
   const recoded = setCodes(lock, new Map(locks.map(([m, sy]) => [keyOf(m, sy), kindOf(devKey, scopeOf.get(keyOf(m, sy)), cv.has(keyOf(m, sy)))])),
     new Set(kept.map(f => keyOf(f.mod, f.sym))),
-    new Set(added.filter(f => back.has(keyOf(f.mod, f.sym))).map(f => keyOf(f.mod, f.sym))), notes, devKey)
+    new Set(added.filter(f => back.has(keyOf(f.mod, f.sym))).map(f => keyOf(f.mod, f.sym))), notes, devKey, dr?.codes ?? [])
   setCcs(lock, new Set(ccs.map(([m, sy]) => keyOf(m, sy))), spec(devKey).ccs ?? [], notes,
-    new Set(fields.filter(f => f.scope === 'kit').map(f => keyOf(f.mod, f.sym))), spec(devKey).fxCcsTaken ?? [])
+    new Set(fields.filter(f => f.scope === 'kit').map(f => keyOf(f.mod, f.sym))), spec(devKey).fxCcsTaken ?? [], dr?.ccs ?? [])
   if (isNew) {
     lock.id = idStr(layoutId(lock))
     notes.unshift(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by builds with other layouts load their mod data at defaults`)
@@ -655,10 +866,26 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   return [lock, notes]
 }
 
+/** Notes for each scope where the build meets the +Drive's bits: it grew past the +Drive's low mark, or repacked a
+ * scope the +Drive keeps bits in. The boot allocator then repacks the scope. store._drive_bits. */
+function driveBits(lock: Lock, dr: Drive, gen0: Record<string, number>, next0: Record<string, number>, cap: Record<string, number>, notes: string[]): void {
+  for (const s of SCOPES) {
+    const low = dr.low[s]
+    if (low >= cap[s] || next0[s] > low) continue        // the +Drive keeps nothing here, or it already repacks
+    let why: string
+    if (lock.generation[s] !== gen0[s]) why = 'the build repacked it'
+    else if (lock.next[s] > low) why = `the build takes bits ${low}..${lock.next[s] - 1}, which the +Drive keeps`
+    else continue
+    notes.push(`+Drive ${s} storage (from bit ${low}): ${why}, so the Drive Loader repacks it at the next boot, and items saved before load ${s} storage at defaults`)
+  }
+}
+
 /** Give each lockable field (keys mod\0sym in want, to its kind: null where the device has no kinds) its lock code, in
- * lock (changed in place). kept: the fields that kept their place; back: freed fields that came back to theirs.
- * -> whether any code changed. store._codes. */
-function setCodes(lock: Lock, want: Map<string, string | null>, kept: Set<string>, back: Set<string>, notes: string[], devKey: string): boolean {
+ * lock (changed in place). kept: the fields that kept their place; back: freed fields that came back to theirs;
+ * reserved: the codes the +Drive's fields hold, given out only when nothing else is left. -> whether any code changed.
+ * store._codes. */
+function setCodes(lock: Lock, want: Map<string, string | null>, kept: Set<string>, back: Set<string>, notes: string[], devKey: string,
+  reserved: number[] | Record<string, number[]> = []): boolean {
   const had = lock.codes ?? [], hadFreed = lock.freed_codes ?? []
   if (!want.size && !had.length && !hadFreed.length) return false   // a lockfile that never had a lockable field stays as it was
   const [first, last] = codeRange(devKey)
@@ -686,24 +913,33 @@ function setCodes(lock: Lock, want: Map<string, string | null>, kept: Set<string
   for (const { mod, sym } of todo) {
     const k = mod + '\0' + sym
     const kind = want.get(k)!
+    const held = new Set(Array.isArray(reserved) ? reserved : kind !== null ? reserved[kind] ?? [] : [])
     const mine = freed.filter(c => (c.kind ?? null) === kind)
     const same = mine.filter(c => key(c) === k)
+    while (nxt.get(kind)! <= last && held.has(nxt.get(kind)!)) nxt.set(kind, nxt.get(kind)! + 1)   // the +Drive's: skipped
+    const spare = mine.filter(c => !held.has(c.code))
+    const taken = new Set([...codes, ...freed].filter(c => (c.kind ?? null) === kind).map(c => c.code))
+    const left = [...held].filter(x => !taken.has(x))
     let c: Code
     if (same.length && back.has(k)) {          // back in its old place: its old code, with its rows
       c = same[same.length - 1]
       freed.splice(freed.indexOf(c), 1)
-      notes.push(`${mod} ${sym}: back with lock code ${c.code}${of(kind)}`)
+      notes.push(`${mod} ${sym}: back with lock code ${c.code}${of(kind)}${held.has(c.code) ? ', which a +Drive field holds: the Drive Loader gives that field another' : ''}`)
     } else if (nxt.get(kind)! <= last) {
       c = { mod, sym, code: nxt.get(kind)! }
       if (kind) c.kind = kind
       nxt.set(kind, nxt.get(kind)! + 1)
       notes.push(`${mod} ${sym}: lock code ${c.code}${of(kind)}`)
-    } else if (mine.length) {                   // the never-used codes are gone: the oldest freed one
-      const old = mine[0]
+    } else if (spare.length || (mine.length && !left.length)) {   // the never-used codes are gone: the oldest freed one
+      const old = (spare.length ? spare : mine)[0]
       freed.splice(freed.indexOf(old), 1)
       c = { mod, sym, code: old.code }
       if (kind) c.kind = kind
-      notes.push(`${mod} ${sym}: lock code ${c.code}${of(kind)} (was ${old.mod} ${old.sym}'s)`)
+      notes.push(`${mod} ${sym}: lock code ${c.code}${of(kind)} (was ${old.mod} ${old.sym}'s)${held.has(c.code) ? ', which a +Drive field holds too: the Drive Loader gives that field another' : ''}`)
+    } else if (left.length) {                   // only the +Drive's are left: the lowest
+      c = { mod, sym, code: Math.min(...left) }
+      if (kind) c.kind = kind
+      notes.push(`${mod} ${sym}: lock code ${c.code}${of(kind)}, which a +Drive field holds: no other is left, so the Drive Loader gives that field another`)
     } else throw new ModError(`the mods have more than ${last - first + 1} lockable parameters${kind ? ' on ' + KIND_NAMES[kind] : ''}`)
     for (const d of freed.filter(d => key(d) === k)) freed.splice(freed.indexOf(d), 1)   // a field has one code
     codes.push(c)
@@ -716,8 +952,10 @@ function setCodes(lock: Lock, want: Map<string, string | null>, kept: Set<string
 }
 
 /** Give each field (keys mod\0sym in want) its CC from pool, in lock (changed in place); a field in kits (the FX
- * track's) none in fxTaken. Not part of the layout ID: a CC says nothing of where data is. store._ccs. */
-function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[], kits: Set<string> = new Set(), fxTaken: number[] = []): void {
+ * track's) none in fxTaken; one in reserved (the +Drive's) only when nothing else is left. Not part of the layout ID: a
+ * CC says nothing of where data is. store._ccs. */
+function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[], kits: Set<string> = new Set(), fxTaken: number[] = [],
+  reserved: number[] = []): void {
   const had = lock.ccs ?? [], hadFreed = lock.freed_ccs ?? []
   if (!want.size && !had.length && !hadFreed.length) return
   const key = (c: { mod: string; sym: string }) => c.mod + '\0' + c.sym
@@ -730,28 +968,38 @@ function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[], 
     }
   }
   const used = new Set([...ccs, ...freed].map(c => c.cc))
-  const unused = pool.filter(cc => !used.has(cc))
+  const held = new Set(reserved)
+  const unused = pool.filter(cc => !used.has(cc) && !held.has(cc))
+  const drives = pool.filter(cc => !used.has(cc) && held.has(cc))
   const have = new Set(ccs.map(key))
+  const hint = ', which a +Drive field holds: the Drive Loader gives that field another'
   const todo = [...want].filter(k => !have.has(k)).map(k => { const [mod, sym] = k.split('\0'); return { mod, sym } }).sort(byModSym)
   for (const { mod, sym } of todo) {
     const k = mod + '\0' + sym
     const ok = (cc: number) => !(kits.has(k) && fxTaken.includes(cc))
     const same = freed.filter(c => key(c) === k && ok(c.cc))
-    const fresh = unused.filter(ok), older = freed.filter(c => ok(c.cc))
+    const fresh = unused.filter(ok)
+    const free1 = freed.filter(c => ok(c.cc) && !held.has(c.cc))
+    const older = free1.length ? free1 : freed.filter(c => ok(c.cc))
+    const lastly = drives.filter(ok)
     let c: Cc
     if (same.length) {
       c = same[same.length - 1]
       freed.splice(freed.indexOf(c), 1)
-      notes.push(`${mod} ${sym}: back with CC ${c.cc}`)
+      notes.push(`${mod} ${sym}: back with CC ${c.cc}${held.has(c.cc) ? hint : ''}`)
     } else if (fresh.length) {
       unused.splice(unused.indexOf(fresh[0]), 1)
       c = { mod, sym, cc: fresh[0] }
       notes.push(`${mod} ${sym}: CC ${c.cc}`)
-    } else if (older.length) {                  // the never-used CCs are gone: the one freed longest ago
+    } else if (older.length && (!held.has(older[0].cc) || !lastly.length)) {   // the never-used CCs are gone: the one freed longest ago
       const old = older[0]
       freed.splice(freed.indexOf(old), 1)
       c = { mod, sym, cc: old.cc }
-      notes.push(`${mod} ${sym}: CC ${c.cc} (was ${old.mod} ${old.sym}'s)`)
+      notes.push(`${mod} ${sym}: CC ${c.cc} (was ${old.mod} ${old.sym}'s)${held.has(c.cc) ? hint : ''}`)
+    } else if (lastly.length) {                 // only the +Drive's are left
+      drives.splice(drives.indexOf(lastly[0]), 1)
+      c = { mod, sym, cc: lastly[0] }
+      notes.push(`${mod} ${sym}: CC ${c.cc}${hint}; no other is left`)
     } else {
       notes.push(`${mod} ${sym}: no CC left (all ${pool.length} are taken); it is on MIDI by its NRPN only`)
       continue
