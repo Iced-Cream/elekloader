@@ -1118,13 +1118,54 @@ static const struct core_param_lock *theirs(void *set, int id, int step, int *tr
 
 /* sound set vtable +60: (set, id, step) -> the lock (8.8) or -1; the FX
  * set's the same (0.9), with stock's FX call for a knob not core's */
+/* With a trig held stock asks this about a hundred times a screen, a dozen
+ * for each knob it draws: a mod parameter's answer is kept for GOT_TICKS,
+ * while its step's ledger region is unchanged (put, drop and every edit
+ * core follows change it), so one draw finds it once */
+#define GOT_TICKS 132000                /* 1 ms of DMA timer 0 */
+#define GOTS 16
+static struct got {
+    void *set;
+    int id, step, value, region;
+    unsigned gen, at;
+} gots[GOTS];
+static int got_next;
+
+static struct got *got_find(void *set, int id, int step)
+{
+    struct got *g;
+    for (g = gots; g < gots + GOTS; g++)
+        if (g->set == set && g->id == id && g->step == step && DTCN0 - g->at < GOT_TICKS &&
+            gen[g->region] == g->gen)
+            return g;
+    return 0;
+}
+
+static int got_keep(void *set, int id, int step, unsigned a, int value)
+{
+    struct got *g = &gots[got_next];
+    got_next = (got_next + 1) % GOTS;
+    g->set = 0;                         /* not found while it is half written */
+    g->id = id;
+    g->step = step;
+    g->value = value;
+    g->region = region_of(a);
+    g->gen = gen[g->region];
+    g->at = DTCN0;
+    g->set = set;
+    return value;
+}
+
 static int lock_get(void *set, int id, int step, int (*stock)(void *, int, int))
 {
     unsigned code, a;
     unsigned char *s;
     const struct core_param_lock *m;
     const struct core_lock_param *p;
-    int t;
+    const struct got *g;
+    int t, v;
+    if (core_lock_by_id(id, &code) && (g = got_find(set, id, step)) != 0)
+        return g->value;
     if (!(p = ours(set, id, &code, &s))) {
         if (!(m = theirs(set, id, step, &t)))
             return stock(set, id, step);
@@ -1132,8 +1173,8 @@ static int lock_get(void *set, int id, int step, int (*stock)(void *, int, int))
     }
     if (!(a = where(step)))
         return -1;
-    step = get(a, code);
-    return step < 0 ? -1 : core_scale_show(p, step);   /* (0.11) on the dial's scale */
+    v = get(a, code);
+    return got_keep(set, id, step, a, v < 0 ? -1 : core_scale_show(p, v));   /* (0.11) on the dial's scale */
 }
 
 int core_lock_get_vt(void *set, int id, int step) { return lock_get(set, id, step, STOCK_LOCK_GET); }
