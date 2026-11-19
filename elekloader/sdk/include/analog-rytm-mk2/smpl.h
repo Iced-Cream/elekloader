@@ -87,9 +87,8 @@ struct smpl_machine {
 };
 
 /* flags: knob C keeps a value of its own, a lockable sound field, instead of
- * SMP's word (index 19, the sample stock plays). The bits are taken only
- * when the companion smpl-knob-c is in the build: a mod with such a machine
- * lists "smpl-knob-c" in its "requires". Without it knob C stays SMP's word. */
+ * SMP's word (index 19, the sample stock plays); every such machine shares
+ * the one field (smpl-machines' knobc.c). */
 #define SMPL_OWN_C 0x0001
 
 /* (smpl-machines 0.3, core-ar2 0.15) The SAMPLE view's second page, SMPL
@@ -99,9 +98,9 @@ struct smpl_machine {
  * the SMPL key stays on it, and a view on page 2 moves back to it. */
 #define SMPL_WAVEFORM 0x0002
 
-/* smpl-knob-c's record (smpl-machines imports it weakly: zeros without it) */
+/* knob C's own value (smpl-machines' knobc.c): its knob id and field */
 struct smpl_knob_c {
-    int32_t id;             /* its knob id (CORE_KNOB(0)), 0 when absent */
+    int32_t id;             /* its knob id (CORE_KNOB(0)) */
     uint32_t field;         /* STORE() of its lockable sound field */
 };
 

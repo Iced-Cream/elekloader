@@ -17,10 +17,10 @@ list TRK + SMPL opens.
 |---|---|
 | needs | core-ar2 0.15 or later, with knob faces (`core_knob_faces`) and `core_param_set` |
 | sites | 4: the render's call of the sample layer's trig intake, 0x40121134 (`jsr 0x4011c1e0`), where it calls each machine's engine and holds back the trigs of voices a machine runs; the entry of the audio side's routine that puts a sound on a track, 0x4011f60a (the kit's sound, or a sound lock's pool sound); the sound setup menu's build, 0x400ef184, after its MACHINE row; and stock's SRC machine setter's entry, 0x400bd1ba, which it wraps |
-| exports | `smpl_track_machine`; `smpl_face`, `smpl_text`, `smpl_c_get` and `smpl_c_delta` for smpl-knob-c |
-| imports | `smpl_knob_c`, weakly: smpl-knob-c's record (below) |
+| exports | `smpl_track_machine`, `smpl_knob_c` (knob C's id and field, below) |
 | declares | `smpl_machines`, the machines (`elekloader/sdk/include/analog-rytm-mk2/smpl.h`); the id pool `smpl_machines`, ids 0..29 |
-| storage | `smpl_choice`, 5 bits a sound: 0 AUTO, 1 stock, 2 + id a machine |
+| storage | `smpl_choice`, 5 bits a sound: 0 AUTO, 1 stock, 2 + id a machine; `smpl_c`, 7 bits a sound, knob C's own value (lockable: p-locks, LFO, velocity and aftertouch, a CC) |
+| knobs | 1 (knob C's own) |
 | RAM | 2.6 KB code, 7.8 KB data |
 
 ## What a machine is
@@ -62,14 +62,13 @@ machine, writes the new machine's defaults, as a knob turn writes them
 A machine's page shows its knobs in record order, so its knob C is SMP's
 word, the sample slot stock plays. A machine that leaves knob C blank, or
 uses it for the sample, needs nothing more. One that needs knob C for
-something else sets `SMPL_OWN_C` in its `flags`, and its mod lists
-`smpl-knob-c` in `requires`: that companion (mods/smpl-knob-c) holds one
-lockable 7-bit sound field and one knob id, which every such machine
-shares, as a sound runs one machine at a time. Knob C then shows that knob
+something else sets `SMPL_OWN_C` in its `flags`: smpl-machines' one
+lockable 7-bit sound field and one knob id (`knobc.c`), which every such
+machine shares, as a sound runs one machine at a time. Knob C then shows that knob
 id, with the machine's face; its value is the field, with p-locks, scenes,
 performances, the LFO, routes and a MIDI CC from core, and the engine gets
-it in `words[2]` (`core_param_value`). A build without smpl-knob-c takes
-none of these bits, and knob C stays SMP's word.
+it in `words[2]` (`core_param_value`). A choice of machine writes the
+new one's default into it.
 
 ## How it works
 

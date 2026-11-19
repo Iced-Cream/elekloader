@@ -44,12 +44,11 @@
 STORE_FIELD(smpl_choice);
 
 /* knob C: SMP's word (index 19), the sample stock plays, unless the machine
- * asks for a value of its own (SMPL_OWN_C) and the companion smpl-knob-c is
- * in the build: then its knob id and lockable sound field (smpl.h), so
- * p-locks, scenes, performances, the LFO, routes and MIDI come from core
- * and the sample stays put. Without the companion the record reads zeros. */
+ * asks for a value of its own (SMPL_OWN_C): then knobc.c's knob id and
+ * lockable sound field (smpl.h), so p-locks, scenes, performances, the LFO,
+ * routes and MIDI come from core and the sample stays put. */
 #define KNOB_C 2
-extern const struct smpl_knob_c smpl_knob_c;   /* weak: smpl-knob-c's */
+extern const struct smpl_knob_c smpl_knob_c;   /* knobc.c */
 #define KNOB_C_ID (smpl_knob_c.id)
 
 static int own_c(const struct smpl_machine *m)

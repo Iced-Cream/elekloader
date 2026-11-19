@@ -2405,7 +2405,7 @@ const struct core_knob_faces my_faces = {39, 46, my_face};
 
 The value's text is a `core_params` entry's, which may answer stock ids.
 A mod's own ids (555 up) take faces too, for a knob whose value the mod
-keeps but whose face changes with the sound (smpl-knob-c's knob C). The
+keeps but whose face changes with the sound (smpl-machines' knob C). The
 linker refuses an entry whose ids reach 469..554.
 
 ### Knob looks (core-ar2 0.13, Analog Rytm MKII)
@@ -3177,8 +3177,7 @@ const struct smpl_machine my_smpl = {
   voice would have started its sample. Stock's sample stays silent there.
   0 for none: the page changes and the sample layer is silent.
 - `flags`: `SMPL_OWN_C` gives knob C a value of its own instead of SMP's
-  word (index 19), the sample slot; the mod then lists `smpl-knob-c` in
-  `requires`, whose one field every such machine shares
+  word (index 19), the sample slot, in a field every such machine shares
   (mods/smpl-machines/README.md, "Knob C"). `SMPL_WAVEFORM` (0.3, core
   0.15) keeps the SAMPLE view's second page, stock's waveform of the
   sample SMP names under the machine's knobs; without it the machine has
