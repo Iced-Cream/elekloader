@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.14: the FX skip's sites and switches (fx.c has the delay's and
+| core-ar2 0.16: the FX skip's sites and switches (fx.c has the delay's and
 | the reverb's rules).
 |
 | 0x4010e75e, in the FX block 0x4010e6bc, between the send gains' update and

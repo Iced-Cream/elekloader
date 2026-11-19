@@ -1187,7 +1187,7 @@ different graphics; `examples/look-check-ar2` draws one of each. A mod that kept
 machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
-## The silent-voice skip (0.14)
+## The silent-voice skip (0.16)
 
 `idle.c` and `idle.s`, at 0x40121208 in the render's slot loop: stock calls
 each of the 8 voice slots' machine routines every block from the slot's
@@ -1253,7 +1253,7 @@ to every track) or the skip's switch-on put the slots in step, and every
 its next check (at most 264 blocks, 176 ms; a machine change in the next
 block); the voice is silent by then.
 
-## The sample-layer skip (0.14)
+## The sample-layer skip (0.16)
 
 `sample.s`, at 0x4011cc08 and 0x4011cd46 in the sample layer's slot loop
 (0x4011c6b8): stock resamples, filters (2:1) and scales every voice slot's
@@ -1287,7 +1287,7 @@ slots in one pipeline), the per-slot rate (0x4011c1e0) and the amp envelope
 (0x40109940, not part of the sample layer). In the emulator the three steps
 the skip leaves out cost about 1 point of render load per idle slot.
 
-## The UI skip (0.14)
+## The UI skip (0.16)
 
 `cast.s`, at 0x401b82f2, the entry of stock's `__dynamic_cast` (libstdc++).
 The main screen's refresh (0x400c9272) asks "is view X open?" about twenty
@@ -1324,7 +1324,7 @@ Off, the site costs two tests more than stock's cast. The memo keeps its
 entries while the skip is off; they stay right, because they never depend
 on anything that changes.
 
-## The FX skip (0.14)
+## The FX skip (0.16)
 
 `fx.s` and `fx.c`, in the FX block 0x4010e6bc: stock builds both send buses
 from all 8 voice slots, and calls the delay (0x4010da24) and the reverb
@@ -1353,7 +1353,7 @@ Input that is not 0 gives each part back to stock in that block. After a
 clear, the next delay or reverb tail starts from silence, as after a power-on. Both routines leave
 the MAC unit as they found it, so a call left out does too.
 
-## Submenus (0.14)
+## Submenus (0.16)
 
 `submenu.s` (`analog-rytm-mk2/settings.h`): a row a mod adds to the GLOBAL
 menu in `ev_settings` (`core_additem`) can open a menu of rows of its own.

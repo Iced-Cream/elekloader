@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.14: a submenu from a SETTINGS row (analog-rytm-mk2/settings.h).
+| core-ar2 0.16: a submenu from a SETTINGS row (analog-rytm-mk2/settings.h).
 |
 | A row a mod adds in ev_settings (core_additem) opens a menu of its own
 | rows with core_submenu_open(menu, sm), from the row's select. The menu is

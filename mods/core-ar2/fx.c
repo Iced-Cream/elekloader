@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.14: the FX skip (README, "The FX skip (0.14)"). Every address
+/* core-ar2 0.16: the FX skip (README, "The FX skip (0.16)"). Every address
  * is OS 1.74's.
  *
  * The FX block 0x4010e6bc builds the two send buses, calls the delay

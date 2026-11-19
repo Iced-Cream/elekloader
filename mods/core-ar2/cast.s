@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.14: the UI skip, a memo on stock's __dynamic_cast (libstdc++,
+| core-ar2 0.16: the UI skip, a memo on stock's __dynamic_cast (libstdc++,
 | 0x401b82f2: (src, src_type, dst_type, src2dst) -> the cast pointer or 0).
 |
 | The UI asks "is view X open?" about twenty times per main-screen refresh

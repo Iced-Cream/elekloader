@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * core-ar2 0.14: a submenu from a SETTINGS row (mods/core-ar2/submenu.s,
- * mods/core-ar2/README.md, "Submenus (0.14)").
+ * core-ar2 0.16: a submenu from a SETTINGS row (mods/core-ar2/submenu.s,
+ * mods/core-ar2/README.md, "Submenus (0.16)").
  *
  * A row a mod adds in ev_settings with core_additem opens a menu of rows of
  * its own: from the row's select, call core_submenu_open(menu, &sm), where

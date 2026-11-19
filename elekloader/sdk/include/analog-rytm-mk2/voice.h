@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * core-ar2 0.14: the silent-voice skip's switch (mods/core-ar2/idle.c,
- * mods/core-ar2/README.md, "The silent-voice skip (0.14)").
+ * core-ar2 0.16: the silent-voice skip's switch (mods/core-ar2/idle.c,
+ * mods/core-ar2/README.md, "The silent-voice skip (0.16)").
  *
  * The skip runs only when a mod asks for it and no mod holds it off:
  * core_voice_skip_want nonzero and core_voice_skip_hold 0. It is off at boot.
@@ -32,8 +32,8 @@ void core_voice_skip_hold_release(void);
 /* the audio blocks the skip has saved a machine call in, since boot */
 extern volatile uint32_t core_voice_skips;
 
-/* The sample-layer skip (0.14, mods/core-ar2/sample.s; README, "The
- * sample-layer skip (0.14)"): a slot whose sample layer is not playing and
+/* The sample-layer skip (0.16, mods/core-ar2/sample.s; README, "The
+ * sample-layer skip (0.16)"): a slot whose sample layer is not playing and
  * whose filter history is zero no longer runs its resample, filter and output
  * stage. The sound is unchanged, bit for bit. Off at boot; it runs while
  * core_sample_skip_want is nonzero and core_voice_skip_hold is 0. The mod that
