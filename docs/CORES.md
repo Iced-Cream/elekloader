@@ -238,11 +238,11 @@ the one a mod that uses it names in `resources.core`.
   A silent voice's machine call skipped, its next note starting
   from the slot's power-on state, which changes the sound slightly: off at
   boot, on while a mod asks for it and none holds it off (0.16;
-  `analog-rytm-mk2/voice.h`; mods/core-ar2/README.md, "The silent-voice skip
+  `analog-rytm-mk2/voice.h`; mods/core-ar2/SKIPS.md, "The silent-voice skip
   (0.16)"). Stock's `dynamic_cast` answered from a memo, which cuts the UI's
   CPU and changes nothing it does or shows: off at boot, on while a mod asks
   for it and none holds it off (0.16; `analog-rytm-mk2/ui.h`;
-  mods/core-ar2/README.md, "The UI skip (0.16)").
+  mods/core-ar2/SKIPS.md, "The UI skip (0.16)").
 - **Analog Four MKII** ([mods/core-a4mk2](../mods/core-a4mk2), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4mk2 0.1)"), and parameter pages, whose

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * core-ar2 0.16: the FX skip's switches (mods/core-ar2/fx.c, fx.s,
- * mods/core-ar2/README.md, "The FX skip (0.16)").
+ * mods/core-ar2/SKIPS.md, "The FX skip (0.16)").
  *
  * All three are off at boot. The mod that offers them as settings writes the
  * user's choice; nothing else writes them. Bytes, read once per audio block,

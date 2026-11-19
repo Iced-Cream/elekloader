@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * core-ar2 0.16: the UI skip's switch (mods/core-ar2/cast.s,
- * mods/core-ar2/README.md, "The UI skip (0.16)").
+ * mods/core-ar2/SKIPS.md, "The UI skip (0.16)").
  *
  * The skip runs only when a mod asks for it and no mod holds it off:
  * core_ui_skip_want nonzero and core_ui_skip_hold 0. It is off at boot.

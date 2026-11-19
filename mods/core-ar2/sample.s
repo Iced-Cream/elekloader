@@ -1,6 +1,6 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.16: the sample-layer skip (README, "The sample-layer skip
-| (0.16)"). Every address is OS 1.74's.
+| core-ar2 0.16: the sample-layer skip (SKIPS.md,
+| "The sample-layer skip (0.16)"). Every address is OS 1.74's.
 |
 | 0x4011c6b8, called once per render block, runs the sample layer of all 8
 | voice slots (struct 0x80005b30 + 0x5c x slot): for each, a 64-step
