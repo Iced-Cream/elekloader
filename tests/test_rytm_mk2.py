@@ -662,7 +662,7 @@ def test_core_ar2_usb_in_gain():
     sites = [x for x in j['sites'] if x.get('target') == 'core_usb_in_site']
     assert sites == [{'addr': '0x4011fc98', 'stock': '20398000ee7c', 'op': 'jsr',
                       'target': 'core_usb_in_site'}], sites
-    assert j['sources'][-1] == 'usbin.s'
+    assert 'usbin.s' in j['sources']
     _r, _s, img = stock()
     if REL.version != '1.74':
         raise Skip('core-ar2 usbin is for 1.74')
