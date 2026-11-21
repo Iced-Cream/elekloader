@@ -81,8 +81,17 @@ int dl_list_dir(const char *rel, struct dl_ent *out, int max)
     return out ? (k < max ? k : max) : k;
 }
 
-void dl_lock(void) {}
-void dl_unlock(void) {}
+static int locked, guard_off, kept;
+void dl_lock(void) { locked++; }
+void dl_unlock(void) { locked--; }
+/* APPLY & RESTART's calls (page.c restart_tick): the keep before any lock, then the guard */
+void dl_guard_off(void) { guard_off = 1; }
+void core_project_keep(void) { kept = !locked && !guard_off; }
+void core_restart(void)                  /* never returns: the script ends here */
+{
+    printf("RESTART kept=%d locked=%d guard_off=%d\n", kept, locked, guard_off);
+    exit(0);
+}
 int dl_fs_file_size(const char *path) { (void)path; return 100; }
 void *dl_alloc(u32 n) { return calloc(1, n ? n : 1); }   /* zeroed, as boot.c's */
 void dl_free(void *p) { free(p); }
@@ -256,6 +265,24 @@ int main(void)
                 printf("%c%s=%s", i ? '|' : ' ', (const char *)dl_page_text(i + 1), t);
             }
             printf("\n");
+        } else if (!strcmp(line, "acts")) {   /* the build list's action panel rows */
+            mode = M_BUILD;
+            printf("ACTS");
+            for (i = 0; i < n_acts(); i++)
+                printf("%c%s", i ? '|' : ' ', (const char *)dl_page_text(I_ACT + i));
+            printf("\n");
+            mode = M_DRIVE;
+        } else if (!strncmp(line, "restart ", 8)) {   /* YES on its confirm (do_restart without the
+                                                         * box), then n ticks of restart_tick */
+            int n = atoi(line + 8);
+            restarting = 1;
+            restart_asked = ticks;
+            printf("KEY %d\n", dl_key(0, 0));
+            while (n-- > 0) {
+                ticks++;
+                restart_tick();
+            }
+            printf("WAITING kept=%d locked=%d guard_off=%d\n", kept, locked, guard_off);
         } else if (!strcmp(line, "build")) {
             mode = M_BUILD;
             park_rows();                 /* as page_rows makes them with the list's rows */

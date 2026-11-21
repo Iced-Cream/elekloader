@@ -15,6 +15,7 @@ import unittest
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+SDK = os.path.join(os.path.dirname(HERE), 'elekloader', 'sdk', 'include')
 sys.path.insert(0, os.path.dirname(HERE))
 from elekloader import drive_store as ds   # noqa: E402
 LABEL = 48                                         # page.c's label buffer
@@ -81,7 +82,7 @@ class BuildRows(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_build_rows_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod
@@ -133,6 +134,19 @@ class BuildRows(unittest.TestCase):
         got = self.run_page(['boot x.elemod|x.elemod', 'build'], tree=['x.elemod'], active=['x.elemod'])
         self.assertEqual(got, [['x']])
 
+    def test_apply_and_restart_shows_only_while_the_saved_set_differs(self):
+        acts = ['SELECT ALL', 'DESELECT ALL', 'UNLOAD', 'INFO', 'FORGET DATA']
+        tree, active = ['a.elemod', 'b.elemod'], ['a.elemod']
+        self.assertEqual(self.lines(['acts'], 'ACTS', tree, active), ['|'.join(acts + ['APPLY & RESTART'])])
+        self.assertEqual(self.lines(['boot a.elemod|a', 'acts'], 'ACTS', tree, active), ['|'.join(acts)])
+
+    def test_yes_on_apply_and_restart_keeps_the_project_then_restarts_without_the_guard(self):
+        tree, active = ['a.elemod'], ['a.elemod']
+        self.assertEqual(self.lines(['restart 39'], 'KEY', tree, active), ['1'])     # keys taken
+        self.assertEqual(self.lines(['restart 39'], 'WAITING', tree, active),
+                         ['kept=0 locked=0 guard_off=0'])   # 2 s not yet up: nothing done
+        self.assertEqual(self.lines(['restart 40'], 'RESTART', tree, active), ['kept=1 locked=1 guard_off=1'])
+
     def test_file_rows_show_the_file_name_never_the_id(self):
         got = self.lines(['id ~T FCR/~T fnm-01-0.1.elemod|fnm-01', 'open ~T FCR', 'drive'], 'DRIVE')
         rows = [r.split('=') for r in got[0].split('|')]
@@ -169,7 +183,7 @@ class Parked(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_build_rows_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
         with open(os.path.join(HERE, '..', 'js', 'test', 'drivestore-vectors.json'), encoding='utf-8') as fh:
             runs = json.load(fh)['runs']
@@ -287,7 +301,7 @@ class CheckTick(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_check_tick_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_check_tick_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_check_tick_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod
@@ -330,7 +344,7 @@ class Reader(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_reader_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_reader_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_reader_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod

@@ -96,6 +96,10 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   file that is missing or doesn't read (its CRC, its records) parks nothing. With `/mods` empty
   and data parked, the panels open so that VIEW BUILD and FORGET DATA can be reached; the file
   list keeps its `NO MODS ON +DRIVE` row.
+- **APPLY & RESTART** is the A4's (mods/drive-loader-a4mk2/PAGE.md, "APPLY & RESTART"), with
+  core-ar2's calls (`analog-rytm-mk2/system.h`); `dl_key` takes keys while `RESTARTING`
+  shows. The action panel is rebuilt with the list (`page_rows`), whose clear puts its cursor
+  on row 0, so it never stays on the row once it has gone.
 - **No files.** With no `.elemod` and no folder in `/mods` the list has one row,
   `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens unless data is parked.
   A build list with no row (nothing in the build and nothing parked, or after CLEAR BUILD,
