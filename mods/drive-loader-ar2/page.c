@@ -99,12 +99,18 @@ static struct dl_status *cst;
 static char (*cdet)[32];
 static char label[48];
 
-/* Parked data (PAGE.md, "Parked data"): the mods /mods/.store keeps fields of that no chosen mod
- * declares any more, read when the page opens and after FORGET DATA. The build list shows them
- * after the build's rows. */
+/* Saved data (PAGE.md, "Saved data"): the mods /mods/.store keeps fields, lock codes or CCs of,
+ * read when the page opens and after FORGET DATA. A build row of such a mod has "* " before its
+ * KEEP, ADD, DROP or "!" (decided 2026-11-18, the A4's, in place of PARK rows). The parked ones
+ * (fields no chosen mod declares any more) are parks; the build list shows those of mods not on
+ * it after the build's rows (prows, made with the list's rows in page_rows, so stock's row
+ * count never changes under it), and FORGET DATA drops a ticked row's parked data. */
 static struct dl_park *parks;
 static int npark;
 static u8 *forgetting;                   /* FORGET DATA's marks, one a parked mod */
+static int *prows, nprow;                /* the parks with a row of their own, after the build's */
+static u8 *stored;                       /* a copy of .store's bytes, for "* " */
+static s32 nstored;
 static u8 *store_raw, *store_out;        /* FORGET DATA's read of .store and its rewrite */
 static s32 store_len;
 
@@ -150,12 +156,17 @@ static void page_free(void)
     dl_free(sel);
     dl_free(parks);
     dl_free(forgetting);
+    dl_free(prows);
+    dl_free(stored);
     files = 0;
     lrows = 0;
     build_rows = sel = 0;
     parks = 0;
     forgetting = 0;
-    nfiles = fcap = nlrows = nbuild = npark = 0;
+    prows = 0;
+    stored = 0;
+    nfiles = fcap = nlrows = nbuild = npark = nprow = 0;
+    nstored = 0;
     set_free();
 }
 
@@ -587,14 +598,26 @@ static int parks_from(const u8 *raw, s32 len)
     int n = len > 0 ? dl_park_list(raw, (u32)len, 0, 0) : 0;
     dl_free(parks);
     dl_free(forgetting);
+    dl_free(prows);
+    dl_free(stored);
     parks = 0;
     forgetting = 0;
-    npark = 0;
+    prows = 0;
+    stored = 0;
+    npark = nprow = 0;
+    nstored = 0;
+    if (len > 0) {
+        if (!(stored = dl_alloc((u32)len)))
+            return -2;
+        dl_memcpy(stored, raw, (u32)len);
+        nstored = len;
+    }
     if (n <= 0)
         return 0;
     parks = dl_alloc((u32)n * sizeof *parks);
     forgetting = dl_alloc((u32)n);
-    if (!parks || !forgetting)
+    prows = dl_alloc((u32)n * sizeof *prows);
+    if (!parks || !forgetting || !prows)
         return -2;
     npark = dl_park_list(raw, (u32)len, parks, n);
     if (npark < 0)
@@ -844,6 +867,19 @@ enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR, P_FORGET };
 static u8 mode;                          /* the list: the files, or the build */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
+
+/* the saved data "*" column's right edge, from the row's x: STATE_GAP left of the widest build
+ * state word, so every row's "*" lines up whatever word follows it (decided 2026-11-18) */
+static int star_x(void)
+{
+    static const char *const words[] = {"KEEP", "ADD", "DROP", "!"};
+    int i, w, most = 0;
+    for (i = 0; i < 4; i++)
+        if ((w = text_w(words[i])) > most)
+            most = w;
+    return ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 - most - STATE_GAP;
+}
+
 static char msg[80];
 static char rmdir_name[DL_SEG_MAX + 1];  /* the folder DELETE DIR asked about */
 
@@ -859,9 +895,45 @@ static int build_empty(void)
     return 1;
 }
 
+/* a file's id names park pid: the whole id, or its first DL_ID_MAX - 1 bytes when the file's id
+ * was cut there */
+static int id_is(const char *fid, const char *pid)
+{
+    u32 i;
+    if (!fid[0])
+        return 0;
+    for (i = 0; fid[i]; i++)
+        if (fid[i] != pid[i])
+            return 0;
+    return !pid[i] || i == DL_ID_MAX - 1;
+}
+
+/* the park of file k's mod, or -1 */
+static int park_of_file(int k)
+{
+    int p;
+    for (p = 0; p < npark; p++)
+        if (id_is(files[k].id, parks[p].id))
+            return p;
+    return -1;
+}
+
+/* prows again: the parks whose mod has no build row (page_rows, with the list's rows) */
+static void park_rows(void)
+{
+    int p, i;
+    nprow = 0;
+    for (p = 0; p < npark && prows; p++) {
+        for (i = 0; i < nbuild && !id_is(files[build_rows[i]].id, parks[p].id); i++)
+            ;
+        if (i == nbuild)
+            prows[nprow++] = p;
+    }
+}
+
 static int list_n(void)
 {
-    return mode == M_BUILD ? nbuild + npark : nlrows;
+    return mode == M_BUILD ? nbuild + nprow : nlrows;
 }
 
 /* the file of list row i in this mode, or -1 for "..", a folder and a parked mod */
@@ -875,7 +947,16 @@ static int file_k(int i)
 /* the parked mod of list row i (the build list's rows after the build's), or -1 */
 static int park_k(int i)
 {
-    return mode == M_BUILD && i >= nbuild && i < nbuild + npark ? i - nbuild : -1;
+    return mode == M_BUILD && i >= nbuild && i < nbuild + nprow ? prows[i - nbuild] : -1;
+}
+
+/* the parked data FORGET DATA drops for list row i: a parked row's, or a build row's mod's */
+static int park_of(int i)
+{
+    int k = park_k(i);
+    if (k >= 0)
+        return k;
+    return mode == M_BUILD && i >= 0 && i < nbuild ? park_of_file(build_rows[i]) : -1;
 }
 
 /* the build list: the saved set, then the mods the last boot loaded that have left it
@@ -956,8 +1037,7 @@ unsigned dl_page_text(int i)
         if (park_k(i) >= 0) {            /* a parked mod: its id, clipped as the build's */
             const char *id = parks[park_k(i)].id;
             if (view)
-                clip_tail(label, end, id, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 - text_w("KEEP") -
-                          LABEL_X - STATE_GAP, text_w);
+                clip_tail(label, end, id, star_x() - text_w("*") - LABEL_X - STATE_GAP, text_w);
             else
                 cat(label, end, id);
         } else if (k >= 0) {
@@ -968,8 +1048,7 @@ unsigned dl_page_text(int i)
             else
                 bare_name(name, name + sizeof name, r->name);
             if (mode == M_BUILD && view)     /* clipped left of the state column */
-                clip_tail(label, end, name, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 -
-                          text_w("KEEP") - LABEL_X - STATE_GAP, text_w);
+                clip_tail(label, end, name, star_x() - text_w("*") - LABEL_X - STATE_GAP, text_w);
             else
                 cat(label, end, name);
         } else if (lrows[i].kind == R_UP)
@@ -1013,15 +1092,17 @@ static void publish_check(void)
  * "(n)" in its place (decided 2026-11-09). Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
  * "!" (the last boot refused it). */
-/* list row i's right-hand column into t */
-static void row_column(int i, char *t, char *end)
+/* list row i's right-hand column into t -> 1 when the row also gets the saved data mark "*"
+ * (.store keeps data of the mod, live or parked), drawn in a column of its own at star_x; a
+ * parked mod not on the build has the "*" alone (decided 2026-11-18, the A4's, in place of PARK) */
+static int row_column(int i, char *t, char *end)
 {
-    int k = file_k(i);
+    int k = file_k(i), star = 0;
     const struct file *r;
     t[0] = 0;
     if (park_k(i) >= 0)                  /* parked data: its fields keep their bits */
-        cat(t, end, "PARK");
-    else if (k < 0) {
+        return 1;
+    if (k < 0) {
         if (lrows[i].kind == R_DIR && lrows[i].sel)   /* "(3)": 3 ticked files below it */
             cat(num(cat(t, end, "("), end, lrows[i].sel), end, ")");
         else
@@ -1031,24 +1112,33 @@ static void row_column(int i, char *t, char *end)
             cat(t, end, "!");
         else if (r->checked)             /* the size once the check has read the file */
             cat(num(t, end, (r->size + 1023) / 1024), end, "KB");
-    } else if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
-        cat(t, end, "!");
-    else if (!r->on)
-        cat(t, end, "DROP");
-    else
-        cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    } else {
+        star = park_of_file(k) >= 0 || dl_store_has(stored, (u32)nstored, r->id, 1);
+        if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
+            cat(t, end, "!");
+        else if (!r->on)
+            cat(t, end, "DROP");
+        else
+            cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    }
+    return star;
 }
 
 void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
 {
-    int i = (int)*f - 1;
+    int i = (int)*f - 1, star;
     char t[16];
     (void)item;
     drawn_at = ticks;
     if (!view || i < 0 || i >= list_n())
         return;
-    row_column(i, t, t + sizeof t);
-    TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
+    star = row_column(i, t, t + sizeof t);
+    if (t[0])
+        TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
+    if (star)                            /* after the word: the word's "XXXXXXX" box clears what lies
+                                          * under it, the star with it (DMS1 emulator, 2026-11-18:
+                                          * "* KEEP" drew as "KEEP"); the star's own box is one "X" */
+        TEXT(canvas, FONT_LIST, x + star_x(), y, 2, 0, "X", "%s", "*");
 }
 
 static void show_box(const char *s)
@@ -1488,7 +1578,7 @@ static int forget_marks(void)
     for (k = 0; k < npark; k++)
         forgetting[k] = 0;
     for (; v && v < e; v++)
-        if ((k = park_k(*v)) >= 0 && !forgetting[k]) {
+        if ((k = park_of(*v)) >= 0 && !forgetting[k]) {
             forgetting[k] = 1;
             n++;
         }
@@ -1877,6 +1967,7 @@ static void page_rows(void)
     void *right = (char *)view + PANE_RIGHT, *left = (char *)view + PANE_LEFT;
     LIST_CLEAR(view);
     ((int *)view)[11] = ((int *)view)[10];   /* no ticks carried across lists */
+    park_rows();                         /* the parked-only rows, fixed until the next rebuild */
     for (i = 0; i < list_n(); i++)
         add_item(view, i + 1, i);
     /* stock's list is never left with no row: its own lists never are (a folder has "..", VIEW
