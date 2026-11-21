@@ -24,7 +24,7 @@
   {"event": "ev_sysex_in", "fn": "core_std_sysex_in", "order": 0}
  ],
  "defsym": {
-  "FINISH_PANEL": "0x413da6bc", "FINISH_UART": "0x413da6cc", "FINISH_DRAIN": "0x40001bce",
+  "FINISH_PANEL": "0x413da6bc", "FINISH_UART": "0x413da6cc", "FINISH_DRAIN": "0x40001bce", "STORE_PTR": "0x419f2888", "STORE_MUTEX": "0x28e78", "RMUTEX_LOCK": "0x40001124", "DRIVE_MUTEX": "0x419f5320", "CARD_MUTEX": "0x42f92118", "MUTEX_LOCK": "0x400010bc", "KEEP_PACK": "0x400a1058", "KEEP_WRITE": "0x401228c8", "RESET_DDR": "0x48000000", "RESET_CTRL": "0xEC090000",
   "BOOT_INIT": "1",
   "DRAWALL": "0x400790f2",
   "KEYDISP": "0x400a0336",

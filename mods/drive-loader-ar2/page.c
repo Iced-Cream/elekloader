@@ -1998,19 +1998,6 @@ static void add_item(void *list, int i, int index)
     MENU_ADD(list, it);
 }
 
-/* Put a panel's cursor back on one of its n rows. The action panel is a list of stock's own, and
- * its label scroll reads the cursor's row with no count check (page_rows' note), so a cursor left
- * on APPLY & RESTART when the sets became equal again, or when the list switched to VIEW +DRIVE's
- * five rows, would read a freed row. The panel is the same list class as the view's own, at
- * PANE_RIGHT, with the same cursor calls in its vtable (0x24 the row, 0x18 a move). */
-static void pane_cursor_in(void *list, int n)
-{
-    unsigned *vt = *(unsigned **)list;
-    int now = ((int (*)(void *))vt[0x24 / 4])(list);
-    if (n > 0 && now >= n)
-        ((void (*)(void *, int))vt[0x18 / 4])(list, n - 1 - now);
-}
-
 /* (Re)build the list and both panels. In the file list the ticks are the page's own (files[].pick),
  * which start as the saved build on entering MODS and after a change (decided 2026-11-07) and stay
  * across folders (decided 2026-11-08). */
@@ -2037,9 +2024,9 @@ static void page_rows(void)
     if (!list_n())
         add_item(view, I_EMPTY, 0);
     LIST_CLEAR(right);
-    for (i = 0; i < n_acts(); i++)
+    for (i = 0; i < n_acts(); i++)      /* LIST_CLEAR put its cursor on row 0, so it is never left
+                                          * on APPLY & RESTART once that row has gone (trace R3) */
         add_item(right, I_ACT + i, -1);
-    pane_cursor_in(right, n_acts());     /* APPLY & RESTART may have gone from under it */
     LIST_CLEAR(left);
     add_item(left, I_LEFT, -1);
     if (mode == M_DRIVE) {

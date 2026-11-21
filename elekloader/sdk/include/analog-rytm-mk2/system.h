@@ -13,8 +13,9 @@ extern void core_restart(void);
 extern void core_restart_now(void);
 /* From a task: write the working project to the +Drive from the live project,
  * as stock's OS upgrade does before its reboot, so the next boot comes back on
- * the project as it is now, mod fields included. Returns; call it before
- * core_restart, never holding the +Drive. */
+ * the project as it is now, mod fields included. It works once a boot and
+ * stops the power-fail write, so only core_restart may follow it. Returns;
+ * never call it holding the +Drive. */
 extern void core_project_keep(void);
 
 #endif
