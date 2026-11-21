@@ -1,0 +1,80 @@
+| SPDX-License-Identifier: GPL-2.0-or-later
+| core-ar2: a restart a mod can ask for, and the working project kept before it
+| (Analog Rytm MKII, OS 1.74), core-a4mk2's restart.s with the Rytm's
+| addresses. ColdFire V4; beside finish.s, whose FINISH_PANEL, FINISH_UART and
+| FINISH_DRAIN it uses. The device's mod.json gives:
+|
+|   DRIVE_MUTEX  ekFS's mutex, held across each +Drive file operation
+|   CARD_MUTEX   the eMMC's mutex, held across each raw sector transfer
+|   MUTEX_LOCK   locks either (the RTOS's plain mutex)
+|   KEEP_PACK    the "Write project MRAM" job's body: the live project
+|                written into the stored working project
+|   RESET_DDR, RESET_CTRL  what stock's restart clears and writes last
+|
+| ---- core_restart: reboot, from a task ----------------------------------------
+| void core_restart(void). Waits for the +Drive to be idle: takes ekFS's mutex,
+| then the eMMC's, in the order stock takes them, and never gives them back, so
+| no save, load or transfer starts or is cut short. Then lets the interrupts
+| send what the panel link and the UART still hold, and does what every stock
+| restart does: interrupts masked, the drain, the restart's last writes. The
+| stock restart masks the interrupts first and then waits on counts only an
+| interrupt moves, which can hang (README, "The OS upgrade's restart"); this
+| does not.
+|
+| From a task, with interrupts on: it blocks on the mutexes. A mod that writes
+| the +Drive under a lock of its own takes that lock before calling. A save
+| stock has queued but not started is not waited for. From an interrupt or
+| ev_crash use core_restart_now (no waiting).
+
+        .section .run, "ax"
+        .globl  core_restart
+core_restart:
+        move.w  %sr, %d1
+        move.l  %d1, -(%sp)             | the caller's interrupt mask
+        pea     DRIVE_MUTEX
+        jsr     MUTEX_LOCK              | no file operation runs past this
+        addq.l  #4, %sp
+        pea     CARD_MUTEX
+        jsr     MUTEX_LOCK              | nor a raw transfer; never unlocked
+        addq.l  #4, %sp
+2:      tst.l   FINISH_PANEL            | interrupts on: let them send it
+        bgt.s   2b
+        tst.l   FINISH_UART
+        bgt.s   2b
+        move.w  #0x2700, %sr
+        tst.l   FINISH_PANEL            | queued since: send it and look again
+        bgt.s   3f
+        tst.l   FINISH_UART
+        bgt.s   3f
+        jsr     FINISH_DRAIN            | nothing pending: waits for the link only
+        bra.w   core_restart_now
+3:      move.l  (%sp), %d1
+        move.w  %d1, %sr                | interrupts back on: send it
+        bra.s   2b
+
+| ---- core_project_keep: the working project kept, from a task ------------------
+| void core_project_keep(void). The Rytm keeps its working project as a stored
+| copy (README, "The project save": 0x405c8f20) that the "Write project MRAM"
+| job writes from the live project after a change, and the boot reads back.
+| A change no project event announces (a mod's own field), or one whose job
+| hasn't run, never reaches it. This runs the job's body at once (KEEP_PACK),
+| so a restart after it boots on the project as it is now. Call it before
+| core_restart, never with the +Drive held. Returns.
+        .globl  core_project_keep
+core_project_keep:
+        jsr     KEEP_PACK
+        rts
+
+| ---- core_restart_now: reboot at once -----------------------------------------
+| void core_restart_now(void), never returns: the stock restart's last steps
+| without its drain, for an interrupt or an ev_crash handler.
+        .globl  core_restart_now
+core_restart_now:
+        move.w  #0x2700, %sr
+        clr.l   RESET_DDR
+        .rept   27
+        nop
+        .endr
+        moveq   #-128, %d0
+        move.b  %d0, RESET_CTRL
+4:      bra.s   4b
