@@ -193,9 +193,8 @@ test('the Data router client: the CLI\'s requests, byte for byte, over its recor
   }
 })
 
-/** A unit serving one file through a host whose MIDI input drops SysEx over 1 KB (Firefox's Web MIDI on Windows):
- * every reply longer than that is lost, and, as stock, an unfinished read can't be closed. */
-class SmallBufferUnit implements datarpc.Port {
+/** A unit serving one file; as stock, an unfinished read can't be closed. `deliver` is its port to the host. */
+class OneFileUnit implements datarpc.Port {
   queue: Uint8Array[] = []
   jobs = new Map<number, [Uint8Array, number]>()
   done = new Set<number>()
@@ -220,11 +219,86 @@ class SmallBufferUnit implements datarpc.Port {
       ok = this.done.has(u32(a, 0)) ? 1 : 0
       extra = Uint8Array.of(...a.subarray(0, 4), 0, 0, 0, 0)
     }
-    const reply = datarpc.frame(Uint8Array.of(0, 0, seq >> 8, seq & 255, cmd | 0x80, ok, ...extra))
-    if (reply.length <= 1024) this.queue.push(reply)
+    this.deliver(datarpc.frame(Uint8Array.of(0, 0, seq >> 8, seq & 255, cmd | 0x80, ok, ...extra)), cmd)
   }
+  deliver(reply: Uint8Array, _cmd: number) { this.queue.push(reply) }
   async receive() { return this.queue.shift() ?? null }
 }
+
+/** Through a host whose MIDI input drops SysEx over 1 KB (Firefox's Web MIDI on Windows): every reply longer than
+ * that is lost. */
+class SmallBufferUnit extends OneFileUnit {
+  deliver(reply: Uint8Array, _cmd: number) { if (reply.length <= 1024) this.queue.push(reply) }
+}
+
+/** A port that damages read replies, F0 and F7 intact: `cut` replies lose 480 SysEx bytes from their middle (T463),
+ * then `flip` replies have one data bit changed (T460). tests/test_drive.py's DamagingUnit. */
+class DamagingUnit extends OneFileUnit {
+  cut: number; flip: number; at: number; reads = 0
+  constructor(body: Uint8Array, cut = 0, flip = 0, at = 1) { super(body); this.cut = cut; this.flip = flip; this.at = at }
+  deliver(reply: Uint8Array, cmd: number) {
+    if (cmd === datarpc.READ && ++this.reads >= this.at && reply.length >= 6 + 8 * 70) {
+      if (this.cut) {
+        this.cut--
+        reply = Uint8Array.of(...reply.subarray(0, 6 + 8 * 8), ...reply.subarray(6 + 8 * 8 + 480))
+      } else if (this.flip) {
+        this.flip--
+        reply = reply.slice()
+        reply[6 + 8 * 40 + 3] ^= 1
+      }
+    }
+    this.queue.push(reply)
+  }
+}
+
+const big = () => new Uint8Array(256 * 110).map((_, i) => i & 255)   // 28,160 bytes: four 8 KB chunks
+
+/** Read replies carrying what the Rytm's route answers at +10, the same word for every chunk (0x40170bd8), not the
+ * chunk asked for. tests/test_drive.py's RouteWordUnit. */
+class RouteWordUnit extends OneFileUnit {
+  deliver(reply: Uint8Array, cmd: number) {
+    if (cmd === datarpc.READ) {
+      const msg = datarpc.unframe(reply)!.slice()
+      new DataView(msg.buffer).setUint32(10, 0x40170bd8)
+      reply = datarpc.frame(msg)
+    }
+    this.queue.push(reply)
+  }
+}
+
+test('the route\'s word at +10 is not taken for the chunk', async () => {
+  const client = new datarpc.Client(new RouteWordUnit(big()), 100)
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
+  assert.deepEqual(client.damaged, [])
+})
+
+test('a read reply cut short is read again, and the damaged read is kept with why (T463)', async () => {
+  const client = new datarpc.Client(new DamagingUnit(big(), 1, 0, 2), 100)
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
+  assert.equal(client.damaged.length, 1)
+  const [path, chunk, why, raw] = client.damaged[0]
+  assert.deepEqual([path, chunk, why], ['/mods/big.elemod', 0x2000,
+    'chunk size 8192, chunk 1: the reply carries 7772 bytes; it says 8192'])
+  assert.equal(raw.length, big().length + container.HEADER + container.FOOTER - 420)
+  assert.equal(client.readChunk, 0x2000)
+})
+
+test('a read whose hash is wrong is read again (T460)', async () => {
+  const client = new datarpc.Client(new DamagingUnit(big(), 0, 1), 100)
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
+  assert.deepEqual(client.damaged.map(d => d[2]), ['chunk size 8192: the data container\'s hash does not match its body'])
+})
+
+test('reads damaged every time are an error that says why', async () => {
+  const unit = new DamagingUnit(big(), 99), client = new datarpc.Client(unit, 100)
+  await assert.rejects(client.get('/mods/big.elemod'), (e: unknown) => e instanceof datarpc.DamagedRead &&
+    e.message.startsWith('reading /mods/big.elemod: every one of 3 reads came through damaged (') &&
+    e.raw === client.damaged[client.damaged.length - 1][3])
+  assert.deepEqual(client.damaged.map(d => d[1]), [0x2000, 0x2000, 0x300])
+  assert.equal(client.readChunk, 0x2000)
+  unit.cut = 0
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
+})
 
 test('a read whose replies are lost starts again with small chunks, and the client keeps that size', async () => {
   const body = new Uint8Array(256 * 44).map((_, i) => i & 255)

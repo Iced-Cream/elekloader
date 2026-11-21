@@ -43,6 +43,13 @@ CHUNK = 0x2000
 # next; 0x300 bytes travel as a SysEx message of about 920 bytes
 READ_CHUNKS = (CHUNK, 0x300)
 NO_REPLY = 'no reply from the unit to command 0x%02x'
+# A read reply can arrive cut short, its F0 and F7 intact: T463 (2026-11-21, a Rytm behind the
+# Sidecar Pi's mirror port, Overbridge Engine open) lost 420 bytes of /mods/.build's 28,095, 480
+# SysEx bytes, ten full-speed USB packets' worth; T460 read a body whose hash did not match. So
+# each reply is checked against the size it gives and the job asked for, the whole
+# read against its container (length and CRC-32), and a damaged read is read again, READ_TRIES
+# times in all, the last with the small chunk.
+READ_TRIES = 3
 FOLDER = '/mods'
 DEPTH = 3                       # folders below FOLDER the route reaches (the loader's DL_DEPTH)
 MKDIR = '.dir'                  # an upload to FOLDER/.dir makes FOLDER (the loader's DL_MKDIR)
@@ -89,6 +96,14 @@ class RpcError(ModError):
     pass
 
 
+class DamagedRead(RpcError):
+    """A read whose bytes came through damaged: `raw` is what came (every chunk, as it came)."""
+
+    def __init__(self, text, raw=b''):
+        super().__init__(text)
+        self.raw = bytes(raw)
+
+
 class Client:
     """Requests over a port: an object with send(bytes) and receive(timeout) -> bytes or None (one
     whole SysEx message, F0 to F7)."""
@@ -96,6 +111,9 @@ class Client:
     def __init__(self, port, timeout=5.0):
         self.port, self.timeout, self.seq = port, timeout, 0
         self.read_chunk = CHUNK                 # the largest read chunk that has come through
+        # every damaged read, kept for the caller to log or save: (path, chunk size, why, raw)
+        self.damaged = []
+        self._chunk_used = CHUNK
 
     def call(self, cmd, args=b''):
         seq = self.seq
@@ -140,31 +158,68 @@ class Client:
         return out
 
     def get(self, path):
-        """-> the bytes the unit serves (a data container). A read whose reply never arrives starts
-        again with a smaller chunk (READ_CHUNKS); the client keeps the size that worked."""
+        """-> the bytes the unit serves (a data container), whole: each reply checked as it comes
+        and the container's length and CRC-32 at the end. A damaged read is read again, READ_TRIES
+        times in all, the last with the smallest chunk; each one is kept in `damaged`. A read whose
+        reply never arrives starts again with a smaller chunk (READ_CHUNKS); the client keeps the
+        size that worked."""
+        whys = []
+        for attempt in range(READ_TRIES):
+            small = attempt > 0 and attempt + 1 == READ_TRIES
+            try:
+                return self._sized(path, small)
+            except DamagedRead as e:
+                why = str(e)
+                self.damaged.append((path, self._chunk_used, why, e.raw))
+                whys.append(why)
+        raise DamagedRead('reading %s: every one of %d reads came through damaged (%s)'
+                          % (path, READ_TRIES, '; '.join(whys)), self.damaged[-1][3])
+
+    def _sized(self, path, small=False):
         sizes = [c for c in READ_CHUNKS if c <= self.read_chunk]
+        if small:
+            sizes = sizes[-1:]
         for i, chunk in enumerate(sizes):
+            self._chunk_used = chunk
             try:
                 data = self._get(path, chunk)
+            except DamagedRead:
+                raise
             except RpcError as e:
                 if i + 1 == len(sizes) or not str(e).endswith(NO_REPLY % READ):
                     raise
                 continue
-            self.read_chunk = chunk
+            try:
+                container.parse(data)
+            except ModError as e:
+                raise DamagedRead('chunk size %d: %s' % (chunk, e), data)
+            if not small:
+                self.read_chunk = chunk
             return data
 
     def _get(self, path, chunk):
         # The bytes are counted here, never taken from a reply's progress word: stock's per-mille
         # progress (ReadPartial, done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the
-        # stage in the +Drive area's free tail a read can be larger than that.
+        # stage in the +Drive area's free tail a read can be larger than that. Nor is the word at +10
+        # the chunk asked for: the Rytm's route answers 0x40170bd8 there for every chunk (emulator,
+        # 2026-11-21). A reply for another job, or shorter than it says, is noted, and the read goes
+        # on to its last chunk, so the unit closes it as it closes any other; then it is a
+        # DamagedRead.
         msg = self.call(ROPEN, path.encode('latin-1') + b'\0' + struct.pack('>IB', chunk, 0))
         job = struct.unpack_from('>I', msg, 6)[0]
-        data, seq = bytearray(), 0
+        data, seq, bad = bytearray(), 0, []
         try:
             while True:
                 msg = self.call(READ, struct.pack('>II', job, seq))
+                if len(msg) < 27:
+                    raise DamagedRead('chunk %d: a %d-byte reply' % (seq, len(msg)), data)
+                rjob = struct.unpack_from('>I', msg, 6)[0]
                 last = msg[18]
                 n = struct.unpack_from('>I', msg, 23)[0]
+                if rjob != job:
+                    bad.append('chunk %d: the reply is job %d' % (seq, rjob))
+                elif len(msg) < 27 + n:
+                    bad.append('chunk %d: the reply carries %d bytes; it says %d' % (seq, len(msg) - 27, n))
                 data += msg[27:27 + n]
                 seq += 1
                 if last:
@@ -174,8 +229,12 @@ class Client:
                 self.call(RCLOSE, struct.pack('>I', job))   # the unit refuses to close an unfinished read
             except RpcError:
                 pass
+            if isinstance(e, DamagedRead):
+                raise DamagedRead('chunk size %d, %s' % (chunk, e), data)
             raise RpcError('reading %s, chunk %d: %s' % (path, seq, e))
         self.call(RCLOSE, struct.pack('>I', job))
+        if bad:
+            raise DamagedRead('chunk size %d, %s' % (chunk, '; '.join(bad)), data)
         return bytes(data)
 
     def put(self, path, data):
