@@ -18,6 +18,10 @@ export const CHUNK = 0x2000
 // next; 0x300 bytes travel as a SysEx message of about 920 bytes
 export const READ_CHUNKS = [CHUNK, 0x300]
 const noReply = (cmd: number) => `no reply from the unit to command 0x${hex2(cmd)}`
+// A read reply can arrive cut short, its F0 and F7 intact (T463, 2026-11-21: 420 of /mods/.build's bytes lost behind
+// the Sidecar Pi; T460: a body whose hash did not match). Each reply is checked, the whole read against its container,
+// and a damaged read is read again, READ_TRIES times in all, the last with the small chunk. datarpc.READ_TRIES.
+export const READ_TRIES = 3
 export const FOLDER = '/mods'
 export const DEPTH = 3                 // folders below FOLDER the route reaches (the loader's DL_DEPTH)
 export const MKDIR = '.dir'            // an upload to FOLDER/.dir makes FOLDER (the loader's DL_MKDIR)
@@ -37,6 +41,15 @@ export function lastOf(status: string | null | undefined): string | null {
 }
 
 export class RpcError extends ModError {}
+
+/** A read whose bytes came through damaged: `raw` is what came. datarpc.DamagedRead. */
+export class DamagedRead extends RpcError {
+  raw: Uint8Array
+  constructor(message: string, raw: Uint8Array = new Uint8Array(0)) { super(message); this.raw = raw }
+}
+
+/** A damaged read, kept for the caller: datarpc.Client.damaged's entries. */
+export type Damaged = [path: string, chunk: number, why: string, raw: Uint8Array]
 
 export interface Port {
   send(raw: Uint8Array): void | Promise<void>
@@ -102,6 +115,8 @@ export class Client {
   port: Port
   timeoutMs: number
   readChunk = CHUNK                       // the largest read chunk that has come through
+  damaged: Damaged[] = []                 // every damaged read, for the caller to log or save
+  private chunkUsed = CHUNK
   constructor(port: Port, timeoutMs = 5000) { this.port = port; this.timeoutMs = timeoutMs }
 
   async call(cmd: number, args: Uint8Array = new Uint8Array(0)): Promise<Uint8Array> {
@@ -143,42 +158,79 @@ export class Client {
     return out
   }
 
-  /** -> the bytes the unit serves (a data container). A read whose reply never arrives starts again
-   *  with a smaller chunk (READ_CHUNKS); the client keeps the size that worked. */
+  /** -> the bytes the unit serves (a data container), whole: each reply checked as it comes and the container's length
+   *  and CRC-32 at the end. A damaged read is read again, READ_TRIES times in all, the last with the smallest chunk;
+   *  each one is kept in `damaged`. A read whose reply never arrives starts again with a smaller chunk (READ_CHUNKS);
+   *  the client keeps the size that worked. */
   async get(path: string): Promise<Uint8Array> {
-    const sizes = READ_CHUNKS.filter(c => c <= this.readChunk)
-    for (let i = 0; ; i++) {
+    const whys: string[] = []
+    for (let attempt = 0; attempt < READ_TRIES; attempt++) {
+      const small = attempt > 0 && attempt + 1 === READ_TRIES
       try {
-        const data = await this.getChunked(path, sizes[i])
-        this.readChunk = sizes[i]
-        return data
+        return await this.sized(path, small)
       } catch (e) {
-        if (!(e instanceof RpcError) || i + 1 === sizes.length || !e.message.endsWith(noReply(READ))) throw e
+        if (!(e instanceof DamagedRead)) throw e
+        this.damaged.push([path, this.chunkUsed, e.message, e.raw])
+        whys.push(e.message)
       }
+    }
+    throw new DamagedRead(`reading ${path}: every one of ${READ_TRIES} reads came through damaged (${whys.join('; ')})`,
+      this.damaged[this.damaged.length - 1][3])
+  }
+
+  private async sized(path: string, small: boolean): Promise<Uint8Array> {
+    let sizes = READ_CHUNKS.filter(c => c <= this.readChunk)
+    if (small) sizes = sizes.slice(-1)
+    for (let i = 0; ; i++) {
+      this.chunkUsed = sizes[i]
+      let data: Uint8Array
+      try {
+        data = await this.getChunked(path, sizes[i])
+      } catch (e) {
+        if (e instanceof DamagedRead) throw e
+        if (!(e instanceof RpcError) || i + 1 === sizes.length || !e.message.endsWith(noReply(READ))) throw e
+        continue
+      }
+      try {
+        container.parse(data)
+      } catch (e) {
+        if (!(e instanceof ModError)) throw e
+        throw new DamagedRead(`chunk size ${sizes[i]}: ${e.message}`, data)
+      }
+      if (!small) this.readChunk = sizes[i]
+      return data
     }
   }
 
   // The bytes are counted here, never taken from a reply's progress word: stock's per-mille progress (ReadPartial,
   // done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the stage in the +Drive area's free tail a read can
-  // be larger than that. Client._get.
+  // be larger than that. A reply that is not the one asked for or not as long as it says is noted, and the read goes
+  // on to its last chunk, so the unit closes it as any other; then it is a DamagedRead. Client._get.
   private async getChunked(path: string, chunk: number): Promise<Uint8Array> {
     let msg = await this.call(ROPEN, cat(path0(path), be([chunk, 4], [0, 1])))
-    const job = rd32(msg, 6), parts: Uint8Array[] = []
+    const job = rd32(msg, 6), parts: Uint8Array[] = [], bad: string[] = []
     let seq = 0
     try {
       for (; ; seq++) {
         msg = await this.call(READ, be([job, 4], [seq, 4]))
-        const n = rd32(msg, 23)
+        if (msg.length < 27) throw new DamagedRead(`chunk ${seq}: a ${msg.length}-byte reply`, cat(...parts))
+        const rjob = rd32(msg, 6), rseq = rd32(msg, 10), last = msg[18], n = rd32(msg, 23)
+        if (rjob !== job || rseq !== seq) bad.push(`chunk ${seq}: the reply is job ${rjob} chunk ${rseq}`)
+        else if (msg.length !== 27 + n) bad.push(`chunk ${seq}: the reply carries ${msg.length - 27} bytes; it says ${n}`)
+        else if (n > chunk || (n < chunk && !last))
+          bad.push(`chunk ${seq}: ${n} bytes in a ${chunk}-byte chunk${last ? '' : ', not the last'}`)
         parts.push(msg.slice(27, 27 + n))
-        if (msg[18]) break
+        if (last) break
       }
     } catch (e) {
       if (!(e instanceof RpcError)) throw e
       // close it, but say why the read stopped: the unit refuses to close an unfinished read
       try { await this.call(RCLOSE, be([job, 4])) } catch (e2) { if (!(e2 instanceof RpcError)) throw e2 }
+      if (e instanceof DamagedRead) throw new DamagedRead(`chunk size ${chunk}, ${e.message}`, e.raw)
       throw new RpcError(`reading ${path}, chunk ${seq}: ${e.message}`)
     }
     await this.call(RCLOSE, be([job, 4]))
+    if (bad.length) throw new DamagedRead(`chunk size ${chunk}, ${bad.join('; ')}`, cat(...parts))
     return cat(...parts)
   }
 

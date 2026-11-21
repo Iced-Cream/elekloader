@@ -415,7 +415,8 @@ Pyodide, and `app.js` loads it only when the view first opens:
   8 KB chunks; where a reply never arrives (Firefox's Web MIDI on Windows
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
-  (5 s) longer.
+  (5 s) longer. A read that came through damaged is read again, three
+  reads in all (docs/DRIVE.md).
 - **Mods on +Drive** (the card for `/mods`) shows one folder at a time: its path on top (`/mods/fx/a`),
   each part of which opens that folder, then its folders (`/NAME`) and its
   `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty

@@ -900,6 +900,79 @@ def test_a_lost_read_reply_is_the_error_not_the_refused_close():
         assert mods.build()[0].crc                     # the next read is whole
 
 
+class DamagingUnit(FakeUnit):
+    """A FakeUnit whose port damages read replies, F0 and F7 intact: `cut` read replies lose 480
+    SysEx bytes from their middle (60 whole 7-bit groups, 420 bytes, as T463's /mods/.build read
+    through the Sidecar Pi lost), then `flip` replies have one data bit changed (the length right,
+    the hash wrong, as T460's read)."""
+
+    def __init__(self, build_blk, cut=0, flip=0, at=1):
+        super().__init__(build_blk)
+        self.cut, self.flip, self.at, self.reads = cut, flip, at, 0
+
+    def send(self, raw):
+        super().send(raw)
+        if datarpc.unframe(raw)[4] != datarpc.READ:
+            return
+        self.reads += 1
+        rep = bytearray(self.out[-1])
+        if self.reads < self.at or len(rep) < 6 + 8 * 70:
+            return
+        if self.cut:
+            self.cut -= 1
+            del rep[6 + 8 * 8:6 + 8 * 8 + 480]
+        elif self.flip:
+            self.flip -= 1
+            rep[6 + 8 * 40 + 3] ^= 1
+        self.out[-1] = bytes(rep)
+
+
+def test_a_read_reply_cut_short_is_read_again():
+    """T463: a reply that lost 480 SysEx bytes on the way. The read is damaged, so it is read again,
+    whole; the damaged one is kept with its bytes and why."""
+    body = bytes(range(256)) * 110                     # 28,160 bytes: four 8 KB chunks
+    unit = DamagingUnit(b'', cut=1, at=2)
+    unit.files['big.elemod'] = body
+    client = datarpc.Client(unit, timeout=0.2)
+    assert datarpc.Mods(client).get('big.elemod')[1] == body
+    assert len(client.damaged) == 1, client.damaged
+    path, chunk, why, raw = client.damaged[0]
+    assert (path, chunk) == ('/mods/big.elemod', 0x2000)
+    assert why == 'chunk size 8192, chunk 1: the reply carries 7772 bytes; it says 8192', why
+    assert len(raw) == len(body) + container.HEADER + container.FOOTER - 420
+    assert client.read_chunk == 0x2000                 # one damaged read keeps the large chunk
+
+
+def test_a_read_whose_hash_is_wrong_is_read_again():
+    """T460: one bit changed on the way, every length right. The container's CRC-32 says so."""
+    body = bytes(range(256)) * 110
+    unit = DamagingUnit(b'', flip=1)
+    unit.files['big.elemod'] = body
+    client = datarpc.Client(unit, timeout=0.2)
+    assert datarpc.Mods(client).get('big.elemod')[1] == body
+    assert [d[2] for d in client.damaged] == ['chunk size 8192: the data container\'s hash does not match its body']
+
+
+def test_reads_damaged_every_time_are_an_error_that_says_why():
+    """Every read damaged, the last one with the small chunk too: the error names each read's
+    damage, and every damaged read's bytes are kept."""
+    body = bytes(range(256)) * 110
+    unit = DamagingUnit(b'', cut=99)
+    unit.files['big.elemod'] = body
+    client = datarpc.Client(unit, timeout=0.2)
+    try:
+        datarpc.Mods(client).get('big.elemod')
+    except datarpc.DamagedRead as e:
+        assert str(e).startswith('reading /mods/big.elemod: every one of 3 reads came through damaged ('), e
+        assert e.raw == client.damaged[-1][3]
+    else:
+        raise AssertionError('a damaged read was taken')
+    assert [d[1] for d in client.damaged] == [0x2000, 0x2000, 0x300]
+    assert client.read_chunk == 0x2000                 # damage is not a lost reply: the size stays
+    unit.cut = 0
+    assert datarpc.Mods(client).get('big.elemod')[1] == body
+
+
 class SmallBufferUnit(LossyUnit):
     """A FakeUnit behind a host MIDI input that drops every SysEx message over 1 KB (Firefox's Web
     MIDI, python-rtmidi on Windows): every reply longer than that is lost."""
