@@ -46,7 +46,7 @@ NO_REPLY = 'no reply from the unit to command 0x%02x'
 # A read reply can arrive cut short, its F0 and F7 intact: T463 (2026-11-21, a Rytm behind the
 # Sidecar Pi's mirror port, Overbridge Engine open) lost 420 bytes of /mods/.build's 28,095, 480
 # SysEx bytes, ten full-speed USB packets' worth; T460 read a body whose hash did not match. So
-# each reply is checked against the size it gives and the job and sequence asked for, the whole
+# each reply is checked against the size it gives and the job asked for, the whole
 # read against its container (length and CRC-32), and a damaged read is read again, READ_TRIES
 # times in all, the last with the small chunk.
 READ_TRIES = 3
@@ -200,9 +200,11 @@ class Client:
     def _get(self, path, chunk):
         # The bytes are counted here, never taken from a reply's progress word: stock's per-mille
         # progress (ReadPartial, done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the
-        # stage in the +Drive area's free tail a read can be larger than that. A reply that is not
-        # the one asked for or not as long as it says is noted, and the read goes on to its last
-        # chunk, so the unit closes it as it closes any other; then it is a DamagedRead.
+        # stage in the +Drive area's free tail a read can be larger than that. Nor is the word at +10
+        # the chunk asked for: the Rytm's route answers 0x40170bd8 there for every chunk (emulator,
+        # 2026-11-21). A reply for another job, or shorter than it says, is noted, and the read goes
+        # on to its last chunk, so the unit closes it as it closes any other; then it is a
+        # DamagedRead.
         msg = self.call(ROPEN, path.encode('latin-1') + b'\0' + struct.pack('>IB', chunk, 0))
         job = struct.unpack_from('>I', msg, 6)[0]
         data, seq, bad = bytearray(), 0, []
@@ -211,15 +213,13 @@ class Client:
                 msg = self.call(READ, struct.pack('>II', job, seq))
                 if len(msg) < 27:
                     raise DamagedRead('chunk %d: a %d-byte reply' % (seq, len(msg)), data)
-                rjob, rseq = struct.unpack_from('>II', msg, 6)
+                rjob = struct.unpack_from('>I', msg, 6)[0]
                 last = msg[18]
                 n = struct.unpack_from('>I', msg, 23)[0]
-                if (rjob, rseq) != (job, seq):
-                    bad.append('chunk %d: the reply is job %d chunk %d' % (seq, rjob, rseq))
-                elif len(msg) != 27 + n:
+                if rjob != job:
+                    bad.append('chunk %d: the reply is job %d' % (seq, rjob))
+                elif len(msg) < 27 + n:
                     bad.append('chunk %d: the reply carries %d bytes; it says %d' % (seq, len(msg) - 27, n))
-                elif n > chunk or (n < chunk and not last):
-                    bad.append('chunk %d: %d bytes in a %d-byte chunk%s' % (seq, n, chunk, '' if last else ', not the last'))
                 data += msg[27:27 + n]
                 seq += 1
                 if last:

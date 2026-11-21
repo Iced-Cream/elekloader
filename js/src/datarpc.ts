@@ -204,8 +204,9 @@ export class Client {
 
   // The bytes are counted here, never taken from a reply's progress word: stock's per-mille progress (ReadPartial,
   // done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the stage in the +Drive area's free tail a read can
-  // be larger than that. A reply that is not the one asked for or not as long as it says is noted, and the read goes
-  // on to its last chunk, so the unit closes it as any other; then it is a DamagedRead. Client._get.
+  // be larger than that. Nor is the word at +10 the chunk asked for (the Rytm's route answers 0x40170bd8 there). A
+  // reply for another job, or shorter than it says, is noted, and the read goes on to its last chunk, so the unit
+  // closes it as any other; then it is a DamagedRead. Client._get.
   private async getChunked(path: string, chunk: number): Promise<Uint8Array> {
     let msg = await this.call(ROPEN, cat(path0(path), be([chunk, 4], [0, 1])))
     const job = rd32(msg, 6), parts: Uint8Array[] = [], bad: string[] = []
@@ -214,11 +215,9 @@ export class Client {
       for (; ; seq++) {
         msg = await this.call(READ, be([job, 4], [seq, 4]))
         if (msg.length < 27) throw new DamagedRead(`chunk ${seq}: a ${msg.length}-byte reply`, cat(...parts))
-        const rjob = rd32(msg, 6), rseq = rd32(msg, 10), last = msg[18], n = rd32(msg, 23)
-        if (rjob !== job || rseq !== seq) bad.push(`chunk ${seq}: the reply is job ${rjob} chunk ${rseq}`)
-        else if (msg.length !== 27 + n) bad.push(`chunk ${seq}: the reply carries ${msg.length - 27} bytes; it says ${n}`)
-        else if (n > chunk || (n < chunk && !last))
-          bad.push(`chunk ${seq}: ${n} bytes in a ${chunk}-byte chunk${last ? '' : ', not the last'}`)
+        const rjob = rd32(msg, 6), last = msg[18], n = rd32(msg, 23)
+        if (rjob !== job) bad.push(`chunk ${seq}: the reply is job ${rjob}`)
+        else if (msg.length < 27 + n) bad.push(`chunk ${seq}: the reply carries ${msg.length - 27} bytes; it says ${n}`)
         parts.push(msg.slice(27, 27 + n))
         if (last) break
       }

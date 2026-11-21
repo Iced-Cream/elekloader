@@ -253,6 +253,25 @@ class DamagingUnit extends OneFileUnit {
 
 const big = () => new Uint8Array(256 * 110).map((_, i) => i & 255)   // 28,160 bytes: four 8 KB chunks
 
+/** Read replies carrying what the Rytm's route answers at +10, the same word for every chunk (0x40170bd8), not the
+ * chunk asked for. tests/test_drive.py's RouteWordUnit. */
+class RouteWordUnit extends OneFileUnit {
+  deliver(reply: Uint8Array, cmd: number) {
+    if (cmd === datarpc.READ) {
+      const msg = datarpc.unframe(reply)!.slice()
+      new DataView(msg.buffer).setUint32(10, 0x40170bd8)
+      reply = datarpc.frame(msg)
+    }
+    this.queue.push(reply)
+  }
+}
+
+test('the route\'s word at +10 is not taken for the chunk', async () => {
+  const client = new datarpc.Client(new RouteWordUnit(big()), 100)
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
+  assert.deepEqual(client.damaged, [])
+})
+
 test('a read reply cut short is read again, and the damaged read is kept with why (T463)', async () => {
   const client = new datarpc.Client(new DamagingUnit(big(), 1, 0, 2), 100)
   assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())

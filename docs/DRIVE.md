@@ -307,8 +307,9 @@ the unit now: the `stage:` line of `/mods/.status`, the Drive Loader's live
 stage ([STAGE.md](../mods/drive-loader-ar2/STAGE.md)), which changes with each boot's set; `put`
 refuses a file over it before sending anything. Reads count the bytes they
 get and never use the router's per-mille progress, which wraps past
-4,294,967 bytes. Each read reply must be the job and chunk asked for and
-as long as it says, and the whole read must pass its container's length
+4,294,967 bytes. Each read reply must be for the job asked for and at
+least as long as it says (its word at +10 is not the chunk: the Rytm's
+route answers the same address there for every chunk), and the whole read must pass its container's length
 and CRC-32; a read that came through damaged (a reply cut short on the way,
 as behind the Sidecar Pi in T463) is read again, three reads in all, the
 last in 768-byte chunks, and each damaged one is kept in

@@ -927,6 +927,28 @@ class DamagingUnit(FakeUnit):
         self.out[-1] = bytes(rep)
 
 
+class RouteWordUnit(FakeUnit):
+    """A FakeUnit whose read replies carry what the Rytm's route answers at +10, the same word for
+    every chunk (0x40170bd8, emulator 2026-11-21), not the chunk asked for."""
+
+    def send(self, raw):
+        super().send(raw)
+        if datarpc.unframe(raw)[4] == datarpc.READ:
+            rep = bytearray(datarpc.unframe(self.out[-1]))
+            struct.pack_into('>I', rep, 10, 0x40170bd8)
+            self.out[-1] = datarpc.frame(bytes(rep))
+
+
+def test_the_routes_word_at_10_is_not_taken_for_the_chunk():
+    """The route's word at +10 is no chunk number: a whole read through it is whole, not damaged."""
+    body = bytes(range(256)) * 110
+    unit = RouteWordUnit(b'')
+    unit.files['big.elemod'] = body
+    client = datarpc.Client(unit, timeout=0.2)
+    assert datarpc.Mods(client).get('big.elemod')[1] == body
+    assert client.damaged == []
+
+
 def test_a_read_reply_cut_short_is_read_again():
     """T463: a reply that lost 480 SysEx bytes on the way. The read is damaged, so it is read again,
     whole; the damaged one is kept with its bytes and why."""
