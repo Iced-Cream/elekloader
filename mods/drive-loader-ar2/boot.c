@@ -38,6 +38,7 @@ void dl_flush(void);
 #define OP_NEW ((void *(*)(u32))0x40082a40)
 #define OP_DELETE ((void (*)(void *))0x40082a4c)
 
+#ifndef DL_HOST_HEAP                    /* tests/drive_payload_host.c: its own heap */
 void *dl_alloc(u32 n)
 {
     void *p = OP_NEW(n);
@@ -51,6 +52,7 @@ void dl_free(void *p)
     if (p)
         OP_DELETE(p);
 }
+#endif
 
 /* dl.h: 1 ms for the tasks below the caller's, each 32 KB of a long check. Not during the
  * boot's link: main() runs it before the UI task and the audio start, the T178 boot linked
@@ -78,6 +80,119 @@ static void path_of(char *out, const char *name)
     while (*name && k < DL_PATH_MAX - 1)
         out[k++] = *name++;
     out[k] = 0;
+}
+
+/* path (DL_PATH_MAX + 4 bytes) with DL_NEW after it */
+static void add_new(char *path)
+{
+    u32 k = dl_strlen(path), i;
+    for (i = 0; i < sizeof DL_NEW; i++)
+        path[k + i] = DL_NEW[i];
+}
+
+/* The updates an upload over a file in use left (route.c, <name>.new), before the boot stages
+ * anything: each /mods/active line's <name>.new goes over <name> (the old file to <name>.old
+ * first, as ekFS's rename takes no target that is there, and back when the .new won't rename; a
+ * failure keeps the old file and the .new for the next boot, and counts in dl_updates[1]). A line
+ * whose update went in takes the new file's CRC, in the set and in /mods/active, since the line
+ * still names the old file's (stock's and Transfer's uploads never write active; the emulator,
+ * 2026-11-22: the boot dropped the update, code 2); dl_updates[1] counts an active not rewritten. */
+u32 dl_updates[2];
+extern unsigned char *volatile dl_stage_at;   /* route.c: the live stage */
+extern volatile unsigned dl_stage_len;
+
+/* the staged CRC of a file below DL_DIR (its payload's hex skipped), as /mods/active names it:
+ * read through the live stage, which nothing else uses before the link. -> 0, or -1 */
+static int staged_crc(const char *name, u32 *crc)
+{
+    struct dl_reader rd;
+    int r;
+    if (dl_read_open(&rd, name) < 0)
+        return -1;
+    while (!(r = dl_read_more(&rd, dl_stage_at, dl_stage_len)))
+        ;
+    if (r != 1 && r != -2)               /* -2: staged past the stage, the CRC is the whole file's */
+        return -1;
+    *crc = ~rd.st.crc;
+    return 0;
+}
+
+/* /mods/active written from the set (its lines that name no CRC or are comments load nothing, so
+ * they go), as the MODS page's save writes it: to active.tmp, then over active. -> 0, or -1 */
+static int write_active(const struct dl_choice *ch, int n)
+{
+    static const char head[] = "# updates applied at boot\n";
+    char path[DL_PATH_MAX], tmp[DL_PATH_MAX], *text, *at;
+    dl_file f;
+    int i, r, b;
+    u32 k;
+    text = dl_alloc(sizeof head + (u32)n * (DL_LINE_NAME_MAX + 10));
+    if (!text)
+        return -1;
+    dl_memcpy(text, head, sizeof head - 1);
+    at = text + sizeof head - 1;
+    for (i = 0; i < n; i++) {
+        k = dl_strlen(ch[i].name);
+        dl_memcpy(at, ch[i].name, k);
+        at += k;
+        *at++ = ' ';
+        for (b = 28; b >= 0; b -= 4)
+            *at++ = "0123456789abcdef"[(ch[i].crc >> b) & 15];
+        *at++ = '\n';
+    }
+    k = (u32)(at - text);
+    path_of(tmp, "active.tmp");
+    path_of(path, "active");
+    dl_memset(&f, 0, sizeof f);
+    r = dl_fs_open(&f, tmp, 1);
+    if (!r)
+        r = dl_fs_write(&f, text, k);
+    dl_fs_close(&f);
+    dl_free(text);
+    if (!r && dl_fs_file_size(tmp) != (int)k)
+        r = -1;
+    if (!r) {
+        dl_fs_delete(path);
+        r = dl_fs_rename(tmp, path);
+    } else
+        dl_fs_delete(tmp);
+    return r ? -1 : 0;
+}
+
+void dl_apply_updates(struct dl_choice *ch, int n)
+{
+    char path[DL_PATH_MAX + 4], nw[DL_PATH_MAX + 4], old[DL_PATH_MAX + 4];
+    int i, changed = 0;
+    u32 k;
+    dl_updates[0] = dl_updates[1] = 0;
+    for (i = 0; i < n; i++) {
+        path_of(path, ch[i].name);
+        dl_memcpy(nw, path, sizeof path);
+        add_new(nw);
+        if (dl_fs_file_size(nw) < 0)
+            continue;
+        dl_memcpy(old, path, sizeof path);
+        k = dl_strlen(old);
+        old[k] = '.', old[k + 1] = 'o', old[k + 2] = 'l', old[k + 3] = 'd', old[k + 4] = 0;
+        dl_fs_delete(old);
+        if (dl_fs_file_size(path) >= 0 && dl_fs_rename(path, old)) {
+            dl_updates[1]++;
+            continue;
+        }
+        if (dl_fs_rename(nw, path)) {
+            dl_fs_rename(old, path);
+            dl_updates[1]++;
+            continue;
+        }
+        dl_fs_delete(old);
+        dl_updates[0]++;
+        if (staged_crc(ch[i].name, &k) == 0 && k != ch[i].crc) {
+            ch[i].crc = k;
+            changed = 1;
+        }
+    }
+    if (changed && write_active(ch, n))
+        dl_updates[1]++;
 }
 
 /* dl_stage_file's reads (skip.h): from the file at `at` (dl_fs_seek), 32 KB at most, 1 ms for the
@@ -114,11 +229,17 @@ s32 dl_read_file(const char *name, u8 *buf, u32 max)
     return r;
 }
 
+/* The MODS page's read of a file: its pending update (<name>.new, an upload over a file in use;
+ * skip.h dl_payload_held) when there is one, since that is the file the next boot links, so the
+ * page checks it and a save names its CRC */
 int dl_read_open(struct dl_reader *rd, const char *name)
 {
-    char path[DL_PATH_MAX];
+    char path[DL_PATH_MAX + 4];
     path_of(path, name);
     dl_memset(rd, 0, sizeof *rd);
+    add_new(path);
+    if (dl_fs_file_size(path) < 0)
+        path[dl_strlen(path) - (sizeof DL_NEW - 1)] = 0;
     if (dl_fs_open(&rd->f, path, 0) < 0) {
         dl_fs_close(&rd->f);
         return -1;
@@ -338,7 +459,7 @@ static void boot(void)
     char *active;
 
     dl_status_n = 0;
-    drive_payloads_n = drive_payloads_lost = 0;
+    dl_payload_reset();
     dl_skip_reason = DL_SKIP_NONE;
     if (EMMC_ERROR != 0 || EKFS_MOUNT != 0) {
         dl_skip_reason = DL_SKIP_DRIVE;
@@ -382,6 +503,7 @@ static void boot(void)
         dl_skip_reason = DL_SKIP_MEMORY;
         return;
     }
+    dl_apply_updates(dl_boot_choice, n); /* before any file is staged */
     write_armed();                       /* before the link, so a link that faults or hangs is
                                           * caught too: the next boot skips the set */
     loaded = dl_link((u32)core_desc, dl_boot_choice, n, 0, 0);   /* the stage at the top of the area */
