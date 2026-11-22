@@ -3,16 +3,9 @@
 The boot copier, the hook bus, mod storage, parameter pages and added machines for the Analog Rytm MKII. From
 0.3 it is for OS 1.74 only; 0.2 is the last core with 1.73 (below). It builds the Digitakt mk1's `core.s`, `settings.s` and
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
-`sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
-from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, from 0.7 with
-write-through storage (Write-through, below) and `finish.s` (The OS upgrade's restart, below),
-and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
-their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
-velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
-defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
-itself (below), and +Drive storage at boot (below). On its own it changes nothing
-the unit does, apart from that restart, which it makes safe.
+`sites`), and its own sources, each in its section below with the version
+that added it. On its own it changes nothing
+the unit does, apart from the OS upgrade's restart (below), which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -36,16 +29,13 @@ routing, so its sites and routines are 1.73's moved (+0x6c, `FN_MGR`
 +0x1cc), each found again by its own bytes. A core built for one release
 is refused with the other's stock file.
 
-**OS versions.** New core versions drop old OS support: 0.3 builds for
-1.74 only (`mod.json`'s `os`, with no `ports`), and is refused with a 1.73
-stock file. 0.1 and 0.2 build for 1.73 and 1.74 (1.73 their `os`, 1.74 their
-port) and keep their 1.73 support as released; 0.2 is the last core with
-1.73. A build takes the newest core it has for the stock OS
-([CORES.md](../../docs/CORES.md#how-a-build-picks-one)), so a 1.73 build
-takes 0.2, and a mod that needs 0.3 (`"core": "0.3"` in `resources`) is
-for 1.74 only. Core 0.2 for 1.73 is built from the tree before 0.3
-(commit 92a99c9: `git worktree add ../core-ar2-0.2 92a99c9`, then build its
-`mods/core-ar2` with the 1.73 stock file).
+**OS versions.** Core 0.3 and newer are for 1.74 only (`os`, no `ports`),
+refused with a 1.73 stock file; 0.1 and 0.2 build for both (1.74 their
+port), and 0.2 is the last for 1.73. A build takes the newest core for its
+stock OS ([CORES.md](../../docs/CORES.md#how-a-build-picks-one)): a 1.73
+build takes 0.2, and a mod that needs 0.3 or newer is for 1.74 only. Core
+0.2 is built from commit 92a99c9 (`git worktree add ../core-ar2-0.2
+92a99c9`, then build its `mods/core-ar2` with the 1.73 stock file).
 
 The routines `core_additem` calls are the Digitakt's, the same code with the
 addresses in it masked: `OP_NEW` 0x40082a40, `ITEM_CTOR` 0x40072fbc,
@@ -324,8 +314,9 @@ page_view_activate does. The view is told by its copy of the list: the
 first of core's ten lists with the same pages. The FX track's page code
 asked a view shown again to go back to its first page (0x400cbd3e, a
 `beqs` around that call); core makes it a `bras`, so FX views keep their
-page as the voice track's do. Both were mods' hooks before (voice-dac's
-cycle, lfo-rnd's title, comp-preview's set-page slot).
+page as the voice track's do. An entry naming a stock page with a `shown`
+gives it that `shown`; the SAMPLE view's draw (vtable 0x401e3420 +0x10)
+first leaves a page gone away (view.c).
 
 | view | site (1.74) | stock pages |
 |---|---|---|
@@ -363,9 +354,8 @@ eleven rytm2_mods mods and duck added 1 to 2 points; fx-sends' chorus about
 peak reached 95%, with no audible artefacts. The 100% that cpu-probe's CPU
 reading touches in that case is the whole processor, the interface's tasks
 included: they get less idle time, not less than they need (the knobs keep
-responding). With the guard the readings were 92% and a 94% peak, within a
-point of the build without it, so at these loads it rarely engages: it is a
-ceiling for heavier builds, not a fix for anything heard.
+responding). The guard is a ceiling for heavier builds: at these loads it
+rarely engages (92%, a 94% peak).
 
 ## Machines (0.5)
 
@@ -401,13 +391,12 @@ half, LSB 0xffff) and +0x1c (NRPN 1:k, `1 << 7 | k`) from slot 35's record
 at the same sound index, which carries what 34..42 carry. Stock builds its
 CC map (`0x413dd3b4 + 32 m`, one record id per CC 16..23) from the records
 after core's writes. +0x20 is 0 on every hidden record, 34..43 included,
-so it is not written. Fewer records: SD TEST 9..12, 15, 16; BT TEST
-9..13; LT and MT TEST 9..12; HH TEST 9..13, 16; CB TEST 10..12, 16 (no
-LEV); BD, RS and CY TEST all eight (machines.h). The TEST records also
+so it is not written. The TEST machines have fewer records (machines.h),
+and they also
 have +0x24 = 0, where 34..42 and every public machine record have 0x600,
 the list kinds that make a record an LFO, velocity and aftertouch
-destination; 0.13 leaves it as it is, so a knob in 44..52 is not offered
-as one of those destinations.
+destination; core copies it from slot 35's record only for an entry
+flagged `CORE_MACHINE_DESTS` (machines.c).
 
 **The trig getters.** `ENGINES[s]` is core's trampoline for slot s (one
 per slot, 19), which latches, for the voice v it is called with, the
@@ -419,12 +408,22 @@ so the latch holds this block's trig. `core_voice_trigged(v)` and
 `core_voice_velocity(v)` read the latch: plain reads, for the engine's own
 voice.
 
-A check mod holding slot 44 on the BD voice and slot 52 on the CY/CB voice
-shows the trampolines, the records' CCs and NRPNs, CC 15 choosing slot 44,
-and one count and the velocity per trig from the sequencer, pads, notes and
-a retrig. A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
+A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
 whole values but its engine word keeps a fraction: read the high byte for
 the display value.
+
+## TEST slots: knob order and knob looks (0.15)
+
+The SRC page table `0x40288028 + 0x24 m` (name, ids on A..H) places
+records on knobs: LEV on H, but on A for TEST machines, whose order core
+makes public when a mod fills one (`place_knobs`). Their UI records
+(0x401a7622) are the tests'; `CORE_MACHINE_LOOKS` replaces them (looks.c).
+
+## Stock engines, trig sounds, core_param_set (0.15)
+
+machines.c (stock engines and knob defaults) and sound.c, sound.s (the
+sound a trig plays, `core_param_set`) carry the 1.74 addresses; machines.h
+the calls.
 
 ## The OS upgrade's restart (0.7)
 
@@ -449,19 +448,17 @@ away from stock. The addresses come from `mod.json` (`FINISH_PANEL`,
 `FINISH_UART`, `FINISH_DRAIN`); core-a4mk2 0.4 uses the same file with the
 A4's.
 
-Checked in analog-emu (25 Oct 2026; each flash a fresh headless emulator
-booted on the source OS, then `elkflash upgrade --no-confirm --wait` of a
-custom 1.74 build). From stock with only this routine patched in, 0 of 15
-hung; from the same build without it, 5 of 15 (one-sided Fisher p = 0.02).
-A source built on core 0.4 hung 0 of 15, so the race is rarer from core
-builds than from stock. With the emulator's panel link paced from its baud
-divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
-of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
-unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
+In analog-emu (25 Oct 2026) builds without it hung 5 of 15 upgrades, with
+it 0 of 15; with the panel link paced as the unit's, none of 30 hung. On a unit (25 Oct 2026), the flashes away
 from builds on this core (to other builds and to stock, five flashes)
 restarted in 15 s, and on an Analog Four MKII a flash from core 0.4
-back to stock 1.56 restarted in 21 s; with a race this rare that is no
-proof the hang is gone, only that the routine does no harm.
+back to stock 1.56 restarted in 21 s: no proof the hang is gone, only
+that the routine does no harm.
+
+## Restarts (0.18)
+
+`core_restart`, `core_restart_now` and `core_project_keep`: `restart.s`'s
+comments, `analog-rytm-mk2/system.h`.
 
 ## Lockable parameters (0.8)
 
@@ -484,7 +481,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
 | sound edit's write | 0x400bd412 (`jmp`, store.c, `st_sound_through`, 0.9) | stock writes each sound edit into the stored copy at once, the DST byte through 0x40007602, which `core_code_id` passes for 42..127 (for the scene and performance entries), so a code reached the stored byte (0.8: after a power-off it loaded as 0xfb, on core and on stock). After stock's write, a code in the stored byte becomes 41 (None) and goes into `core_lfo_dst` of the live sound the stored one is kept from; a stock destination clears it |
 | sound save, load | 0x4000843a, 0x400081f6 (store.c, `st_sound_save`, `st_sound_load`) | stock saves the LFO's destination (live sound +28, a slot) as the stored sound's +100 through a table of its 42 parameters (0x401c5c7c) and loads it through the inverse (0x401c5d24), which have no entry for a code: a code would come back as a stock parameter (42 as FIN). Core keeps the code, less 41, in its sound field `core_lfo_dst` (7 bits, placed by the linker for an `"lfo"` field, or at boot for a +Drive one) and writes 41 into the stored byte, stock's own None (META:None, slot 0): stock, or a build that does not know the code, loads that LFO with no destination, and stock's saves keep it so. Neither table has a bound: a slot above 41 that stock saves comes back as one of its parameters (64, as 42 loads, as ACC, 39), so on load a slot of 42..127 that `core_lfo_dst` did not give (a sound from stock or another layout) is set to None |
-| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter |
+| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter. Each follows its category's last entry (owner name: 0x40007296(0x40006eca(id))) |
 | menu label | 0x4004a7e8 (`jmp`) | the category (at most 4 characters; `MOD` when there is none), a colon and the name, through stock's `%.16s:%.32s` |
 | DST value | 0x400ffab2 (`jmp`) | the short name |
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
@@ -805,10 +802,9 @@ and 64 give 25400 and 16256. The codes come back after a power-off save and
 a cold boot; stock 1.74 cold-booting the same card shows them as code 0
 (the unused route's META), with the amount kept. Not checked: a sound
 loaded with a code the build lacks (the scrub), kit save and reload,
-SysEx and Overbridge transfers, a unit, listening. The amounts here were
-written into the live sound; the amount is knobs E to H in MODULATION
-SETUP VEL (A to D pick the destination, YES commits). Later, in the
-emulator (1 Nov 2026, lock-check 1.9): knob E sets the amount (60 at
+SysEx and Overbridge transfers, a unit, listening. The amount is knobs E
+to H in MODULATION SETUP VEL (A to D pick the destination, YES commits).
+In the emulator (lock-check 1.9): knob E sets the amount (60 at
 velocity 127 gives C 120000, as predicted); a sound loaded with a code the
 build lacks (a core-only build on that card) has that route back as code 0,
 amount 0; SAVE KIT and RELOAD (KIT menu) keep a route to C; a kit dump over
@@ -1155,8 +1151,7 @@ calls stock's own routines; nothing of their code or glyphs is copied.
 
 `looks.c`, `looks.s`: a mod's own knob id (555 up, `core_params` and
 `core_param_locks`) has no stock records, so stock drew every such knob as
-record 0's dial on record 0's range (0..0), whatever it showed: a switch
-like voice-dac's POL became a dial whose pointer never moves. An entry in
+record 0's dial on record 0's range (0..0). An entry in
 `core_knob_looks` (`elekloader/sdk/include/analog-rytm-mk2/pages.h`,
 docs/ADAPTING.md "Knob looks (core-ar2 0.13, Analog Rytm MKII)") gives its
 ids the look of any stock knob, a range of their own, or a UI record of the
@@ -1177,23 +1172,19 @@ the value and its text `core_params'`, and the parameter record's other
 fields (its sound slot, the +0x24 flags that put it in the LFO and
 modulation lists and open a list on a turn, MIDI) are read for the knob's
 own id as before, so a knob that looks like a stock one does nothing that
-stock one does. Stock's graphics draw the knob's value on the scale of
-the parameter they were made for (the dial's 0..127, which several graphics
-map their value to and clamp, 0x400ff86c..0x400ffa14), not on the range. So
-for an entry with min < max core also takes the graphic's call, 0x400a85e8
-(the knob sets' vtable +88, which calls the delegate at +0x24 with the
-value), and moves the value from min..max onto look's range there: the
-graphic spans the knob's own range. The value text and the knob's value
-are unchanged.
+stock one does. Stock's graphics draw on the scale of the parameter they
+were made for (the dial's 0..127, 0x400ff86c..0x400ffa14), so for min <
+max core moves the value onto look's range at 0x400a85e8 (the knob sets'
+vtable +88); the value and its text are unchanged.
 
-A stock 1.74 boot builds 87 different UI records (by their flags, steps and
-delegates) over 469 ids, with 46 different graphics;
-`examples/look-check-ar2` draws one stock id of each beside a mod knob that
-takes its look (its `looks.h` lists a sample id of each, and its
-`looks_table.py` prints their stock names from your own OS file). A mod that kept its knobs on hidden
+A stock 1.74 boot builds 87 different UI records over 469 ids, with 46
+different graphics; `examples/look-check-ar2` draws one of each. A mod that kept its knobs on hidden
 machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
+## Skips and submenus (0.16)
+
+[SKIPS.md](SKIPS.md).
 
 ## +Drive storage at boot (0.14)
 
@@ -1228,6 +1219,34 @@ boot ([docs/DRIVE.md](../../docs/DRIVE.md)) sets the layout core reads with:
   so its +Drive fields load at defaults. A SysEx pattern dump's mod
   p-locks load only under the live ID itself (rows.c).
 
+## Knob faces (0.15)
+
+`core_knob_faces` (docs/ADAPTING.md, "Knob faces (core-ar2 0.15, Analog
+Rytm MKII)") gives stock ids 1..468, and a mod's own ids from 555, another
+label, name, look, range and default for the sounds a mod says, on the hooks above: the label and name
+lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
+`uirec`, `range` (which the setter 0x400a906c clamps to) and the graphic
+(`looks.c`, sound 0: the current track's). No code site of its own.
+
+## Knob flags (0.17)
+
+`flags.c`, `flags.s` (their top comments); docs/ADAPTING.md.
+
+## Note ends, track mutes and DIN MIDI out (0.15)
+
+No new sites; the traces are in `machines.c` and `voiceio.c`.
+
+| what | where (OS 1.74) | context |
+|---|---|---|
+| `core_voice_released(v)` | trig state 0x8000e508 + 4t in the trig latch: 2 (release) gives 1, 3 (cut) gives 2 | the engine |
+| `core_track_mutes()`, `core_set_track_mutes(mask)` | settings model (0x400ae492) data +0x20; 0x400b6d94, 0x400b6dd8 | UI task |
+| `core_midi_din_try_send(len, msg)`, `core_midi_din_up()` | DIN sender 0x40001dea, its room test under a mask; OUT PORT FUNC 0x400b5424 | any |
+
+## Standard events (0.17)
+
+std1: `std.c`, `ui.c`, `stdmidi.c`, `stdvoice.c` (their top comments);
+[std-check](../../examples/std-check-ar2), [ui-check](../../examples/ui-check-ar2).
+
 ## Checked so far
 
 On a unit (OS 1.73 and 1.74): the boot site and its DDR area, both render
@@ -1235,11 +1254,11 @@ sites, the boot copier and every event, with
 [hello-marker-ar2](../../examples/hello-marker-ar2) and
 [hooks-check-ar2](../../examples/hooks-check-ar2).
 
-Statically, against the stock image (python, no toolchain): every site's
-stock bytes, and that each covers whole instructions.
+Statically: every site's stock bytes, and that each covers whole
+instructions.
 
-- **Mod storage (0.2)**, in an emulator (OS 1.74 and 1.73, 19 Oct 2026) and
-  on a unit (19 Oct 2026), with [store-check-ar2](../../examples/store-check-ar2):
+- **Mod storage (0.2)**, in an emulator (OS 1.74, 1.73) and on a unit (19 Oct
+  2026), with [store-check-ar2](../../examples/store-check-ar2):
   every field of every item kept through save, another project's load, the
   load back, a power cycle, .arprj export and import, and a Total Recall
   sync; an ancestor layout read all of it, a bumped kit generation read

@@ -10,6 +10,7 @@ The addresses below are 1.73's. 1.74's main OS is 1.73's with code added in
 two places (Outbox 8's main-output routing), so what follows each moved:
 see moved(). Core-ar2 0.3 is for 1.74 only (0.2 is the last core with 1.73).
 """
+import hashlib
 import json
 import os
 import struct
@@ -129,8 +130,13 @@ def test_core_ar2_sites():
     mod, port = build.for_release(j, DEV, REL)
     assert not port and mod['device'] == DEV.key and mod['os'] == REL.version
     for s in mod['sites']:
-        a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
-        assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        a = int(s['addr'], 16)
+        if 'stock' in s:
+            want = bytes.fromhex(s['stock'])
+            assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        else:                           # (0.17) "len" and "stock_sha256": no stock bytes in mod.json
+            want = img[a - DEV.main_load:a - DEV.main_load + s['len']]
+            assert hashlib.sha256(want).hexdigest() == s['stock_sha256'], s
         if s['op'] == 'ptr':            # data: the sound set's vtable entries, not code: +76
             # (0.8, the slot id) and +60..+72 (0.8, the lock get, set, clear and turn); and from
             # 0.9 the FX set's (vtable 0x401dcea0), the same five
@@ -138,6 +144,11 @@ def test_core_ar2_sites():
                     ((76, 0x400a86dc), (60, 0x400a98b4), (64, 0x400a9926), (68, 0x400a99c2), (72, 0x400a8560))}
             ptrs.update({0x401dcea0 + o: v for o, v in
                          ((76, 0x400a870c), (60, 0x400a9a26), (64, 0x400a9a98), (68, 0x400a9b0e), (72, 0x400a8560))})
+            # the SampleManager views' tick through their list's vtable (+0x30; 0x401e84f8 and
+            # 0x401e71cc, stock's thunk 0x400e4db6), for the mod folders' refill
+            ptrs.update({0x401e84f8 + 0x30: 0x400e4db6, 0x401e71cc + 0x30: 0x400e4db6})
+            # (0.15) the SAMPLE view's draw (vtable 0x401e3420 +0x10), for a page that went away
+            ptrs[0x401e3420 + 0x10] = 0x400d2004
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -201,8 +212,53 @@ def test_core_ar2_sites():
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
     # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and
-    # main()'s call at 0x401009e0 (0.14, ev_boot_drive)
-    assert len(mod['sites']) == 126
+    # the pads' three (ev_pad: strike, release, pressure) and the LEDs' two (led_set's and
+    # led_colour's slot colour sends), and the engine push's sound (0.15: core_trig_sound), and
+    # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
+    # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15),
+    # and the USB input's shift index (usbin.s), and main()'s call at 0x401009e0 (0.14, ev_boot_drive), and the silent-voice skip's,
+    # the sample-layer skip's two, the UI skip's and the FX skip's three (0.16), and std1's UI
+    # and system events' 23 (0.17, ui.s: boot done and idle, USB, LEDs, pattern, mute, the
+    # parameter set, six view stack sites, eleven clipboard calls), and std1's MIDI events' 8
+    # (0.17, stdmidi.s: the DIN and USB dispatch, the CC apply, program change, the three senders
+    # and the sequencer's note post), and std1's voice events' 2 (0.17, stdvoice.s: the audio
+    # interrupt's trig and release), and the knob flags' five (0.17, flags.s: the flags getter, the
+    # turn's two reads, the push's and the list's creation)
+    assert len(mod['sites']) == 193
+    # (0.17) the UI, MIDI and voice events' sites give "len" and "stock_sha256", no stock bytes,
+    # the knob flags' too
+    ui = [x for x in mod['sites'] if 'stock_sha256' in x]
+    assert len(ui) == 38 and all('stock' not in x for x in ui)
+    # (0.17) the knob flags' sites (flags.s), their stock bytes checked by sha256 above
+    fl = {x['addr']: (x['len'], x['target']) for x in mod['sites'] if x.get('target', '').startswith('core_flags_')}
+    assert fl == {'0x40007234': (10, 'core_flags_hook'), '0x40039fbe': (10, 'core_flags_turn_site'),
+                  '0x4003a224': (10, 'core_flags_delta_site'), '0x4003a890': (10, 'core_flags_push_site'),
+                  '0x40039d94': (12, 'core_flags_list_site')}, fl
+    # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
+    x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
+    assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x
+    o = 0x4011f5f6 - DEV.main_load
+    assert img[o:o + 12].hex() == '2f02486a00144ebae4d0508f', x
+    # 0.16: the UI skip's site is __dynamic_cast's link and movem, 8 bytes; its stock
+    # copy in cast.s rejoins right after them
+    x = [x for x in mod['sites'] if x.get('target') == 'core_cast_site'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x401b82f2', 'jmp', '4e56ffd848d7043c'), x
+    assert img[0x401b82f2 - DEV.main_load:0x401b82fa - DEV.main_load].hex() == '4e56ffd848d7043c'
+    cast = open(os.path.join(ROOT, 'mods', 'core-ar2', 'cast.s')).read()
+    assert 'CAST_REST, 0x401b82fa' in cast and 'link.w  %a6,#-40' in cast
+    # 0.16: the FX skip's send site, and its delay and reverb sites, each a 4-byte
+    # `jsr (pc)` with the instruction after it (10 bytes)
+    for addr, want in (('0x4010e75e', '22032003ed89'), ('0x4010e7c4', '4ebaf25e36398000fbb6'),
+                        ('0x4010e81e', '4ebaec14283c00001000')):
+        x = [x for x in mod['sites'] if x['addr'] == addr][0]
+        assert x['stock'] == want, x
+        a = int(addr, 16) - DEV.main_load
+        assert img[a:a + len(want) // 2].hex() == want, addr
+    # 0.16: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
+    # returns to stock's beq, which takes the skip when the site leaves %a1 at 0
+    x = [x for x in mod['sites'] if x.get('target') == 'core_voice_site'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x40121208', 'jsr', '227548004a89'), x
+    assert img[0x40121208 - DEV.main_load:0x40121210 - DEV.main_load].hex() == '227548004a896738'
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
@@ -310,7 +366,9 @@ def test_core_ar2_sites():
         assert img[a - DEV.main_load:a - DEV.main_load + 8] == bytes.fromhex(b), hex(a)
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
-    assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
+    ins = sorted((x['order'], x['fn']) for x in mod['subscribe'] if x['event'] == 'ev_render_in')
+    # and (0.16) the voice skip's boot snapshot just after it
+    assert ins == [(0, 'core_load_in'), (1, 'core_voice_boot')], ins
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
     # mod storage's own sites, with the FX and sound edits' writes into the stored kit (0.9)
     # and the project save (0.10)
@@ -372,6 +430,11 @@ def test_core_ar2_machine_slots_44_52():
             assert l(r + 0x18) == 0xffffffff and l(r + 0x1c) == 0xffffffff, (m, hex(r))
     for m in range(34, 53):
         assert all(l(r + 0x20) == 0 for r in recs[m].values()), m
+    # the profile's machine_slots: how many knobs from LEV on have a record, as the linker gives slots
+    _t, by_core = DEV.machine_slots
+    have = {m: next(k for k in range(9) if 9 + k not in recs[m]) for m in range(34, 53)}
+    assert dict(by_core[-1][1]) == have and by_core[-1][0] == '0.13'
+    assert dict(by_core[0][1]) == {m: have[m] for m in range(34, 44)} and by_core[0][0] == '0.5'
     owner = img[0x40291138 - DEV.main_load:0x40291138 - DEV.main_load + 8]
     assert all(t < 12 for t in owner), owner.hex()
     with open(os.path.join(ROOT, 'mods', 'core-ar2', 'machines.c')) as fh:
@@ -528,6 +591,110 @@ def test_core_ar2_screen_check_needs_0_12():
         else:
             raise AssertionError('the screen check linked with core 0.11')
         patch.build(SYX, [new, app], version='1.74', log=lambda *a: None)
+
+
+def test_core_ar2_pads_and_leds():
+    """ev_pad takes the UI loop's three calls into the views (strike, release, pressure) and
+    ev_leds the two slot colour sends; the sites are stock's calls, and pad-check links
+    (the build needs the cross toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    sites = {(x['addr'], x.get('target')): x for x in j['sites']}
+    for addr, target, stock_bytes in (('0x400a47ce', 'core_pad', '4eb9400a0398'),
+                                      ('0x400a4804', 'core_pad', '4eb9400a0398'),
+                                      ('0x400a4784', 'core_pad_touch', '4eb9400a03b4'),
+                                      ('0x40095e68', 'core_led_send', '4eb9400019e4'),
+                                      ('0x40096088', 'core_led_send', '4eb9400019e4')):
+        x = sites[(addr, target)]
+        assert x['op'] == 'jsr' and x['stock'] == stock_bytes, x
+    assert j['collections']['ev_pad'] == {'entry': 4, 'spare': 256}
+    assert j['collections']['ev_leds'] == {'entry': 4, 'spare': 256}
+    assert ('ev_tick', 'core_leds_tick', 1000000) in [(x['event'], x['fn'], x['order']) for x in j['subscribe']]
+    assert 'pads.c' in j['sources']
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 pads are for 1.74')
+    for x in j['sites']:
+        if x.get('target') in ('core_pad', 'core_pad_touch', 'core_led_send'):
+            o = int(x['addr'], 16) - DEV.main_load
+            assert img[o:o + 6].hex() == x['stock'], x
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'pad-check-ar2'), SYX, tmp)[0]
+        patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
+
+
+def test_core_ar2_drive_folders():
+    """the mod folders' sites are stock's first instructions, calls and vtable slots, the
+    collection holds 8, and drive-check links (the build needs the cross toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    want = {'0x4007c0b4': 'core_drive_readdir_site', '0x40080504': 'core_drive_resolve_site',
+            '0x400807d2': 'core_drive_exists', '0x40080910': 'core_drive_size',
+            '0x400808b6': 'core_drive_count', '0x400b719a': 'core_drive_load',
+            '0x4007c640': 'core_drive_path_site', '0x40080060': 'core_drive_check',
+            '0x4007b41c': 'core_drive_link_site', '0x4007c1dc': 'core_drive_mkdir',
+            '0x400ea820': 'core_drive_ref_site', '0x400ea6b2': 'core_drive_mkdir_site',
+            '0x401e8528': 'core_drive_list_tick', '0x401e71fc': 'core_drive_list_tick'}
+    got = {x['addr']: x for x in j['sites'] if x.get('target', '').startswith('core_drive_')}
+    assert sorted(got) == sorted(want), sorted(got)
+    for addr, target in want.items():
+        assert got[addr]['target'] == target, got[addr]
+    assert got['0x400ea820']['stock'] == '4eb94007e698' and got['0x400ea820']['op'] == 'jsr'
+    assert got['0x400ea6b2']['stock'] == '4eb94007c1dc' and got['0x400ea6b2']['op'] == 'jsr'
+    for addr in ('0x401e8528', '0x401e71fc'):
+        assert got[addr]['op'] == 'ptr' and got[addr]['stock'] == '400e4db6'
+    assert j['collections']['core_drive_folders'] == {'entry': 4, 'spare': 8, 'max': 8}
+    assert 'drive.c' in j['sources'] and 'drive.s' in j['sources']
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 mod folders are for 1.74')
+    for x in got.values():
+        o = int(x['addr'], 16) - DEV.main_load
+        assert img[o:o + len(x['stock']) // 2].hex() == x['stock'], x
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'drive-check-ar2'), SYX, tmp)[0]
+        patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
+
+
+def test_core_ar2_usb_in_gain():
+    """The USB input's gain a mod holds: one site, the audio interrupt's load of USB TO MAIN's
+    index before its two copy loops, and usb-gain-check links (the build needs the cross
+    toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    sites = [x for x in j['sites'] if x.get('target') == 'core_usb_in_site']
+    assert sites == [{'addr': '0x4011fc98', 'stock': '20398000ee7c', 'op': 'jsr',
+                      'target': 'core_usb_in_site'}], sites
+    assert 'usbin.s' in j['sources']
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 usbin is for 1.74')
+    o = 0x4011fc98 - DEV.main_load
+    assert img[o:o + 6].hex() == '20398000ee7c'
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'usb-gain-check-ar2'), SYX, tmp)[0]
+        patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
 
 
 if __name__ == '__main__':

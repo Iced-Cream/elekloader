@@ -29,6 +29,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.4.elemod`, `core-dn1-5.4-os1.44.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
+| Digitakt II | 1.17 | `core-dt2-1.2.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page (experimental) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.14.elemod` | build it ([below](#building-a-core)). Drive Loader 0.5 needs it: +Drive storage at boot (`ev_boot_drive`, `core_store_gens`) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.13.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page. The Drive Loader needs 0.12 or newer: the +Drive mods' spare entries in its tables. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -195,7 +196,14 @@ the one a mod that uses it names in `resources.core`.
     the core's README).
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
-  renders on the DSP.
+  renders on the DSP. Also:
+  - each frame's per-track parameter values (`ev_frame_params`) and key
+    LEDs over the stock views' (`ev_key_leds`);
+  - the mods' project and kit data, saved with the project and its kits
+    and copied with the kits, and value rows (ADAPTING.md, "Project data, kit data and value rows (core-dt2 1.1, Digitakt II)").
+  - what a +Drive loader needs (TELOS): the card and its file system ready, the
+    +Drive's files, project saves and loads, crashes, restart, SysEx and the
+    OS's tasks (1.2; the core's README).
 - **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
   Digitakt II's events and rows, without `.fast`; remote panel input and
   SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC
@@ -204,7 +212,9 @@ the one a mod that uses it names in `resources.core`.
   the [sine example](../examples/sharc-sine/README.md)); from 0.3 a DSP
   memory peek (ADAPTING.md, "The DSP peek"); from 0.4 MIDI CCs before the
   stock applies them (`ev_midi_cc`) and words posted to DSP code
-  (`core_dsp_post`, ADAPTING.md, "The DSP peek"). The optional
+  (`core_dsp_post`, ADAPTING.md, "The DSP peek"); and what a +Drive loader
+  needs (TELOS): the card ready and its sectors, project saves and loads,
+  crashes, restart and the OS's tasks (the core's README). The optional
   [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) enables the busy
   measure for a build with a SHARC mod. The
   [machines companion](MACHINES-DN2.md) adds
@@ -232,6 +242,20 @@ the one a mod that uses it names in `resources.core`.
   (0.11; ADAPTING.md, "Locks a mod keeps itself (core-ar2 0.11, Analog Rytm
   MKII)"). Spare entries in its tables for +Drive mods, which the Drive
   Loader fills at boot (0.12; the core's README, "Room for +Drive mods").
+  The USB input's gain, one of stock's USB TO MAIN steps a mod holds in
+  place of the setting (0.15; ADAPTING.md, "USB input gain (core-ar2 0.15,
+  Analog Rytm MKII)").
+  A silent voice's machine call skipped, its next note starting
+  from the slot's power-on state, which changes the sound slightly: off at
+  boot, on while a mod asks for it and none holds it off (0.16;
+  `analog-rytm-mk2/voice.h`; mods/core-ar2/SKIPS.md, "The silent-voice skip
+  (0.16)"). Stock's `dynamic_cast` answered from a memo, which cuts the UI's
+  CPU and changes nothing it does or shows: off at boot, on while a mod asks
+  for it and none holds it off (0.16; `analog-rytm-mk2/ui.h`;
+  mods/core-ar2/SKIPS.md, "The UI skip (0.16)"). The standard events, std1,
+  at the sites core already owns and the UI, system, MIDI and voice events at
+  new sites (0.17; ADAPTING.md, "Standard events (std1)"; the core's README,
+  "Standard events (0.17)").
 - **Analog Four MKII** ([mods/core-a4mk2](../mods/core-a4mk2), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4mk2 0.1)"), and parameter pages, whose
