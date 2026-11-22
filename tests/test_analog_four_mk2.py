@@ -218,7 +218,13 @@ def test_core_a4mk2_sites():
         ('0x400c8ba2', 'jmp', '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734'),
         ('0x40103af6', 'jmp', 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107'),
         ('0x400e62c8', 'jmp', 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113')]
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 2
+    # and the USB-MIDI sender's entry (usbring.s): a jmp over its first two instructions
+    usb = [x for x in mod['sites'] if x.get('target') == 'core_usb_send_site']
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in usb] == [
+        ('0x40003578', 'jmp', '2dbe98a7e84431a2d98f4806f77e9e192e5a03db375e7a68b6512508b8d2e334')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'usbring.s')) as fh:
+        assert 'jmp     0x4000357e' in fh.read()
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 2 + len(usb)
     drive = [x for x in mod['sites'] if x.get('target') in ('core_boot_drive_site', 'core_drive_format_site')]
     assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in drive] == [('0x401061e8', 'jsr', '2191bc0fbd58c2ca2de73154f96cbeefab902e00e9e39d779cd79165b2d2a25c'),
                                                                 ('0x40074af6', 'jsr', 'd591193fb5976f498f1504a122969002d042106a574926de3451910bc943c49d')]

@@ -256,9 +256,8 @@ What it does not do:
   pattern-track and pattern fields with them; core clears the target slot's.
 - The spare sound and FX words reach the engine through stock's parameter
   pushes, into the slot every unused parameter goes to; that nothing reads
-  that slot is inferred from the code, and on a unit (21 Oct 2026) a
-  pattern sounded the same by ear before and after store-check set
-  every sound's markers.
+  that slot is inferred from the code; on a unit (21 Oct 2026) a pattern
+  sounded the same with store-check's markers set in every sound.
 
 ## Restarts
 
@@ -283,6 +282,10 @@ runs loses the last change. The call repacks the whole image (0x40096d90,
 stock's full repack job) and writes it to the next copy (0x40106f04, as
 stock's OS upgrade does before its reboot). [G; emulator-checked with the
 A4 Drive Loader's APPLY & RESTART]
+
+## USB-MIDI sender's wrap
+
+`usbring.c`.
 
 ## Lockable parameters (0.5)
 
@@ -624,7 +627,7 @@ erases, before the header's rewrite. Both are the loader's: no spares.
 
 ## Checked so far
 
-The runs' logs are in their pull requests; what they established:
+Logs are in the runs' pull requests:
 
 - **On a unit** (OS 1.56) [hw]: core with
   [hooks-check](../../examples/hooks-check-a4mk2) passed every event;
