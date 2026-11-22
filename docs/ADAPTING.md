@@ -128,7 +128,8 @@ event (lower first; the shipped mods use 10-90).
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
 | `ev_midi_cc` | Digitakt mk1 (core 4.3), Digitone mk1 (core-dn1 3.2) and Digitone II (core-dn2 0.4): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` by MIDI CONFIG's channels: on the Digitakt 0-7 the audio tracks, 8-15 the MIDI tracks, 16 FX; on the Digitone 0-8 (channels 1-9 by default); on the Digitone II 0-15, 16 FX. A CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). The router keeps a few CCs for itself (NRPN and data entry among them), which never arrive. On the Digitone, a mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
 | `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
-| `ev_key_leds` | Digitone mk1 only (core-dn1 3.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_key_leds` | Digitone mk1 (core-dn1 3.3) and Digitakt II (core-dt2 1.1): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_frame_params` | Digitakt II only (core-dt2 1.1): each frame's per-track parameter values, before the stock modulators and LFOs add theirs; the frame interrupt | `void f(int16_t *values, int stride)` | interrupt level, once a frame. Track t's value j (the Sound array's index, the modulation destinations') at `values[stride * t + j]`, stride 71; add to them, held in each parameter's range. The kit and the pages are untouched, so what a handler adds is never saved |
 | `ev_render_params` | Digitone mk1 only (core-dn1 3.3): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
 | `ev_voice_ready` | Digitone mk1 only (core-dn1 4.2): a voice starting a note, once it holds its sound and the event's p-locks, in the render | `void f(int voice, int track, void *event)` | interrupt level, after `ev_voice_on` in the same pass. What the voice has here is what plays; `fw_voice_locks` puts more locks into it as the render puts a step's ("Parameter pages and the starting voice" below) |
 | `ev_param_turn` | Digitone mk1 only (core-dn1 4.2): a knob turn on a parameter page that the stock would put into the track's sound (no trig held); UI task | `int f(void *view, int id, int delta, int knob)` | return nonzero to take it: the stock neither edits the sound nor shows its pop-up. `delta` is the stock's step (8.8). GRID REC's held trigs keep their turns and are never asked |
@@ -136,10 +137,11 @@ event (lower first; the shipped mods use 10-90).
 | `ev_live_note` | Digitakt mk1 (core 4.2) and Digitone mk1 (core-dn1 5.3): a note played live on a track (the trig keys, keyboard mode, the preview, a MIDI note on its channel), before its voice; the UI or the MIDI task. The sequencer's trigs do not pass here | `int f(int track, int note, int vel, int on, int source)` | return nonzero to take it: the stock neither counts the key nor plays (or releases) it. On a release `vel` is the source; `source` 0x40 the panel, 2 MIDI on the Digitakt; 0x40 or 0x80 KEYBOARD mode, the port (8 or 0x10 DIN, 2 or 4 USB) for MIDI on the Digitone. `fw_note_on` and `fw_note_off` (core3.h) play a note past the event; each counts the key, so pair them |
 
 The events, their prototypes and their conventions are the same on every
-device; only the sites differ, and `ev_voice_on`, `ev_key_leds`,
+device; only the sites differ, and `ev_voice_on`,
 `ev_render_params`, `ev_midi_pc`, `ev_voice_ready`, `ev_param_turn` and
-`ev_param_value` exist on the Digitone only, and `ev_live_note` on the two mk1s only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
-`ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
+`ev_param_value` exist on the Digitone only, `ev_key_leds` on it and the Digitakt II, `ev_frame_params` on the Digitakt II only, and `ev_live_note` on the two mk1s only. The Digitakt II's core (mods/core-dt2) has `ev_tick`, `ev_draw`,
+`ev_key`, `ev_enc`, `ev_settings`, its own `ev_personalize`,
+`ev_frame_params` and `ev_key_leds` ("Project data, kit data and value rows (core-dt2 1.1, Digitakt II)" below), and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_tick` (`core_fast`): subscribe only `.run` code to `ev_key` and
@@ -265,7 +267,8 @@ The sites core owns (do not patch them):
   0x4009e09e, 0x4009e166, 0x400edbe2, 0x40018332, 0x4009dba0 and
   0x400ea41c;
 - Digitakt II 1.17: 0x40000538, 0x40032ad4, 0x40032b3a, 0x40033d94,
-  0x40033dde, 0x400a5eac, 0x4009e2a2;
+  0x40033dde, 0x400a5eac, 0x4009e2a2, 0x4002e90c, 0x400311a2,
+  0x400dbee4, 0x400db8be, 0x400df932, 0x400df99c and 0x40136388;
 - Digitone II 1.12: 0x40000538, 0x4002e464, 0x4002e4ca, 0x4002f20c,
   0x4002f256, 0x4009ff88, 0x400987a2, 0x4011fc8c, 0x4011f8c4,
   0x4012197a;
@@ -1740,6 +1743,63 @@ the load of a block already in RAM (at boot, and from SysEx), both by jsr;
 0x4001570e, the new project's builder (CREATE NEW, by jmp), and 0x400acbf4,
 the template copy of slot -1's load (by jsr).
 
+### Project data, kit data and value rows (core-dt2 1.1, Digitakt II)
+
+Core-dt2 1.1 keeps mods' data in the saved project, in bytes the stock OS
+writes as zeros and never reads, and adds value rows to the menus. The C
+names are in `elekloader/sdk/include/digitakt-mk2/core.h`; the smallest mod
+that uses them is [examples/kit-memo-dt2](../examples/kit-memo-dt2).
+
+**Project data.** As on the Digitone mk1 ("Project data (core-dn1 2.1,
+Digitone mk1)" above): a mod contributes a `core_projdata_t` to
+`core_projdata` and claims `projdata:<tag>`. A Digitakt II project file's
+header (0xBEEFBACE, version 5) leaves +0x1c to +0x200 unused; core puts
+`ELKP` and the blocks there on each save and takes them out on each load,
+then calls `loaded(found)`.
+
+**Kit data.** Kit n is pattern n's, and each kit record leaves 194 bytes
+after its end mark (+0x573e) unused. A mod contributes a `core_kitdata_t` to
+`core_kitdata` and claims `kitdata:<tag>`:
+
+| offset | field | |
+|---|---|---|
+| +0 | tag | four characters |
+| +4 | size | bytes per kit |
+| +8 | data | `CORE_KITS` (128) blocks, kit n's at data + n * size |
+| +12 | changed | `void changed(int kit, int found)`, or 0: kit's block was loaded or copied; `found` is 0 when the kit had none for this set of kit-data mods, and the block then holds zeros |
+
+The area holds `K`, a 16-bit layout id (a CRC of every block's tag and
+size, in the table's order) and the blocks, so 191 bytes for all of them
+(`core_kitdata_room()`); a block that does not fit is left out. Core fills
+it when the firmware writes a kit record (a project save, SAVE KIT), reads
+it when one is loaded, and follows the firmware's copies of a kit in RAM
+(`memcpy` calls of a kit's size): pattern copy and paste, PASTE KIT and
+undo. A kit copied into a buffer outside the project's kits (the clipboard,
+the undo copy) keeps its blocks in one of eight shadows until it is copied
+back. `core_kit_on()` gives the kit on (the pattern on's).
+
+Both areas stay readable by the stock OS, which keeps them when it saves a
+project it loaded. Core writes only where an area holds zeros or its own
+data, and leaves anything else (another tool's, a later OS's) as it was,
+counting it in `core_store_conflicts`.
+
+**Value rows.** From `ev_personalize` (or `ev_settings`),
+`core_addvalue(menu, &row)` adds a row that shows `label` and, on the right
+as LED INTENSITY does, `values[get()]`; LEFT and RIGHT step it, and each
+change calls `set(new)` and redraws. Claim the row (`personalize:<label>`).
+
+**Key LEDs.** An `ev_key_leds` handler sets an LED with
+`fw_led_set(mgr, logical, 2, value)` (value's high nibble a colour; layer 1
+turns it off). Logical ids: the trig keys are key code + 1, the page keys
+TRIG to MOD key code + 19. A handler that changes its LEDs asks for a frame
+by setting the view controller's byte +0x21 (Brain + 0x40).
+
+The sites, each a whole instruction the core runs too (jsr, except
+`memcpy`'s first 12 bytes, by jmp): `ev_frame_params` 0x4002e90c,
+`ev_key_leds` 0x400311a2, kit save 0x400dbee4, kit load 0x400db8be,
+project save 0x400df932, project load 0x400df99c, `memcpy` 0x40136388.
+mods/core-dt2/README.md has what each was.
+
 ### Mod storage (core-ar2 0.2, Analog Rytm MKII)
 
 From core-ar2 0.2 a Rytm mod can keep its own values with the project:
@@ -2266,7 +2326,7 @@ mods that share an id from 555.
 declare how many the mod needs in mod.json, `"knobs": 4`, and use
 `__knobs + k` for knob k. The linker gives each mod its own run past every
 other mod's ids and keeps it from build to build in the lockfile
-(docs/FORMAT.md, "Knob ids"):
+("Knob ids" below):
 
 ```c
 #include "analog-rytm-mk2/pages.h"
@@ -2282,6 +2342,160 @@ the mod's `"knobs"`.
 
 Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
 with other mods may give the mod other ids.
+
+**Page ids by count.** In the same way, `"pages": 2` in mod.json gives the
+mod two page ids from 12 up, past the ids other mods' `core_pages`,
+`core_page_fns` and `core_view_pages` entries name, and `CORE_PAGE(k)`
+(pages.h) is page k's id:
+
+```c
+CORE_PAGES;                         /* extern char __pages[] */
+const struct core_page my_page = {CORE_PAGE(0), "MY PAGE", {CORE_KNOB(0), 0, 0, 0, 0, 0, 0, 0}};
+const struct core_view_page my_view_page = {CORE_VIEW_COMP, CORE_PAGE(0), 0};
+```
+
+Page ids are not saved, so they may differ from one build to the next.
+
+### Knob ids
+
+On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
+MKII's start at 555, the Analog Four MKII's 0x200), a mod declares
+`"knobs": n` and the linker gives it n ids in a row, the first its own
+symbol `__knobs`. A relocation to `__knobs` is an `abs32` or an `abs16` with
+an addend of 0..n-1, else refused, as is `"knobs"` on a device without
+`param_ids` or a mod that defines `__knobs` itself.
+
+The linker (`store.knobs`) gives the runs from
+the first id up, by mod id, past every id a mod's `core_params` or
+`core_param_locks` entry names in its own bytes, and checks the linked
+entries again with their runs. The lockfile keeps them in `knobs` and
+`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them in
+the layout ID. A mod keeps its run while its count holds; one that leaves
+keeps it in `freed_knobs` and gets it back when it returns; one whose count
+changes keeps its first id when the new run has room there; any other takes
+never-used ids from `next_knob` up. Only when those run out (past 65535,
+which an `abs16` holds; the A4's 0x3fff) are freed runs
+given out again. A build whose core keeps no lockfile gets the same ids for
+the same mods. The build's manifest carries the runs as `knobs` (`{mod:
+[first, count]}`).
+
+### Machine slots and page ids
+
+
+On a device whose profile gives mods machine slots (`machine_slots`: the
+Analog Rytm MKII's hidden slots 34..52, those of the build's core), a mod declares `"machine_knobs": [k0, k1, ...]`, the knobs each of
+its machines needs, and the linker gives machine i a slot whose parameter
+records cover knobs 0..ki-1. A relocation to `__machines` with addend i
+(an `abs32` or `abs16`) is written as machine i's slot itself, not as a
+sum, so it fills a `core_machines` entry's slot field and nothing else.
+The linker (`store.machines`, the same in `js/src/store.ts`) never gives
+out a slot a mod claims by number (a `core_machines` entry that names its
+slot, or a `machine:<n>` resource), and picks for each new machine, by mod
+id, the free slot with the fewest knobs that has enough, then the lowest.
+A slot is stored data (sounds and kits save their machine's number), so
+the lockfile keeps each machine's slot in `machines` and `freed_machines`
+(`mod`, `index`, `slot`, `knobs`), outside the layout ID: a machine keeps
+its slot while the slot has its knobs; one that leaves keeps its slot in
+`freed_machines` and gets it back when it returns; freed slots are given
+out again only when no never-used slot fits. A claim by number on a slot
+the lockfile gives a machine of the same build is refused, not moved. The
+manifest carries them as `machines` (`{mod: [slot, ...]}`).
+
+On a device whose profile gives mods page ids (`page_ids`: the Analog
+Rytm MKII's start at 12, past stock's 0..11), a mod declares `"pages": n`
+and the linker gives it n ids in a row, by mod id, past every id a
+`core_pages`, `core_page_fns` or `core_view_pages` entry names in its own
+bytes. `__pages` is the first, as `__knobs`. Page ids are not saved, so
+the lockfile does not keep them: they can change from one build to the
+next. The manifest carries them as `pages` (`{mod: [first, count]}`).
+`"machine_knobs"` or `"pages"` on a device without them, or a mod that defines
+`__machines` or `__pages` itself, is refused.
+
+### Id pools
+
+A mod may hand out ids of its own to the other mods of a build: a framework
+mod's machines, say, whose number each sound saves. It declares the pool,
+`"id_pools": {"machines": [1, 30]}`, and a mod that adds to it asks
+for a count, `"pool_ids": {"machines": 2}`. A relocation to
+`__pool_<name>` with addend i (`abs32` or `abs16`) is written as that mod's
+i-th id, not as a sum. The linker (`store.pool_ids`, the same in
+`js/src/store.ts`) gives each new id, by mod id, the lowest of the pool's
+never-used ids. An id is stored data, so the lockfile keeps them in
+`pool_ids` and `freed_pool_ids` (`pool`, `mod`, `index`, `id`), outside the
+layout ID: an id stays with its mod while the mod asks for it; one whose mod
+leaves (or asks for fewer) moves to `freed_pool_ids` and comes back when it
+returns; freed ids are given out again, lowest first, only when no
+never-used id is left. Without a lockfile the ids are given out the same
+way. The manifest carries them as `pool_ids` (`{pool: {mod: [id, ...]}}`).
+Two mods declaring one pool, a mod asking for ids from a pool no given mod
+declares, a reference to a pool the mod asks nothing from, more ids asked
+for than a pool has, and a mod that defines a `__pool_` symbol itself are
+refused.
+
+### Knob faces (core-ar2 0.15, Analog Rytm MKII)
+
+A mod that gives a stock page a different meaning for some sounds, but
+wants the values to stay the sound's own (stored, p-locked, slid, on the
+LFO and MIDI), keeps stock's ids and changes their faces. With
+`analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_faces", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_faces", 0]]}
+```
+
+```c
+static const struct core_knob_face harm = {"HRM", "Harmonics", 94, 0, 0, 127 << 8, 64 << 8};
+static const struct core_knob_face *my_face(int32_t id, void *sound)
+{
+    return id == 39 && runs_mine(sound) ? &harm : 0;    /* 0: stock's face */
+}
+const struct core_knob_faces my_faces = {39, 46, my_face};
+```
+
+- `face(id, sound)`: `sound` is the live sound the page edits, or 0 where
+  stock passes only the id (the UI record, the range, the graphic), meaning
+  the current track's. It is called in the UI task, often: answer from RAM.
+- `label`, `name`: 0 keeps the record's.
+- `look`, `ui`: as in `core_knob_looks` (below); 0 and 0 keep the knob's
+  own look.
+- `min`, `max`, `def`: when min < max, the range and default. Stock's
+  setter clamps every write to them, so a value outside stays only until
+  it is next turned or locked.
+
+The value's text is a `core_params` entry's, which may answer stock ids.
+A mod's own ids (555 up) take faces too, for a knob whose value the mod
+keeps but whose face changes with the sound (smpl-knob-c's knob C). The
+linker refuses an entry whose ids reach 469..554.
+
+### Knob flags (core-ar2 0.17, Analog Rytm MKII)
+
+A knob of the mod's own (555 up) that should open a destination list when
+turned or pushed, as LFO DEST does, sets the list flag stock reads from the
+parameter record, which an own id doesn't have. With
+`analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_flags", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_flags", 0]]}
+```
+
+```c
+CORE_KNOBS;
+/* {first, last, flags} */
+const struct core_knob_flag my_flags = {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB_LIST};
+```
+
+- `flags`: added to the record's. Only `CORE_KNOB_LIST` is honoured; core
+  masks the other bits off.
+- Give the ids a look too (`core_knob_looks`, look 67 draws LFO DEST's
+  knob); the value and its text stay your `core_params` entry's.
+- `core_knob_list_id`: the knob the last list was created for. Own ids all
+  have container index -1, so with two list knobs this says whose it is.
+
+Stock ids never change. The linker refuses an entry below 555 and two
+mods' entries that share an id. A mod that gated the flag reads itself
+(lfo-rnd 1.4) clashes with core 0.17 at those sites.
 
 ### Knob looks (core-ar2 0.13, Analog Rytm MKII)
 
@@ -2398,6 +2612,15 @@ sites, with `analog-rytm-mk2/moments.h`:
   it, else it is queued (1,024 bytes, at most 128 a message) and sent at
   the next sequencer tick or `ev_tick`, in order. `core_usb_midi_up()`
   says whether USB is on and the host has configured the MIDI port.
+- `core_midi_din_try_send(len, msg)` (core 0.15): the same for the DIN MIDI OUT port,
+  a whole message of up to 256 bytes into stock's DIN sender, 1 sent or 0
+  not now (no room, or OUT PORT FUNC is DIN24 or DIN48); it never waits,
+  from any task or interrupt. `core_midi_din_up()` says whether the port
+  is a MIDI port.
+- `core_track_mutes()` and `core_set_track_mutes(mask)` (core 0.15), bit t for track
+  t (0..12): the mutes as the mute screens show them, set the way
+  Overbridge's settings write sets them (the engine and the screens follow,
+  no MIDI goes out). UI task.
 - `core_current_kit()`, `core_current_track()`, `core_current_pattern()`
   (-1 for none) and `core_current_kit_item()`, `core_current_sound_item()`,
   `core_current_pattern_item()` for `core_store_get` and `core_store_set`,
@@ -2574,6 +2797,76 @@ they call. `examples/screen-check-ar2` uses each of them.
   progress box (up to four at once), `core_progress_set(h, done, total)`
   fills its bar and `core_progress_close(h)` takes it away. The box takes
   no keys: catch NO in your `ev_key` and close it.
+
+### Mod folders in the +Drive browser (core-ar2 0.15, Analog Rytm MKII)
+
+A folder of a mod's own after the +Drive's root entries in SETTINGS >
+SAMPLES and the sample slot browser, browsed with the browser's own keys
+(`analog-rytm-mk2/drive.h`; the internals in `mods/core-ar2/drive.c`'s
+header). `examples/drive-check-ar2` uses each part.
+
+- Contribute a `struct core_drive_folder` to `core_drive_folders`: its
+  name and `list`, `entry`, `parent` and `load`. Folder 0 is the mod's
+  folder; the mod numbers the others (1..1022) and gives each folder's
+  entries in order, subfolders and files (at most 1023).
+- `list(folder)` runs in the UI task at each read of the folder, and for
+  folder 0 when the root is listed. It must not wait: answer -1 while the
+  listing is not in, ask for it, and call `core_drive_refill(f, folder)`
+  (any task) once it is complete; the browser reads the folder again at its
+  next UI tick.
+- `load(folder, i)`: LOAD TO PROJ on a file. Nonzero takes it (it counts
+  as loaded, nothing reaches the Rytm's sample memory), 0 refuses it.
+- The folder is read-only, as core owns stock's filesystem calls: no
+  CREATE DIR, RENAME, DELETE, MOVE or UPLOAD in it, no path for its
+  entries, and no real root entry with its name. Real paths pass through
+  unchanged, and the USB transfer and the Drive Loader never see a mod
+  folder. At most 8 show; a name is 1..23 characters, never `mods`, and a
+  real root entry of the same name hides the mod's.
+
+### Pads and LEDs (core-ar2 0.15, Analog Rytm MKII)
+
+A pad strike before stock plays it, and pad and key LEDs a mod colours
+(`analog-rytm-mk2/pads.h`; ask for `"core": "0.15"` in `resources`; the
+internals in `mods/core-ar2/pads.c`'s header). Both run in the UI task. `examples/pad-check-ar2` uses each.
+
+- **`ev_pad`**, `int32_t f(int32_t pad, int32_t value, int32_t flags)`:
+  each of the 12 pads' (0 BD .. 11 CB) strikes (`CORE_PAD_DOWN`, value the
+  velocity), releases (`CORE_PAD_UP`) and pressure (`CORE_PAD_PRESSURE`,
+  0..32640), with `CORE_PAD_FUNC` while FUNC is held. Return nonzero to a
+  strike to take it: stock doesn't play the sound, send the note or select
+  the track, and gets neither the pressure nor the release of that touch.
+  A strike stock got keeps its release, whatever you answer. The pad's key
+  event (ids 0x90..0x9b) still comes to `ev_key`: a strike taken there
+  alone still sounds. `core_pads_taken()` gives the pads a mod holds now.
+- **`ev_leds`**, `void f(void)`, every UI frame after every mod's
+  `ev_tick`: call `core_led(led, colour)` for each LED you want this
+  frame, colour an index in the panel's palette (0 dark). It stays over
+  whatever stock does with that LED (on, off, blink, the track's colour)
+  until a frame in which no handler sets it; then stock's colours come
+  back. `led` is stock's LED number: `CORE_LED_TRIG(k)` the trig keys,
+  `CORE_LED_PAD(p)` the pads.
+
+### USB input gain (core-ar2 0.15, Analog Rytm MKII)
+
+Stock cuts the USB input before it mixes it in, by the step AUDIO
+ROUTING's USB TO MAIN [dB] sets: four steps 6 dB apart, from the most cut
+to none. A mod may hold one of those steps in its place
+(`analog-rytm-mk2/usbin.h`; the internals in `mods/core-ar2/usbin.s`'s
+header). `examples/usb-gain-check-ar2` uses each call.
+
+- **`core_usb_in_gain(who, step)`**, UI task: hold `step`
+  (`CORE_USB_IN_CUT18` .. `CORE_USB_IN_NONE`, 0..3) for `who`, any address
+  of your mod's own, the same each call; `CORE_USB_IN_RELEASE` lets your
+  hold go. 0 done, -1 refused: another mod holds it, `who` is 0 or the
+  step is not one of the four. The setting is never written: when you let
+  go, it applies again.
+- **`core_usb_in_step()`** is the step in force (held or the setting's),
+  **`core_usb_in_holder()`** who holds it (0 for nobody).
+
+The Rytm takes one stereo USB pair there, so a held step applies to
+whatever arrives on it, a DAW's audio as well as yours: hold it only while
+you need it. Only stock's own steps can be held, so the input is never
+mixed in louder than stock mixes it with the setting at its top.
 
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
@@ -2937,6 +3230,60 @@ and pitch (PIT) are lockable mod parameters, read on each synth voice every
 block with `core_param_values_voice` and added to the effects' return (the
 DAC words 4 and 5 of the TX block at `ev_render_out`).
 
+### SMPL machines (smpl-machines, Analog Rytm MKII)
+
+A sound's SMPL page (indices 17..24, records 39..46) is one sample layer
+every SRC machine shares. smpl-machines (mods/smpl-machines) lets a mod
+add machines there: a page of its own for the sounds that run it, and an
+engine in place of stock's sample. Ask for ids by count and add a record
+for each, with `analog-rytm-mk2/smpl.h`:
+
+```json
+"pool_ids": {"smpl_machines": 1},
+"requires": ["core", "smpl-machines"],
+"contribute": [{"to": "smpl_machines", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_smpl", 0]]}]
+```
+
+```c
+SMPL_MACHINES;
+static void engine(int32_t voice, int32_t track, const int16_t *words, int32_t trig);
+const struct smpl_machine my_smpl = {
+    SMPL_MACHINE(0), "MY ENGINE", "MYEN", 0xff, SMPL_FREE, 0, 0, engine,
+    {{"HRM", "Harmonics", 0, 0, 127 << 8, 64 << 8, 0},
+     /* ... knobs B..H; a knob with label 0 is blank */}};
+```
+
+- `voices`: bit v lets voice v run it (`CORE_VOICE_*`). A track whose voice
+  is left out is not offered it.
+- `bind`, `src`: `SMPL_FREE` is chosen in the sound setup menu's SMPL
+  MACHINE row or the list TRK + SMPL opens only; `SMPL_DEFAULT` runs on AUTO for sounds of SRC machine
+  `src`; `SMPL_REQUIRED` always runs for them, is never offered, and the row doesn't turn.
+  `src` is a slot, `CORE_MACHINE(i)` for a mod's own SRC machine.
+- `engine`: called in the audio interrupt once a block for each voice that
+  runs the machine, with the track's engine words for indices 17..24
+  (value << 8, after p-locks, slides and the LFO) and `trig` 1 when the
+  voice would have started its sample. Stock's sample stays silent there.
+  0 for none: the page changes and the sample layer is silent.
+- `flags`: `SMPL_OWN_C` gives knob C a value of its own instead of SMP's
+  word (index 19), the sample slot; the mod then lists `smpl-knob-c` in
+  `requires`, whose one field every such machine shares
+  (mods/smpl-machines/README.md, "Knob C"). `SMPL_WAVEFORM` (0.3, core
+  0.15) keeps the SAMPLE view's second page, stock's waveform of the
+  sample SMP names under the machine's knobs; without it the machine has
+  one page. 0 otherwise.
+- `knobs`: per knob, as a knob face (above), plus `text(buf, value)` for
+  the value's text, 0 for a number. A knob with look 0 whose range differs
+  from the record's under it draws as a plain dial (BR's, 42), not as that
+  record (TUN's dial stops at its +24). A change to the machine, chosen or by
+  the SRC machine, writes each ranged knob's `def`, except into SMP's word,
+  which keeps the sample; a change to stock writes stock's SMPL defaults.
+
+The ids come from the build's lockfile ("Id pools" above), so a
+saved sound finds its machine in the next build. Choosing a machine
+writes each `def` of a knob with `min < max` into the sound
+(`core_param_set`).
+
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
 The Rytm has 53 machine slots. 34..52 hold hidden factory machines: stock
@@ -2986,6 +3333,28 @@ parameters in those records (fx-sends, duck, voice-dac) move off them
 for this core; one that still uses a slot's records declares `"machine:<n>"` in
 its resources, and the linker refuses it next to a machine in that slot.
 
+A filled TEST slot's SRC page shows the knobs in the public machines'
+order (core-ar2 0.15), `knobs[1..7]` on A..G and LEV on H (stock's TEST
+pages put LEV on A, mods/core-ar2/README.md "TEST slots: knob order and
+knob looks (0.15)"). A TEST record keeps the test machine's look (some draw
+as switches, or as ERR above 7); set `CORE_MACHINE_LOOKS` in the entry's
+`flags` and point `looks` at eight `{look, ui}`, one per knob, to draw one
+as any stock knob (`look`, a stock id; 0 keeps the record's) or with a UI
+record of the mod's own (`ui`, as in `core_knob_looks`). The look's value
+text comes with its graphic, so pick a stock knob whose both fit (FIN's
+text is -64..+63, LEV's graphic a level bar). The knob keeps its own range and the graphic spans it:
+
+```c
+static const struct core_machine_look my_looks[8] = {
+    {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+    {103, 0},           /* knobs[6], on F: a 0..127 dial (BD HARD DEC) */
+    {457, 0},           /* knobs[7], on G: a switch */
+};
+const struct core_machine my_machine = {
+    45, my_engine, -1, 0xff, CORE_MACHINE_LOOKS, "MY VOICE", "MYVC",
+    {/* knobs */}, my_looks};
+```
+
 The engine is called once per 32-frame block for each voice running the
 machine, from the audio interrupt, as stock's are: `frame` is the analog
 control frame and `blk` the track's parameter block (word k is the
@@ -3000,12 +3369,59 @@ In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
 trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
 sounding voice alike) and `core_voice_velocity(voice)` is the track's
 velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
-accent.
+accent. `core_voice_released(voice)` (core 0.15) is 1 when the track's note
+ended this block (a pad, key or MIDI note-off, the note's length, the
+sequencer) and 2 when stock cut every track at once (the kit and project
+loads), else 0. It mirrors stock: the stop and the loads send every track a
+note-off, so an end can come for a note that already ended; a mod that
+sends MIDI keeps its own note-on flag.
+
+Any stock engine can run this way: `core_track_default_machine(t)`,
+`core_machine_engine(m)` and `core_machine_voices(m)` find one, and
+`core_machine_defaults(m, blk)` fills a block with its knobs' defaults
+(machines.h). Call an engine only on a voice its mask allows, and call
+`core_voice_engine_reset(voice)` when the voice changes engine. An entry
+in slots 44..52 with `CORE_MACHINE_DESTS` in its `flags` offers its knobs
+as LFO, velocity and aftertouch destinations.
+
+`core_track_sound(t)` is the sound a track's last trig played: its kit's
+sound, or a pool sound under a sound lock (`core_track_pool_sound`).
+`core_param_set(t, index, value, out)` sets a sound parameter from the UI
+task as its knob does.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
 not run. `examples/machine-ar2` is the smallest machine: BD COPY, BD
 CLASSIC under another name.
+
+**Machines by count.** Rather than pick a slot, a mod may declare its
+machines in mod.json, each with the knobs it needs counted from LEV,
+`"machine_knobs": [8, 4]`, and fill each entry's slot with `CORE_MACHINE(i)`
+(machines.h). The linker gives each machine a free slot whose records
+cover that many knobs (the fewest that do, then the lowest), past every
+slot a mod claims by number, and keeps it in the lockfile from build to
+build, since saved sounds name the slot ("Machine slots and page
+ids"):
+
+```c
+CORE_MACHINES;                      /* extern char __machines[] */
+const struct core_machine my_machine = {
+    CORE_MACHINE(0), my_engine, 0, CORE_VOICE_BD, 0, "BD COPY", "BDCP", {/* ... */}};
+```
+
+`CORE_MACHINE(i)` is written as the slot itself: use it whole, never in a
+sum. A claim by number on a slot the lockfile gives a machine in the same
+build is refused, not moved.
+
+**A stock hidden machine.** An entry whose engine is 0 keeps the slot's
+stock engine, and one whose name or label is 0 keeps the slot's stock name
+or label (with an engine of 0 core installs no trampoline, so the trig
+getters are not latched for it). With a voice mask, such an entry unhides a
+factory machine as an ordinary claim by number that the linker checks:
+
+```c
+const struct core_machine bd_test = {44, 0, 0, CORE_VOICE_BD, 0, 0, 0, {{0}}};
+```
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)
 
@@ -4630,8 +5046,13 @@ Some differences from an octabam build, by design:
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
 | `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
 | `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
-| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` | the mod uses a knob past the count it declares, or a PC-relative reference to it | raise `"knobs"` in mod.json, or fix the index |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` (or `__machines`, `"machine_knobs"`; `__pages`, `"pages"`; `__pool_<name>`, `"pool_ids"`) | the mod uses a knob, machine or page past the count it declares, or a PC-relative reference to it | raise the count in mod.json, or fix the index |
 | `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
+| `asks for machine slots ("machine_knobs"), which the <device> does not give mods` / `asks for page ids ("pages"), ...` | only the Analog Rytm MKII gives them out | pick fixed slots or ids, or drop the field |
+| `asks for a machine with N knobs, and no machine slot with that many is free` | every hidden slot with that many records is taken | ask for fewer knobs, or drop a machine mod |
+| `asks for ids from the pool P ("pool_ids"), which no given mod declares` | the mod that declares the pool (a framework mod, such as smpl-machines) is not in the build | add that mod |
+| `the mods ask for N ids from the pool P, which has M` / `asks for more ids from the pool P than it has free` | the mods together ask a pool for more ids than it has | build with fewer of those mods |
+| `machine slot N is claimed by number, and the lockfile gives it to M's machine I` | a mod claims, by number, a slot the lockfile already gives a by-count machine; saved sounds name that slot | give the claim another slot |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |

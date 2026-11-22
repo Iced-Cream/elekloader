@@ -131,6 +131,8 @@ core_param_get:
 
 | param_apply_delta (0x400378a6): `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@`.
 | Frame: 0 the cursor, 8 view, 12 id, 16 delta, 20 func (its low byte).
+| From 0.17 a turn no core_params entry took goes to the std1 mods'
+| ev_param_turn handlers (std.c) before stock.
 core_param_delta:
         lea     core_params,%a1
         subq.l  #4,%sp
@@ -161,7 +163,22 @@ core_param_delta:
         jsr     VIEW_INVALIDATE
         addq.l  #8,%sp
         rts
-9:      addq.l  #4,%sp
+9:      tst.l   std_param_turn            | (0.17) no entry took it: std1's ev_param_turn
+        beq.s   8f
+        mvz.b   23(%sp),%d0
+        move.l  %d0,-(%sp)                | func
+        move.l  20(%sp),-(%sp)            | delta
+        move.l  20(%sp),-(%sp)            | id
+        move.l  20(%sp),-(%sp)            | view
+        jsr     core_std_param_turn       | std.c
+        lea     16(%sp),%sp
+        tst.l   %d0
+        beq.s   8f
+        move.l  8(%sp),-(%sp)             | taken: stock makes no lock; redraw the view
+        jsr     VIEW_INVALIDATE
+        addq.l  #8,%sp
+        rts
+8:      addq.l  #4,%sp
         lea     -12(%sp),%sp
         movem.l %d2-%d3/%a2,(%sp)
         jmp     DELTA_RET
@@ -222,6 +239,9 @@ core_param_text:
 | {view, page, shown}: shown, when not 0, is `int shown(void *view)`, asked
 | on each press of the page key, and the key steps over the page while it
 | answers 0.
+| (0.15) An entry naming one of the view's stock pages with a shown adds no
+| page: it gives that stock page its shown (stock's SAMPLE view's page 5,
+| say). One with no shown lists the stock page again, as before.
         .equ    VIEW_MAX, 16
         .equ    VIEWS, 10
         .equ    VIEW_SHOWN, VIEWS * VIEW_MAX * 4  | each page's shown, after the lists
@@ -277,7 +297,21 @@ view_list:
         move.l  %d0,%a0
         cmp.l   (%a0),%d2
         bne.s   3b
-        moveq   #VIEW_MAX,%d4
+        tst.l   8(%a0)                    | (0.15) a stock page of the view's own
+        beq.s   4f                        | with a shown: that page's shown, no
+        move.l  4(%a0),%d4                | page added
+        moveq   #0,%d0
+5:      cmp.l   %d3,%d0
+        bge.s   4f
+        cmp.l   (%a2,%d0.l*4),%d4
+        beq.s   6f
+        addq.l  #1,%d0
+        bra.s   5b
+6:      move.l  8(%a0),%d4
+        lea     VIEW_SHOWN(%a2),%a0
+        move.l  %d4,(%a0,%d0.l*4)
+        bra.s   3b
+4:      moveq   #VIEW_MAX,%d4
         cmp.l   %d4,%d1
         bge.s   3b                        | full
         move.l  4(%a0),%d4
@@ -392,9 +426,24 @@ view_stock:
         .long   VIEW6_LIST, VIEW6_N, VIEW7_LIST, VIEW7_N, VIEW8_LIST, VIEW8_N
         .long   VIEW9_LIST, VIEW9_N
 
+| (0.15) The SAMPLE view's draw (vtable 0x401e3420 +0x10, 0x400d2004; the
+| pointer at 0x401e3430): a page whose shown answers 0 is not drawn, the
+| view moves on to the next page that is (core_view_settle, pages.c), as the
+| page key would, before stock's draw: a machine change can hide the page
+| the view is on.
+        .globl  core_sample_draw
+core_sample_draw:
+        move.l  4(%sp),-(%sp)
+        jsr     core_view_settle
+        addq.l  #4,%sp
+        jmp     SAMPLE_DRAW
+
+        .globl  core_view_buf, core_view_len
         .bss
         .align  2
+core_view_buf:
 view_buf:
         .space  VIEWS * VIEW_MAX * 4 * 2  | the lists, then each page's shown
+core_view_len:
 view_len:
         .space  VIEWS * 4
