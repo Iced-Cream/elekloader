@@ -277,16 +277,16 @@ test('a read reply cut short is read again, and the damaged read is kept with wh
   assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
   assert.equal(client.damaged.length, 1)
   const [path, chunk, why, raw] = client.damaged[0]
-  assert.deepEqual([path, chunk, why], ['/mods/big.elemod', 0x2000,
-    'chunk size 8192, chunk 1: the reply carries 7772 bytes; it says 8192'])
+  assert.deepEqual([path, chunk, why], ['/mods/big.elemod', 0x800,
+    'chunk size 2048, chunk 1: the reply carries 1628 bytes; it says 2048'])
   assert.equal(raw.length, big().length + container.HEADER + container.FOOTER - 420)
-  assert.equal(client.readChunk, 0x2000)
+  assert.equal(client.readChunk, 0x800)
 })
 
 test('a read whose hash is wrong is read again (T460)', async () => {
   const client = new datarpc.Client(new DamagingUnit(big(), 0, 1), 100)
   assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
-  assert.deepEqual(client.damaged.map(d => d[2]), ['chunk size 8192: the data container\'s hash does not match its body'])
+  assert.deepEqual(client.damaged.map(d => d[2]), ['chunk size 2048: the data container\'s hash does not match its body'])
 })
 
 test('reads damaged every time are an error that says why', async () => {
@@ -294,8 +294,8 @@ test('reads damaged every time are an error that says why', async () => {
   await assert.rejects(client.get('/mods/big.elemod'), (e: unknown) => e instanceof datarpc.DamagedRead &&
     e.message.startsWith('reading /mods/big.elemod: every one of 3 reads came through damaged (') &&
     e.raw === client.damaged[client.damaged.length - 1][3])
-  assert.deepEqual(client.damaged.map(d => d[1]), [0x2000, 0x2000, 0x300])
-  assert.equal(client.readChunk, 0x2000)
+  assert.deepEqual(client.damaged.map(d => d[1]), [0x800, 0x800, 0x300])
+  assert.equal(client.readChunk, 0x800)
   unit.cut = 0
   assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], big())
 })
