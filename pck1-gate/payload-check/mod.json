@@ -1,0 +1,18 @@
+{
+ "id": "payload-check",
+ "version": "0.1",
+ "title": "Payload check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for drive-loader-ar2 0.12's Drive payload table on the Analog Rytm MKII: a +Drive mod with a 225 KB .payload of a known pattern. After boot it walks the table (drive_payload_count, _at, _find, _info), tries the calls' edges, then reads its payload whole twice through dl_payload_read in 4 KB calls, 32 calls a tick, checking every word against the pattern and the sha256 of what it read against drive_payload_info's, and times the reads in DMA timer 0's counts, calibrated against 30 ticks. Its record follows the magic PCK1. A test, not for a project you keep.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c", "payload.s"],
+ "weak": ["drive_payload_abi", "drive_payload_count", "drive_payload_at",
+          "drive_payload_find", "drive_payload_info", "dl_payload_read"],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "pck_tick", "order": 60}
+ ],
+ "requires": ["core", "drive-loader"]
+}
