@@ -952,17 +952,17 @@ def test_the_routes_word_at_10_is_not_taken_for_the_chunk():
 def test_a_read_reply_cut_short_is_read_again():
     """T463: a reply that lost 480 SysEx bytes on the way. The read is damaged, so it is read again,
     whole; the damaged one is kept with its bytes and why."""
-    body = bytes(range(256)) * 110                     # 28,160 bytes: four 8 KB chunks
+    body = bytes(range(256)) * 110                     # 28,160 bytes: fourteen 2 KB chunks
     unit = DamagingUnit(b'', cut=1, at=2)
     unit.files['big.elemod'] = body
     client = datarpc.Client(unit, timeout=0.2)
     assert datarpc.Mods(client).get('big.elemod')[1] == body
     assert len(client.damaged) == 1, client.damaged
     path, chunk, why, raw = client.damaged[0]
-    assert (path, chunk) == ('/mods/big.elemod', 0x2000)
-    assert why == 'chunk size 8192, chunk 1: the reply carries 7772 bytes; it says 8192', why
+    assert (path, chunk) == ('/mods/big.elemod', 0x800)
+    assert why == 'chunk size 2048, chunk 1: the reply carries 1628 bytes; it says 2048', why
     assert len(raw) == len(body) + container.HEADER + container.FOOTER - 420
-    assert client.read_chunk == 0x2000                 # one damaged read keeps the large chunk
+    assert client.read_chunk == 0x800                  # one damaged read keeps the large chunk
 
 
 def test_a_read_whose_hash_is_wrong_is_read_again():
@@ -972,7 +972,7 @@ def test_a_read_whose_hash_is_wrong_is_read_again():
     unit.files['big.elemod'] = body
     client = datarpc.Client(unit, timeout=0.2)
     assert datarpc.Mods(client).get('big.elemod')[1] == body
-    assert [d[2] for d in client.damaged] == ['chunk size 8192: the data container\'s hash does not match its body']
+    assert [d[2] for d in client.damaged] == ['chunk size 2048: the data container\'s hash does not match its body']
 
 
 def test_reads_damaged_every_time_are_an_error_that_says_why():
@@ -989,10 +989,30 @@ def test_reads_damaged_every_time_are_an_error_that_says_why():
         assert e.raw == client.damaged[-1][3]
     else:
         raise AssertionError('a damaged read was taken')
-    assert [d[1] for d in client.damaged] == [0x2000, 0x2000, 0x300]
-    assert client.read_chunk == 0x2000                 # damage is not a lost reply: the size stays
+    assert [d[1] for d in client.damaged] == [0x800, 0x800, 0x300]
+    assert client.read_chunk == 0x800                  # damage is not a lost reply: the size stays
     unit.cut = 0
     assert datarpc.Mods(client).get('big.elemod')[1] == body
+
+
+def test_a_read_reply_fits_stocks_usb_midi_send_ring():
+    """T480/T484: stock's USB-MIDI send ring (Rytm 1.74 0x400029e0, A4 1.56 0x40003578) can put an
+    event 1,008 events later in place of one not yet sent, inside a reply longer than that. The
+    largest read reply, as the unit frames it, stays within 1,008 four-byte events."""
+    body = bytes(range(256)) * 40
+    unit = FakeUnit(b'')
+    unit.files['big.elemod'] = body
+    client = datarpc.Client(unit, timeout=0.2)
+    sizes = []
+    send = unit.send
+    def watch(raw):
+        send(raw)
+        if datarpc.unframe(raw)[4] == datarpc.READ:
+            sizes.append(len(unit.out[-1]))
+    unit.send = watch
+    assert datarpc.Mods(client).get('big.elemod')[1] == body
+    assert max(sizes) <= 3 * datarpc.READ_RING_EVENTS, max(sizes)
+    assert -(-max(sizes) // 3) <= datarpc.READ_RING_EVENTS
 
 
 class SmallBufferUnit(LossyUnit):

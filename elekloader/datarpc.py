@@ -41,7 +41,17 @@ CHUNK = 0x2000
 # a read's chunk sizes, largest first: when a reply never arrives (a host whose MIDI input drops SysEx
 # over about 1 KB, as Firefox's Web MIDI and python-rtmidi on Windows), the read starts again with the
 # next; 0x300 bytes travel as a SysEx message of about 920 bytes
-READ_CHUNKS = (CHUNK, 0x300)
+READ_CHUNKS = (0x800, 0x300)
+# A read's largest chunk is 0x800, not CHUNK: a reply's SysEx must fit stock's USB-MIDI send ring.
+# Stock (Rytm 1.74 0x400029e0, A4 1.56 0x40003578) packs SysEx into 4-byte USB-MIDI events in a
+# 4 KB ring. A call that finds the write position at 0xfc0 or later waits only until fewer than
+# (position - 63) bytes are unsent, then writes from 0, while its room test still lets 4,092 bytes
+# be unsent: the first events written from 0 can land on ones the USB has not sent yet. A host that reads slowly then gets, in that event's place, the
+# one sent 1,008 events later (T480, T484: 10 damaged events in 4 reads of a 1.1 MB file, each one
+# event 1,008 later). A reply of at most 1,008 events (3,024 SysEx bytes, a chunk of up to about
+# 2,600 bytes) cannot wrap onto itself, as long as the ring is empty when it starts, which it is
+# between a request and its reply. 0x800 travels as 2,382 SysEx bytes (794 events).
+READ_RING_EVENTS = 1008
 NO_REPLY = 'no reply from the unit to command 0x%02x'
 # A read reply can arrive cut short, its F0 and F7 intact: T463 (2026-11-21, a Rytm behind the
 # Sidecar Pi's mirror port, Overbridge Engine open) lost 420 bytes of /mods/.build's 28,095, 480
@@ -110,10 +120,10 @@ class Client:
 
     def __init__(self, port, timeout=5.0):
         self.port, self.timeout, self.seq = port, timeout, 0
-        self.read_chunk = CHUNK                 # the largest read chunk that has come through
+        self.read_chunk = READ_CHUNKS[0]        # the largest read chunk that has come through
         # every damaged read, kept for the caller to log or save: (path, chunk size, why, raw)
         self.damaged = []
-        self._chunk_used = CHUNK
+        self._chunk_used = READ_CHUNKS[0]
 
     def call(self, cmd, args=b''):
         seq = self.seq

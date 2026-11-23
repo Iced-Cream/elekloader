@@ -16,7 +16,14 @@ export const CHUNK = 0x2000
 // a read's chunk sizes, largest first: when a reply never arrives (a host whose MIDI input drops SysEx
 // over about 1 KB, as Firefox's Web MIDI and python-rtmidi on Windows), the read starts again with the
 // next; 0x300 bytes travel as a SysEx message of about 920 bytes
-export const READ_CHUNKS = [CHUNK, 0x300]
+export const READ_CHUNKS = [0x800, 0x300]
+// A read's largest chunk is 0x800, not CHUNK: a reply's SysEx must fit stock's USB-MIDI send ring (Rytm 1.74
+// 0x400029e0, A4 1.56 0x40003578), 4 KB of 4-byte events. A call that finds the write position at 0xfc0 or later
+// waits only until fewer than (position - 63) bytes are unsent, then writes from 0, while its room test still lets
+// 4,092 bytes be unsent: the first events written from 0 can land on ones the USB has not sent yet, and a slow host
+// gets the event 1,008 later in that place (T480, T484). A reply of at most 1,008 events (3,024 SysEx bytes) cannot
+// wrap onto itself; 0x800 travels as 2,382 SysEx bytes (elekloader/datarpc.py).
+export const READ_RING_EVENTS = 1008
 const noReply = (cmd: number) => `no reply from the unit to command 0x${hex2(cmd)}`
 // A read reply can arrive cut short, its F0 and F7 intact (T463, 2026-11-21: 420 of /mods/.build's bytes lost behind
 // the Sidecar Pi; T460: a body whose hash did not match). Each reply is checked, the whole read against its container,
@@ -118,9 +125,9 @@ export class Client {
   seq = 0
   port: Port
   timeoutMs: number
-  readChunk = CHUNK                       // the largest read chunk that has come through
+  readChunk = READ_CHUNKS[0]              // the largest read chunk that has come through
   damaged: Damaged[] = []                 // every damaged read, for the caller to log or save
-  private chunkUsed = CHUNK
+  private chunkUsed = READ_CHUNKS[0]
   constructor(port: Port, timeoutMs = 5000) { this.port = port; this.timeoutMs = timeoutMs }
 
   async call(cmd: number, args: Uint8Array = new Uint8Array(0)): Promise<Uint8Array> {
